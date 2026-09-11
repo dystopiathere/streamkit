@@ -1,0 +1,133 @@
+import { randomUUID } from 'node:crypto';
+import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import type { AlertEvent, CursorPagination, IncomingAlertEvent, Page } from '@streamkit/contracts';
+import { RealtimeBus } from '../../common/bus/realtime-bus.service';
+import { PrismaService } from '../../common/prisma/prisma.service';
+import { DedupService } from './dedup.service';
+import { toContractEvent, toPrismaEventType, toPrismaProvider } from './event.mappers';
+
+export type IngestResult =
+  { status: 'created'; event: AlertEvent } | { status: 'duplicate'; event: null };
+
+/** Код Prisma для нарушения уникального индекса. */
+const UNIQUE_VIOLATION = 'P2002';
+
+@Injectable()
+export class EventsService {
+  private readonly logger = new Logger(EventsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dedup: DedupService,
+    private readonly bus: RealtimeBus,
+  ) {}
+
+  /**
+   * Приём нормализованного события: дедуп → запись → публикация в шину.
+   *
+   * Порядок не переставлять. Публикация после успешной записи гарантирует, что
+   * алерт на стриме соответствует тому, что лежит в истории; обратный порядок
+   * приводит к «показали, но не сохранили» при падении БД.
+   */
+  async ingest(incoming: IncomingAlertEvent): Promise<IngestResult> {
+    const isFirstSeen = await this.dedup.claim(
+      incoming.userId,
+      incoming.provider,
+      incoming.externalId,
+    );
+    if (!isFirstSeen) {
+      this.logger.debug({ provider: incoming.provider }, 'Дубль события отброшен по Redis');
+      return { status: 'duplicate', event: null };
+    }
+
+    try {
+      const row = await this.prisma.alertEvent.create({
+        data: {
+          userId: incoming.userId,
+          type: toPrismaEventType(incoming.type),
+          provider: toPrismaProvider(incoming.provider),
+          externalId: incoming.externalId,
+          username: incoming.username,
+          message: incoming.message,
+          amountMinor: incoming.amount?.amountMinor ?? null,
+          currency: incoming.amount?.currency ?? null,
+          isTest: incoming.isTest,
+          occurredAt: incoming.occurredAt ? new Date(incoming.occurredAt) : new Date(),
+        },
+      });
+
+      const event = toContractEvent(row);
+      await this.bus.publish({ kind: 'alert', userId: incoming.userId, event });
+      await this.touchSource(incoming);
+
+      return { status: 'created', event };
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === UNIQUE_VIOLATION
+      ) {
+        // Redis потерял ключ (перезапуск), но уникальный индекс в БД поймал дубль.
+        this.logger.debug({ provider: incoming.provider }, 'Дубль события отброшен по индексу БД');
+        return { status: 'duplicate', event: null };
+      }
+
+      // Сбой не связан с дублем: снимаем отметку, чтобы повтор провайдера
+      // не отбросился молча как «уже обработано».
+      await this.dedup.release(incoming.userId, incoming.provider, incoming.externalId);
+      throw error;
+    }
+  }
+
+  /**
+   * Тестовый алерт из дашборда. Отдельный `externalId` на каждый вызов — иначе
+   * дедупликация отбросит вторую проверку, и стример решит, что всё сломалось.
+   */
+  async createTestEvent(userId: string): Promise<AlertEvent> {
+    const result = await this.ingest({
+      userId,
+      type: 'donation',
+      provider: 'manual',
+      externalId: `test-${randomUUID()}`,
+      username: 'Тестовый зритель',
+      message: 'Проверка оповещения',
+      amount: { amountMinor: 50_000, currency: 'RUB' },
+      isTest: true,
+      occurredAt: new Date().toISOString(),
+    });
+
+    if (result.status === 'duplicate') {
+      // Практически недостижимо: externalId уникален на каждый вызов.
+      throw new Error('Не удалось создать тестовое событие');
+    }
+    return result.event;
+  }
+
+  /** История событий с курсорной пагинацией: по возрастанию id не листаем — только по времени. */
+  async list(userId: string, pagination: CursorPagination): Promise<Page<AlertEvent>> {
+    const rows = await this.prisma.alertEvent.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: pagination.limit + 1,
+      ...(pagination.cursor ? { cursor: { id: pagination.cursor }, skip: 1 } : {}),
+    });
+
+    const hasMore = rows.length > pagination.limit;
+    const items = hasMore ? rows.slice(0, pagination.limit) : rows;
+
+    return {
+      items: items.map(toContractEvent),
+      nextCursor: hasMore ? (items.at(-1)?.id ?? null) : null,
+    };
+  }
+
+  private async touchSource(incoming: IncomingAlertEvent): Promise<void> {
+    if (incoming.provider === 'manual') return;
+    await this.prisma.donationSource
+      .updateMany({
+        where: { userId: incoming.userId, provider: toPrismaProvider(incoming.provider) },
+        data: { lastEventAt: new Date() },
+      })
+      .catch(() => undefined);
+  }
+}

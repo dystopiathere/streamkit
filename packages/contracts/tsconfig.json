@@ -1,0 +1,5 @@
+{
+  "extends": "@streamkit/config/tsconfig/lib.json",
+  "include": ["src/**/*.ts", "tsup.config.ts"],
+  "exclude": ["dist", "node_modules"]
+}

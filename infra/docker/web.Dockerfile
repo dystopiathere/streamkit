@@ -1,0 +1,48 @@
+# Образ статики: используется и для дашборда, и для overlay.
+# Какое приложение собирать, задаётся аргументом APP.
+#
+#   docker build -f infra/docker/web.Dockerfile --build-arg APP=web .
+#   docker build -f infra/docker/web.Dockerfile --build-arg APP=overlay .
+
+FROM node:24-alpine AS base
+ENV PNPM_HOME=/pnpm
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
+WORKDIR /app
+
+FROM base AS build
+ARG APP=web
+# VITE_-переменные попадают в бандл на этапе сборки, а не читаются в рантайме.
+# Значит, для другого домена API нужен пересобранный образ — это ограничение
+# любой статики, и лучше знать о нём здесь, чем искать причину в проде.
+ARG VITE_API_URL=/api
+ENV VITE_API_URL=$VITE_API_URL
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/config/package.json packages/config/
+COPY packages/contracts/package.json packages/contracts/
+COPY packages/ui/package.json packages/ui/
+COPY apps/web/package.json apps/web/
+COPY apps/overlay/package.json apps/overlay/
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile
+
+COPY tsconfig.base.json ./
+COPY packages/ packages/
+COPY apps/web/ apps/web/
+COPY apps/overlay/ apps/overlay/
+
+RUN pnpm --filter @streamkit/contracts build \
+    && pnpm --filter @streamkit/ui build \
+    && pnpm --filter @streamkit/${APP} build
+
+# Кладём результат в фиксированный путь, чтобы финальный слой не зависел от APP.
+RUN cp -r apps/${APP}/dist /dist
+
+FROM nginx:1.27-alpine AS runtime
+COPY --from=build /dist /usr/share/nginx/html
+COPY infra/docker/nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+  CMD wget -q --spider http://127.0.0.1/ || exit 1

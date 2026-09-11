@@ -1,0 +1,230 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Новый пуш в ту же ветку отменяет предыдущий прогон: докручивать CI для
+# устаревшего коммита незачем.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24'
+
+jobs:
+  quality:
+    name: Типы, формат, юнит-тесты
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Prisma Client — сгенерированный код, в репозитории его нет.
+      # Без этого шага падает проверка типов всего, что трогает БД.
+      - run: pnpm --filter @streamkit/api exec prisma generate
+
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm format:check
+      - run: pnpm test
+
+  integration:
+    name: Интеграционные тесты
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: streamkit
+          POSTGRES_PASSWORD: streamkit
+          POSTGRES_DB: streamkit_test
+        options: >-
+          --health-cmd "pg_isready -U streamkit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+        ports:
+          - 6379:6379
+
+    env:
+      DATABASE_URL: postgresql://streamkit:streamkit@localhost:5432/streamkit_test?schema=public
+      REDIS_URL: redis://localhost:6379
+      NODE_ENV: test
+      # Значения тестовые и одноразовые: боевые секреты живут только в
+      # окружении деплоя, в CI их быть не должно.
+      JWT_SECRET: test-secret-value-for-ci-at-least-32-chars
+      ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcy0hIQ==
+      IP_HASH_PEPPER: test-pepper-for-ci
+      CORS_ORIGINS: http://localhost:5173
+      OVERLAY_BASE_URL: http://localhost:5174
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @streamkit/contracts build
+      - run: pnpm --filter @streamkit/api exec prisma migrate deploy
+      - run: pnpm --filter @streamkit/api test:int
+
+  e2e:
+    name: Сквозной сценарий
+    runs-on: ubuntu-latest
+    needs: quality
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: streamkit
+          POSTGRES_PASSWORD: streamkit
+          POSTGRES_DB: streamkit_e2e
+        options: >-
+          --health-cmd "pg_isready -U streamkit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+        ports:
+          - 6379:6379
+
+    env:
+      DATABASE_URL: postgresql://streamkit:streamkit@localhost:5432/streamkit_e2e?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: test-secret-value-for-ci-at-least-32-chars
+      ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcy0hIQ==
+      IP_HASH_PEPPER: test-pepper-for-ci
+      CORS_ORIGINS: http://localhost:5173,http://localhost:5174
+      OVERLAY_BASE_URL: http://localhost:5174
+      VITE_API_URL: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @streamkit/api exec prisma generate
+      - run: pnpm build
+      - run: pnpm --filter @streamkit/api exec prisma migrate deploy
+      - run: pnpm --filter @streamkit/e2e exec playwright install --with-deps chromium
+      - run: pnpm --filter @streamkit/e2e test
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 7
+
+  security:
+    name: Проверки безопасности
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # gitleaks нужна история, иначе он проверит только последний коммит.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Известные уязвимости в зависимостях. Падаем только на high и critical:
+      # иначе пайплайн краснеет от moderate в транзитивных dev-зависимостях и
+      # его начинают игнорировать.
+      - run: pnpm audit --audit-level high
+        continue-on-error: false
+
+      - name: Поиск утёкших секретов
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker:
+    name: Сборка образов
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: API
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/api.Dockerfile
+          push: false
+          load: true
+          tags: streamkit-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Дашборд
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/web.Dockerfile
+          build-args: APP=web
+          push: false
+          tags: streamkit-web:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Overlay
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/web.Dockerfile
+          build-args: APP=overlay
+          push: false
+          tags: streamkit-overlay:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Уязвимости в образе: базовый образ и системные пакеты pnpm audit не видит.
+      - name: Сканирование образа API
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: streamkit-api:ci
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'HIGH,CRITICAL'

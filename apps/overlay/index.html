@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Публичная страница по токену: индексировать её нельзя ни при каких условиях -->
+    <meta name="robots" content="noindex, nofollow" />
+    <title>StreamKit Overlay</title>
+    <style>
+      /* Прозрачный фон обязателен: браузер-сорс OBS накладывает страницу
+         поверх игры, и любой непрозрачный цвет закроет картинку. */
+      html,
+      body,
+      #root {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        /* Оверлей ничего не принимает от пользователя */
+        user-select: none;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

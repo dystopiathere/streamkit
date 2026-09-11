@@ -1,0 +1,124 @@
+# Полный стек: то же, что поедет в прод, но на одной машине.
+# Запуск: docker compose -f infra/docker/compose.yml --env-file .env up --build
+name: streamkit
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-streamkit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?нужно задать POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-streamkit}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-streamkit}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Миграции выполняются отдельным одноразовым контейнером, а не при старте API.
+  # Иначе при нескольких репликах несколько процессов начнут мигрировать базу
+  # одновременно.
+  migrate:
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-streamkit}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-streamkit}?schema=public
+    command: ['npx', 'prisma', 'migrate', 'deploy']
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-streamkit}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-streamkit}?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?нужно задать JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?нужно задать ENCRYPTION_KEY}
+      IP_HASH_PEPPER: ${IP_HASH_PEPPER:?нужно задать IP_HASH_PEPPER}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:8081}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      OVERLAY_BASE_URL: ${OVERLAY_BASE_URL:-http://localhost:8081}
+    ports:
+      - '3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+    restart: unless-stopped
+    command: ['node', 'dist/worker.js']
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-streamkit}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-streamkit}?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      IP_HASH_PEPPER: ${IP_HASH_PEPPER}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      OVERLAY_BASE_URL: ${OVERLAY_BASE_URL:-http://localhost:8081}
+      PORT: 3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        APP: web
+        VITE_API_URL: ${PUBLIC_API_URL:-http://localhost:3000}
+    restart: unless-stopped
+    ports:
+      - '8080:80'
+
+  overlay:
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        APP: overlay
+        VITE_API_URL: ${PUBLIC_API_URL:-http://localhost:3000}
+    restart: unless-stopped
+    ports:
+      - '8081:80'
+
+volumes:
+  postgres-data:
+  redis-data:

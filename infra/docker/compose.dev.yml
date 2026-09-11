@@ -1,0 +1,48 @@
+# Инфраструктура для разработки: только PostgreSQL и Redis.
+#
+# Приложения здесь сознательно не контейнеризованы. На Windows bind-mount с
+# symlink-структурой pnpm работает медленно и ненадёжно, а hot-reload через
+# контейнер даёт секунды задержки на каждое сохранение. Поэтому базы — в Docker,
+# код — на хосте (`pnpm dev`). Полная сборка всех сервисов проверяется в
+# compose.yml, который повторяет прод.
+name: streamkit-dev
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-streamkit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-streamkit}
+      POSTGRES_DB: ${POSTGRES_DB:-streamkit}
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # Без healthcheck миграции стартуют раньше готовности базы и падают
+      # на первом же запуске в CI.
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-streamkit} -d ${POSTGRES_DB:-streamkit}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # appendonly для разработки не нужен, но и вреда нет: переживает рестарт,
+    # и дедупликация не «забывает» события при перезапуске контейнера.
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:
+  redis-data:

@@ -1,0 +1,275 @@
+import { createHmac } from 'node:crypto';
+import { defaultAlertWidgetConfig } from '@streamkit/contracts';
+import request from 'supertest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { createHarness, registrationPayload, type TestHarness } from './harness';
+
+/**
+ * Сквозной путь события: виджет → публичная ссылка → вебхук → история.
+ * Проверяется то, ради чего существует продукт, и то, что ломается тише всего:
+ * дедупликация и проверка подписи.
+ */
+describe('Виджеты и приём событий (feature)', () => {
+  let harness: TestHarness;
+  let accessToken: string;
+
+  beforeAll(async () => {
+    harness = await createHarness();
+  });
+
+  afterAll(async () => {
+    await harness.close();
+  });
+
+  beforeEach(async () => {
+    await harness.reset();
+    const registration = await request(harness.app.getHttpServer())
+      .post('/api/auth/register')
+      .send(registrationPayload())
+      .expect(201);
+    accessToken = registration.body.accessToken as string;
+  });
+
+  const server = () => harness.app.getHttpServer();
+  const auth = () => ({ Authorization: `Bearer ${accessToken}` });
+
+  async function createWidget(): Promise<string> {
+    const response = await request(server())
+      .post('/api/widgets')
+      .set(auth())
+      .send({ name: 'Алерты', type: 'alerts', config: defaultAlertWidgetConfig() })
+      .expect(201);
+    return response.body.id as string;
+  }
+
+  async function createWebhookSource(): Promise<{ sourceId: string; secret: string }> {
+    const response = await request(server())
+      .post('/api/events/webhook/secret')
+      .set(auth())
+      .expect(201);
+    return response.body as { sourceId: string; secret: string };
+  }
+
+  function sign(secret: string, timestamp: string, body: string): string {
+    return createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex');
+  }
+
+  it('создаёт виджет с полным набором дефолтов конфига', async () => {
+    const widgetId = await createWidget();
+    const response = await request(server())
+      .get(`/api/widgets/${widgetId}`)
+      .set(auth())
+      .expect(200);
+
+    expect(response.body.config.durationMs).toBe(6000);
+    expect(response.body.config.text.fontSize).toBe(32);
+  });
+
+  it('мержит частичное обновление конфига, не теряя остальные поля', async () => {
+    const widgetId = await createWidget();
+
+    await request(server())
+      .patch(`/api/widgets/${widgetId}`)
+      .set(auth())
+      .send({ config: { text: { fontSize: 64 } } })
+      .expect(200);
+
+    const response = await request(server())
+      .get(`/api/widgets/${widgetId}`)
+      .set(auth())
+      .expect(200);
+
+    expect(response.body.config.text.fontSize).toBe(64);
+    // Остальные поля стиля не должны обнулиться.
+    expect(response.body.config.text.color).toBe('#FFFFFF');
+    expect(response.body.config.durationMs).toBe(6000);
+  });
+
+  it('не отдаёт чужой виджет', async () => {
+    const widgetId = await createWidget();
+
+    const other = await request(server())
+      .post('/api/auth/register')
+      .send(registrationPayload())
+      .expect(201);
+
+    // 404, а не 403: иначе по коду ответа можно перебирать существующие id.
+    await request(server())
+      .get(`/api/widgets/${widgetId}`)
+      .set({ Authorization: `Bearer ${other.body.accessToken as string}` })
+      .expect(404);
+  });
+
+  it('выдаёт ссылку для OBS и хранит только её хэш', async () => {
+    const widgetId = await createWidget();
+
+    const response = await request(server())
+      .post(`/api/widgets/${widgetId}/tokens`)
+      .set(auth())
+      .send({ label: 'OBS' })
+      .expect(201);
+
+    expect(response.body.url).toContain('token=');
+
+    const rawToken = new URL(response.body.url as string).searchParams.get('token') as string;
+    const stored = await harness.prisma.overlayToken.findMany({ where: { widgetId } });
+
+    expect(stored).toHaveLength(1);
+    expect(stored[0]?.tokenHash).not.toContain(rawToken);
+  });
+
+  it('принимает корректно подписанный вебхук', async () => {
+    const { sourceId, secret } = await createWebhookSource();
+    const body = JSON.stringify({
+      externalId: 'evt-1',
+      username: 'Зритель',
+      message: 'Спасибо',
+      amount: { amountMinor: 50_000, currency: 'RUB' },
+    });
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+
+    const response = await request(server())
+      .post(`/api/webhooks/${sourceId}`)
+      .set('Content-Type', 'application/json')
+      .set('x-streamkit-timestamp', timestamp)
+      .set('x-streamkit-signature', sign(secret, timestamp, body))
+      .send(body)
+      .expect(202);
+
+    expect(response.body.status).toBe('created');
+
+    const events = await harness.prisma.alertEvent.findMany();
+    expect(events).toHaveLength(1);
+    expect(events[0]?.amountMinor).toBe(50_000);
+  });
+
+  it('отвергает вебхук с неверной подписью и пишет это в аудит', async () => {
+    const { sourceId } = await createWebhookSource();
+    const body = JSON.stringify({ externalId: 'evt-2', username: 'Злоумышленник' });
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+
+    await request(server())
+      .post(`/api/webhooks/${sourceId}`)
+      .set('Content-Type', 'application/json')
+      .set('x-streamkit-timestamp', timestamp)
+      .set('x-streamkit-signature', 'a'.repeat(64))
+      .send(body)
+      .expect(401);
+
+    expect(await harness.prisma.alertEvent.count()).toBe(0);
+
+    const audit = await harness.prisma.auditLog.findMany({
+      where: { action: 'webhook.signature.invalid' },
+    });
+    expect(audit.length).toBeGreaterThan(0);
+  });
+
+  it('отвергает вебхук без заголовков подписи', async () => {
+    const { sourceId } = await createWebhookSource();
+    await request(server())
+      .post(`/api/webhooks/${sourceId}`)
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ externalId: 'evt-3', username: 'Зритель' }))
+      .expect(401);
+  });
+
+  it('отвергает запрос с просроченной меткой времени', async () => {
+    const { sourceId, secret } = await createWebhookSource();
+    const body = JSON.stringify({ externalId: 'evt-4', username: 'Зритель' });
+    // Час назад: подпись верная, но окно давно закрылось.
+    const timestamp = (Math.floor(Date.now() / 1000) - 3600).toString();
+
+    await request(server())
+      .post(`/api/webhooks/${sourceId}`)
+      .set('Content-Type', 'application/json')
+      .set('x-streamkit-timestamp', timestamp)
+      .set('x-streamkit-signature', sign(secret, timestamp, body))
+      .send(body)
+      .expect(401);
+  });
+
+  it('не принимает один и тот же подписанный запрос дважды', async () => {
+    const { sourceId, secret } = await createWebhookSource();
+    const body = JSON.stringify({ externalId: 'evt-5', username: 'Зритель' });
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const signature = sign(secret, timestamp, body);
+
+    const send = () =>
+      request(server())
+        .post(`/api/webhooks/${sourceId}`)
+        .set('Content-Type', 'application/json')
+        .set('x-streamkit-timestamp', timestamp)
+        .set('x-streamkit-signature', signature)
+        .send(body);
+
+    await send().expect(202);
+    // Повтор перехваченного запроса отбивается защитой от replay.
+    await send().expect(401);
+
+    expect(await harness.prisma.alertEvent.count()).toBe(1);
+  });
+
+  it('дедуплицирует событие с тем же externalId, пришедшее заново', async () => {
+    const { sourceId, secret } = await createWebhookSource();
+    const body = JSON.stringify({ externalId: 'evt-6', username: 'Зритель' });
+
+    const send = () => {
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      return request(server())
+        .post(`/api/webhooks/${sourceId}`)
+        .set('Content-Type', 'application/json')
+        .set('x-streamkit-timestamp', timestamp)
+        .set('x-streamkit-signature', sign(secret, timestamp, body))
+        .send(body);
+    };
+
+    await send().expect(202);
+
+    // Сбрасываем Redis: имитируем перезапуск кэша. Дубль обязан пойматься
+    // уникальным индексом в PostgreSQL — это вторая линия защиты.
+    await harness.redis.flushdb();
+
+    const second = await send().expect(202);
+    expect(second.body.status).toBe('duplicate');
+    expect(await harness.prisma.alertEvent.count()).toBe(1);
+  });
+
+  it('отзыв ссылки делает её нерабочей', async () => {
+    const widgetId = await createWidget();
+    const created = await request(server())
+      .post(`/api/widgets/${widgetId}/tokens`)
+      .set(auth())
+      .send({ label: null })
+      .expect(201);
+
+    await request(server())
+      .delete(`/api/widgets/${widgetId}/tokens/${created.body.id as string}`)
+      .set(auth())
+      .expect(204);
+
+    const tokens = await request(server())
+      .get(`/api/widgets/${widgetId}/tokens`)
+      .set(auth())
+      .expect(200);
+
+    expect(tokens.body).toHaveLength(0);
+  });
+
+  it('тестовый алерт сохраняется с пометкой и виден в истории', async () => {
+    await request(server()).post('/api/events/test').set(auth()).expect(201);
+
+    const history = await request(server()).get('/api/events').set(auth()).expect(200);
+
+    expect(history.body.items).toHaveLength(1);
+    expect(history.body.items[0].isTest).toBe(true);
+  });
+
+  it('позволяет отправить несколько тестовых алертов подряд', async () => {
+    await request(server()).post('/api/events/test').set(auth()).expect(201);
+    await request(server()).post('/api/events/test').set(auth()).expect(201);
+
+    // Если бы externalId был одинаковым, второй алерт отбросился бы дедупликацией,
+    // и стример решил бы, что настройка сломалась.
+    expect(await harness.prisma.alertEvent.count()).toBe(2);
+  });
+});

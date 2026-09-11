@@ -1,0 +1,49 @@
+@import 'tailwindcss';
+
+/*
+ * Tailwind 4 настраивается прямо в CSS — отдельного tailwind.config.js больше нет.
+ * Токены объявлены через @theme, поэтому доступны и как CSS-переменные, и как
+ * утилиты (bg-surface, text-muted и т.д.).
+ *
+ * Палитра тёмная по умолчанию: дашборд открыт рядом с OBS во время стрима,
+ * и светлая тема в этом сценарии слепит.
+ */
+@theme {
+  --color-bg: oklch(0.18 0.015 280);
+  --color-surface: oklch(0.23 0.018 280);
+  --color-surface-hover: oklch(0.27 0.02 280);
+  --color-border: oklch(0.32 0.02 280);
+  --color-fg: oklch(0.96 0.005 280);
+  --color-muted: oklch(0.68 0.015 280);
+  --color-accent: oklch(0.62 0.19 295);
+  --color-accent-fg: oklch(0.98 0.01 295);
+  --color-danger: oklch(0.62 0.21 25);
+  --color-success: oklch(0.68 0.15 155);
+
+  --radius-card: 0.75rem;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-fg);
+    font-family:
+      'Inter',
+      system-ui,
+      -apple-system,
+      'Segoe UI',
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Видимый фокус обязателен: по дашборду ходят с клавиатуры, а дефолтная
+     обводка браузера на тёмном фоне почти не читается. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}

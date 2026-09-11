@@ -1,0 +1,9 @@
+{
+  "extends": "@streamkit/config/tsconfig/lib.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "tsup.config.ts"],
+  "exclude": ["dist", "node_modules"]
+}

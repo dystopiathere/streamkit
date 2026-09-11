@@ -1,0 +1,68 @@
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { AlertEvent, AlertWidgetConfig } from '@streamkit/contracts';
+import type { Redis } from 'ioredis';
+import { REDIS_PUBLISHER, REDIS_SUBSCRIBER } from '../redis/redis.module';
+
+export const BUS_CHANNEL = 'streamkit:realtime';
+
+export type BusMessage =
+  | { kind: 'alert'; userId: string; event: AlertEvent }
+  | {
+      kind: 'widget-config';
+      userId: string;
+      widgetId: string;
+      isEnabled: boolean;
+      config: AlertWidgetConfig;
+    }
+  | { kind: 'overlay-revoked'; tokenId: string; reason: 'token-revoked' | 'widget-deleted' };
+
+/**
+ * Шина реального времени поверх Redis pub/sub.
+ *
+ * Нужна по двум причинам.
+ *
+ * 1. Масштабирование: сокет клиента висит на одном инстансе API, а событие может
+ *    прийти на любой другой. Без общей шины алерт просто не дойдёт.
+ * 2. Развязка модулей: виджеты публикуют «конфиг изменился», ничего не зная о
+ *    gateway, а gateway ничего не знает о сервисе виджетов на уровне модулей.
+ *    Иначе получается цикл импортов.
+ *
+ * Доставка socket.io между инстансами при этом обеспечивается redis-адаптером;
+ * эта шина отвечает за доменные события, а не за транспорт сокета.
+ */
+@Injectable()
+export class RealtimeBus {
+  private readonly logger = new Logger(RealtimeBus.name);
+
+  constructor(
+    @Inject(REDIS_PUBLISHER) private readonly publisher: Redis,
+    @Inject(REDIS_SUBSCRIBER) private readonly subscriber: Redis,
+  ) {}
+
+  async publish(message: BusMessage): Promise<void> {
+    await this.publisher.publish(BUS_CHANNEL, JSON.stringify(message));
+  }
+
+  /**
+   * Подписка. Возвращает функцию отписки. Ошибки разбора сообщения не должны
+   * ронять подписчика: чужой мусор в канале — не повод терять живые события.
+   */
+  async subscribe(handler: (message: BusMessage) => void): Promise<() => Promise<void>> {
+    const listener = (channel: string, payload: string): void => {
+      if (channel !== BUS_CHANNEL) return;
+      try {
+        handler(JSON.parse(payload) as BusMessage);
+      } catch (error) {
+        this.logger.warn({ err: error }, 'Не удалось разобрать сообщение шины');
+      }
+    };
+
+    this.subscriber.on('message', listener);
+    await this.subscriber.subscribe(BUS_CHANNEL);
+
+    return async () => {
+      this.subscriber.off('message', listener);
+      await this.subscriber.unsubscribe(BUS_CHANNEL).catch(() => undefined);
+    };
+  }
+}

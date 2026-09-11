@@ -1,0 +1,281 @@
+// StreamKit — схема данных.
+//
+// Инварианты, которые Prisma не выражает, но которые обязаны соблюдать сервисы:
+//  * Деньги хранятся только парой (amountMinor, currency) и только целыми минорными
+//    единицами. Либо оба поля заполнены, либо оба NULL.
+//  * Ничего секретного не лежит в открытом виде: токены и TOTP-секреты шифруются
+//    AES-256-GCM (см. src/common/crypto), в БД попадает только шифротекст.
+//  * Токены (refresh, overlay) хранятся хэшем. Оригинал существует только у клиента.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/* ------------------------------------------------------------------ */
+/* Пользователи и аутентификация                                        */
+/* ------------------------------------------------------------------ */
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  /// Пользователь запросил удаление: ПДн обезличены, запись оставлена ради
+  /// ссылочной целостности истории событий.
+  ANONYMIZED
+}
+
+model User {
+  id                  String     @id @default(uuid()) @db.Uuid
+  email               String     @unique
+  passwordHash        String
+  displayName         String
+  status              UserStatus @default(ACTIVE)
+  isTotpEnabled       Boolean    @default(false)
+  /// Шифротекст TOTP-секрета. NULL, пока второй фактор не подключён.
+  totpSecretEncrypted String?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  anonymizedAt        DateTime?
+
+  refreshTokens   RefreshToken[]
+  consents        Consent[]
+  widgets         Widget[]
+  alertEvents     AlertEvent[]
+  donationSources DonationSource[]
+  credentials     IntegrationCredential[]
+  channels        Channel[]
+  auditLogs       AuditLog[]
+
+  @@index([status])
+}
+
+/// Refresh-токен с ротацией. Семейство (familyId) заводится при логине; каждое
+/// обновление создаёт новый токен и помечает старый использованным. Предъявление
+/// уже использованного токена означает кражу — гасим всё семейство.
+model RefreshToken {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  familyId     String    @db.Uuid
+  /// sha256 от секрета. Сам секрет в БД не попадает.
+  tokenHash    String    @unique
+  userAgent    String?
+  /// Хэш IP, а не IP: для разбора инцидентов хватает, объём ПДн меньше.
+  ipHash       String?
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime  @default(now())
+  /// Проставляется при ротации или отзыве. Непустое значение = токен больше не валиден.
+  revokedAt    DateTime?
+  replacedById String?   @db.Uuid
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([expiresAt])
+}
+
+/* ------------------------------------------------------------------ */
+/* Согласия и аудит (152-ФЗ)                                            */
+/* ------------------------------------------------------------------ */
+
+enum ConsentDocument {
+  TERMS
+  PRIVACY
+  PERSONAL_DATA
+  COOKIE_ANALYTICS
+  MARKETING
+}
+
+/// Журнал согласий. Хранится версия документа, действовавшая в момент согласия:
+/// без неё невозможно доказать, на что именно согласился пользователь.
+model Consent {
+  id              String          @id @default(uuid()) @db.Uuid
+  userId          String          @db.Uuid
+  document        ConsentDocument
+  documentVersion String
+  grantedAt       DateTime        @default(now())
+  revokedAt       DateTime?
+  ipHash          String?
+  userAgent       String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, document])
+}
+
+/// Аудит значимых действий: входы, смена пароля, отзыв токенов, экспорт и удаление
+/// данных, неудачные проверки подписи вебхука.
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @db.Uuid
+  action    String
+  ipHash    String?
+  userAgent String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+}
+
+/* ------------------------------------------------------------------ */
+/* Виджеты и overlay                                                    */
+/* ------------------------------------------------------------------ */
+
+enum WidgetType {
+  ALERTS
+}
+
+model Widget {
+  id       String     @id @default(uuid()) @db.Uuid
+  userId   String     @db.Uuid
+  type     WidgetType
+  name     String
+  isEnabled Boolean   @default(true)
+  /// Конфиг, провалидированный схемой из @streamkit/contracts.
+  config   Json
+  /// Версия формы конфига. Ломающее изменение схемы = инкремент + миграция данных.
+  configVersion Int   @default(1)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokens OverlayToken[]
+
+  @@index([userId])
+}
+
+/// Публичная ссылка на виджет для браузер-сорса OBS. В БД только хэш токена,
+/// поэтому утечка дампа не даёт доступа к чужим оверлеям.
+model OverlayToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  widgetId  String    @db.Uuid
+  tokenHash String    @unique
+  label     String?
+  createdAt DateTime  @default(now())
+  lastSeenAt DateTime?
+  revokedAt DateTime?
+
+  widget Widget @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+
+  @@index([widgetId])
+}
+
+/* ------------------------------------------------------------------ */
+/* События и источники                                                  */
+/* ------------------------------------------------------------------ */
+
+enum EventProvider {
+  DONATIONALERTS
+  DONATEPAY
+  TWITCH
+  YOUTUBE
+  WEBHOOK
+  MANUAL
+}
+
+enum AlertEventType {
+  DONATION
+  FOLLOW
+  SUBSCRIPTION
+  RESUBSCRIPTION
+  CHEER
+  RAID
+  REWARD
+}
+
+/// Нормализованное событие. Уникальность (provider, externalId, userId) — вторая
+/// линия защиты от дублей после быстрой проверки в Redis: если Redis потерял ключ
+/// при рестарте, БД всё равно не даст записать событие дважды.
+model AlertEvent {
+  id          String         @id @default(uuid()) @db.Uuid
+  userId      String         @db.Uuid
+  type        AlertEventType
+  provider    EventProvider
+  externalId  String
+  username    String
+  message     String         @db.VarChar(500)
+  amountMinor Int?
+  currency    String?        @db.VarChar(3)
+  isTest      Boolean        @default(false)
+  occurredAt  DateTime
+  createdAt   DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalId, userId])
+  @@index([userId, createdAt])
+}
+
+/// Подключённый источник донат-событий.
+model DonationSource {
+  id                String        @id @default(uuid()) @db.Uuid
+  userId            String        @db.Uuid
+  provider          EventProvider
+  isEnabled         Boolean       @default(true)
+  /// Идентификатор аккаунта на стороне провайдера (для диагностики и отображения).
+  externalAccountId String?
+  /// Секрет для проверки HMAC собственного вебхука. Шифротекст.
+  webhookSecretEncrypted String?
+  lastEventAt       DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+}
+
+/* ------------------------------------------------------------------ */
+/* Интеграции с площадками                                              */
+/* ------------------------------------------------------------------ */
+
+enum Platform {
+  TWITCH
+  YOUTUBE
+  VKPLAY
+  TROVO
+}
+
+model Channel {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  platform    Platform
+  externalId  String
+  login       String
+  displayName String
+  avatarUrl   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([platform, externalId])
+  @@index([userId])
+}
+
+/// OAuth-токены пользователя к внешним сервисам. Только шифротекст; наружу не
+/// отдаются никогда, даже владельцу.
+model IntegrationCredential {
+  id                    String    @id @default(uuid()) @db.Uuid
+  userId                String    @db.Uuid
+  provider              String
+  accessTokenEncrypted  String
+  refreshTokenEncrypted String?
+  scopes                String[]
+  expiresAt             DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([expiresAt])
+}
