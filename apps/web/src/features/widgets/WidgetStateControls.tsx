@@ -1,4 +1,10 @@
-import { type Widget, type WidgetState, formatDuration, formatMoney } from '@streamkit/contracts';
+import {
+  type Widget,
+  type WidgetState,
+  formatDuration,
+  formatMoney,
+  parseMajorToMinor,
+} from '@streamkit/contracts';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -65,9 +71,12 @@ function GoalControls({
   onSubmit: (offsetMinor: number) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const [value, setValue] = useState('0');
-
   const raised = state?.kind === 'goal' ? state : null;
+
+  // Поле в рублях, состояние в копейках. Просить у стримера копейки значит
+  // заставлять его печатать 100000 там, где он думает про тысячу.
+  const [value, setValue] = useState('0');
+  const offsetMinor = parseMajorToMinor(value);
 
   return (
     <div className="space-y-3">
@@ -82,12 +91,15 @@ function GoalControls({
       ) : null}
 
       <div>
-        <Label htmlFor="goal-offset">{t('widgets.field.offsetMinor')}</Label>
+        <Label htmlFor="goal-offset">
+          {t('widgets.field.offsetMinor')}
+          {raised ? `, ${CURRENCY_SIGNS[raised.currency] ?? raised.currency}` : ''}
+        </Label>
         <div className="flex gap-2">
           <Input
             id="goal-offset"
             type="number"
-            step={100}
+            step="0.01"
             value={value}
             onChange={(event) => setValue(event.target.value)}
             className="max-w-40"
@@ -95,7 +107,8 @@ function GoalControls({
           <Button
             variant="secondary"
             isLoading={isPending}
-            onClick={() => onSubmit(Math.trunc(Number(value) || 0))}
+            disabled={offsetMinor === null}
+            onClick={() => offsetMinor !== null && onSubmit(offsetMinor)}
           >
             {t('common.save')}
           </Button>
@@ -105,6 +118,15 @@ function GoalControls({
     </div>
   );
 }
+
+const CURRENCY_SIGNS: Record<string, string> = {
+  RUB: '₽',
+  USD: '$',
+  EUR: '€',
+  KZT: '₸',
+  BYN: 'Br',
+  UAH: '₴',
+};
 
 function TimerControls({
   state,

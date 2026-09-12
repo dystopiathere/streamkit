@@ -46,14 +46,20 @@ describe('Состояние виджетов (feature)', () => {
 
   async function seedDonation(
     amountMinor: number,
-    options: { currency?: string; username?: string; daysAgo?: number; isTest?: boolean } = {},
+    options: {
+      currency?: string;
+      username?: string;
+      daysAgo?: number;
+      isTest?: boolean;
+      type?: 'DONATION' | 'SUBSCRIPTION';
+    } = {},
   ): Promise<void> {
     seq += 1;
     const at = new Date(Date.now() - (options.daysAgo ?? 0) * 24 * 60 * 60 * 1000);
     await harness.prisma.alertEvent.create({
       data: {
         userId,
-        type: 'DONATION',
+        type: options.type ?? 'DONATION',
         provider: 'WEBHOOK',
         externalId: `seed-${seq}`,
         username: options.username ?? 'Зритель',
@@ -80,6 +86,34 @@ describe('Состояние виджетов (feature)', () => {
     expect(response.body.kind).toBe('goal');
     expect(response.body.raisedMinor).toBe(50_000);
     expect(response.body.targetMinor).toBe(100_000);
+  });
+
+  it('засчитывает в цель несколько типов событий сразу', async () => {
+    // Марафон обычно наполняют и донаты, и платные подписки. Схема массив
+    // поддерживала с самого начала — ограничение было только в форме.
+    const widgetId = await createWidget('goal', {
+      countTypes: ['donation', 'subscription'],
+    });
+    await seedDonation(30_000, { type: 'DONATION' });
+    await seedDonation(20_000, { type: 'SUBSCRIPTION' });
+
+    const response = await request(server())
+      .get(`/api/widgets/${widgetId}/state`)
+      .set(auth())
+      .expect(200);
+    expect(response.body.raisedMinor).toBe(50_000);
+  });
+
+  it('не засчитывает событие типа, который не отмечен', async () => {
+    const widgetId = await createWidget('goal', { countTypes: ['donation'] });
+    await seedDonation(30_000, { type: 'DONATION' });
+    await seedDonation(20_000, { type: 'SUBSCRIPTION' });
+
+    const response = await request(server())
+      .get(`/api/widgets/${widgetId}/state`)
+      .set(auth())
+      .expect(200);
+    expect(response.body.raisedMinor).toBe(30_000);
   });
 
   it('не смешивает валюты в цели', async () => {

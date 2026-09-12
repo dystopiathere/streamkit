@@ -25,6 +25,42 @@ export function toMinor(major: number, currency: Currency): Money {
   };
 }
 
+/**
+ * Строка из поля ввода в рублях → целые копейки.
+ *
+ * Разбираем строку, а не умножаем `Number(value)` на сто: `10.07 * 100` даёт
+ * 1006.9999999999999, и это ровно тот промежуточный float, который правило 1
+ * репозитория запрещает. Пользователь при этом вводит рубли — просить у него
+ * копейки значит заставлять печатать 100000 там, где он думает про тысячу.
+ *
+ * @returns null, если строка не похожа на сумму. Пустая строка — тоже null:
+ *          «ничего не ввели» и «ввели ноль» это разные вещи.
+ */
+export function parseMajorToMinor(input: string): number | null {
+  const match = /^(-?)(\d+)(?:[.,](\d{1,2}))?$/.exec(input.trim());
+  if (!match) return null;
+
+  const [, sign, whole, fraction = ''] = match;
+  const minor = Number(whole) * MINOR_UNITS_PER_MAJOR + Number(fraction.padEnd(2, '0'));
+  return sign === '-' ? -minor : minor;
+}
+
+/**
+ * Копейки → строка в рублях для поля ввода.
+ *
+ * Целочисленно и без разделителей разрядов: результат уходит в `<input
+ * type="number">`, который форматированную строку просто не примет.
+ */
+export function formatMinorForInput(amountMinor: number): string {
+  const sign = amountMinor < 0 ? '-' : '';
+  const absolute = Math.abs(Math.trunc(amountMinor));
+  const whole = Math.trunc(absolute / MINOR_UNITS_PER_MAJOR);
+  const fraction = absolute % MINOR_UNITS_PER_MAJOR;
+  return fraction === 0
+    ? `${sign}${whole}`
+    : `${sign}${whole}.${String(fraction).padStart(2, '0')}`;
+}
+
 export function formatMoney(money: Money, locale = 'ru-RU'): string {
   return new Intl.NumberFormat(locale, {
     style: 'currency',
