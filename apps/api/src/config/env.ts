@@ -5,6 +5,26 @@ import { z } from 'zod';
  * значение бессмысленно — это лучше, чем узнать о пустом секрете в проде через
  * неделю. Значения по умолчанию заданы только для того, что безопасно по умолчанию.
  */
+/**
+ * Необязательная переменная, у которой пустая строка означает «не задана».
+ *
+ * Обычный `.optional()` этого не делает: `FOO=` в файле окружения — это
+ * присутствующее значение, просто пустое, и проверка `min(1)` на нём падает.
+ * Ровно так и вышло: в `.env.example` ключи площадок стоят пустыми, и
+ * приложение, прочитав такой файл, отказывалось стартовать целиком — вместо
+ * того чтобы просто не предлагать ненастроенную площадку.
+ *
+ * Пробелы срезаются заодно: значение, скопированное из консоли площадки,
+ * регулярно приезжает с хвостовым пробелом, а секрет с пробелом не сходится
+ * молча и необъяснимо.
+ */
+function optionalValue() {
+  return z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.string().trim().min(1).optional(),
+  );
+}
+
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
@@ -51,7 +71,7 @@ export const envSchema = z.object({
     ),
 
   /** Домен для cookie. Пусто — cookie для текущего хоста (так и надо на localhost). */
-  COOKIE_DOMAIN: z.string().optional(),
+  COOKIE_DOMAIN: optionalValue(),
 
   /** Базовый публичный URL overlay-приложения: из него собираются ссылки для OBS. */
   OVERLAY_BASE_URL: z.string().url(),
@@ -71,10 +91,10 @@ export const envSchema = z.object({
   // Учётные данные площадок необязательны: без них площадка просто не
   // предлагается к подключению. Требовать их означало бы, что ни одно
   // существующее окружение и ни один прогон CI больше не стартует.
-  TWITCH_CLIENT_ID: z.string().min(1).optional(),
-  TWITCH_CLIENT_SECRET: z.string().min(1).optional(),
-  YOUTUBE_CLIENT_ID: z.string().min(1).optional(),
-  YOUTUBE_CLIENT_SECRET: z.string().min(1).optional(),
+  TWITCH_CLIENT_ID: optionalValue(),
+  TWITCH_CLIENT_SECRET: optionalValue(),
+  YOUTUBE_CLIENT_ID: optionalValue(),
+  YOUTUBE_CLIENT_SECRET: optionalValue(),
 
   /**
    * Суточный бюджет запросов к YouTube Data API.
