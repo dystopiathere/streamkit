@@ -148,7 +148,7 @@ jobs:
       - run: pnpm build
       - run: pnpm --filter @streamkit/api exec prisma migrate deploy
       - run: pnpm --filter @streamkit/e2e exec playwright install --with-deps chromium
-      - run: pnpm --filter @streamkit/e2e test
+      - run: pnpm --filter @streamkit/e2e test:e2e
 
       - uses: actions/upload-artifact@v4
         if: failure()

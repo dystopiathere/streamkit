@@ -57,7 +57,6 @@
     "pino-pretty": "^13.0.0",
     "prisma": "^6.2.0",
     "supertest": "^7.0.0",
-    "testcontainers": "^10.16.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "unplugin-swc": "^1.5.1",
