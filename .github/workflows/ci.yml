@@ -72,8 +72,12 @@ jobs:
       NODE_ENV: test
       # Значения тестовые и одноразовые: боевые секреты живут только в
       # окружении деплоя, в CI их быть не должно.
+      #
+      # ENCRYPTION_KEY обязан декодироваться ровно в 32 байта. Проверка:
+      #   node -e "console.log(Buffer.from(process.argv[1],'base64').length)" <ключ>
+      # Здесь это base64 от строки test-encryption-key-32-bytes!!!! длиной 32.
       JWT_SECRET: test-secret-value-for-ci-at-least-32-chars
-      ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcy0hIQ==
+      ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcyEhISE=
       IP_HASH_PEPPER: test-pepper-for-ci
       TOKEN_HASH_PEPPER: test-token-pepper-for-ci
       CORS_ORIGINS: http://localhost:5173
@@ -124,7 +128,7 @@ jobs:
       DATABASE_URL: postgresql://streamkit:streamkit@localhost:5432/streamkit_e2e?schema=public
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: test-secret-value-for-ci-at-least-32-chars
-      ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcy0hIQ==
+      ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcyEhISE=
       IP_HASH_PEPPER: test-pepper-for-ci
       TOKEN_HASH_PEPPER: test-token-pepper-for-ci
       CORS_ORIGINS: http://localhost:5173,http://localhost:5174
