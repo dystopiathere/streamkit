@@ -10,6 +10,15 @@ import { widgetConfigSchema, widgetStateSchema } from './widgets.js';
 export const SOCKET_EVENTS = {
   /** Сервер → overlay: показать алерт. */
   alert: 'alert',
+  /**
+   * Сервер → overlay: начальное состояние сразу после подключения.
+   *
+   * Отдельное событие от configUpdated, а не то же самое. Раньше оно было одним,
+   * и это молча ломало обновление настроек: bootstrap несёт имя виджета и его
+   * состояние, обновление конфига — нет, а схема требовала имя обязательным.
+   * Сообщение о смене настроек не проходило разбор и отбрасывалось целиком.
+   */
+  bootstrap: 'overlay:bootstrap',
   /** Сервер → overlay: конфиг изменился, применить без перезагрузки страницы. */
   configUpdated: 'config:updated',
   /** Сервер → overlay: токен отозван, соединение сейчас закроется. */
@@ -44,6 +53,11 @@ export type AlertMessage = z.infer<typeof alertMessageSchema>;
  *
  * Без типа оверлей не знает, чем именно рендерить присланный объект: раньше тип
  * был ровно один, и его можно было не передавать.
+ *
+ * Состояния здесь нет НАМЕРЕННО. «Настройки изменились» не означает «состояния
+ * больше нет»: если бы поле было и приезжало пустым, правка заголовка цели во
+ * время эфира обнуляла бы собранную сумму на экране, а идущий марафон
+ * откатывался бы к начальной длительности.
  */
 export const configUpdatedMessageSchema = z
   .object({
@@ -77,14 +91,19 @@ export const analyticsUpdatedMessageSchema = z.object({
 });
 export type AnalyticsUpdatedMessage = z.infer<typeof analyticsUpdatedMessageSchema>;
 
-/** Начальное состояние, которое overlay получает сразу после подключения. */
+/**
+ * Начальное состояние, которое overlay получает сразу после подключения.
+ *
+ * Приезжает своим событием (SOCKET_EVENTS.bootstrap), а не тем же, что смена
+ * настроек: только здесь есть имя виджета и посчитанное сервером состояние.
+ */
 export const overlayBootstrapSchema = z
   .object({
     widgetId: z.string().uuid(),
     name: z.string(),
     isEnabled: z.boolean(),
     /** Состояние считается сервером; у alert-виджета его нет. */
-    state: widgetStateSchema.nullable().default(null),
+    state: widgetStateSchema.nullable(),
   })
   .and(widgetConfigSchema);
 export type OverlayBootstrap = z.infer<typeof overlayBootstrapSchema>;

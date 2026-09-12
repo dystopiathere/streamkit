@@ -119,6 +119,11 @@ export class WidgetsService {
       config: result.config,
     } as BusMessage);
 
+    // Состояние идёт следом отдельным сообщением, и это обязательно: часть
+    // настроек входит в снимок состояния (сумма цели, валюта, период топа), и
+    // без пересчёта оверлей рисовал бы новый конфиг со старыми числами.
+    await this.state.publish(row).catch(() => undefined);
+
     return result;
   }
 

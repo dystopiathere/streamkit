@@ -300,6 +300,14 @@ export const goalStateSchema = z.object({
   raisedMinor: z.number().int().nonnegative(),
   targetMinor: z.number().int().positive(),
   currency: currencySchema,
+  /**
+   * Стартовая сумма, уже включённая в raisedMinor.
+   *
+   * Отдаётся отдельно, чтобы форма в дашборде могла показать заданное значение.
+   * Без него поле всегда открывалось нулём, и сохранение настроек затирало
+   * смещение — собранная сумма на экране падала без всякой причины.
+   */
+  offsetMinor: z.number().int(),
 });
 export type GoalState = z.infer<typeof goalStateSchema>;
 

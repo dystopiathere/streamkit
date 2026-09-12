@@ -166,6 +166,16 @@ describe('Состояние виджетов (feature)', () => {
       .expect(200);
 
     expect(response.body.raisedMinor).toBe(35_000);
+    // Смещение отдаётся и отдельным полем: без него форме в дашборде нечем
+    // заполнить «стартовую сумму», она открывается нулём, и сохранение стирает
+    // заданное значение.
+    expect(response.body.offsetMinor).toBe(25_000);
+
+    const reread = await request(server())
+      .get(`/api/widgets/${widgetId}/state`)
+      .set(auth())
+      .expect(200);
+    expect(reread.body.offsetMinor).toBe(25_000);
   });
 
   it('управляет таймером, и состояние переживает перечитывание', async () => {

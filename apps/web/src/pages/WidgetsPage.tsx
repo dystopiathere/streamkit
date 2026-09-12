@@ -1,4 +1,4 @@
-import { WIDGET_TYPES, type WidgetType, defaultWidgetConfig } from '@streamkit/contracts';
+import { WIDGET_TYPES, type CreateWidgetInput, type WidgetType } from '@streamkit/contracts';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -25,9 +25,11 @@ export function WidgetsPage(): React.JSX.Element {
     const trimmed = name.trim();
     if (trimmed.length === 0) return;
 
-    // Конфиг уходит пустым: дефолты досыпает схема на сервере, и они обязаны
-    // быть одни и те же независимо от того, кто создал виджет.
-    await createWidget.mutateAsync({ ...defaultWidgetConfig(type), name: trimmed });
+    // Конфиг уходит ПУСТЫМ, а не собранным на клиенте: дефолты досыпает схема
+    // на сервере. Раньше сюда уезжал defaultWidgetConfig(type), вычисленный в
+    // браузере, — вместе с ним уезжала и дата начала цели по часам машины
+    // стримера. Сбитые часы означали цель, которая молча никогда не наполнится.
+    await createWidget.mutateAsync({ name: trimmed, type, config: {} } as CreateWidgetInput);
     setName('');
   };
 

@@ -95,6 +95,7 @@ function Surface({
                   raisedMinor: Math.round(goal.targetMinor / 3),
                   targetMinor: goal.targetMinor,
                   currency: goal.currency,
+                  offsetMinor: 0,
                 }
           }
         />

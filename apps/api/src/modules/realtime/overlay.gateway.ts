@@ -2,6 +2,7 @@ import { Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common'
 import { type OnGatewayConnection, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import {
   SOCKET_EVENTS,
+  type ConfigUpdatedMessage,
   type OverlayBootstrap,
   overlayRoom,
   shouldShowAlert,
@@ -78,7 +79,7 @@ export class OverlayGateway implements OnGatewayConnection, OnModuleInit, OnModu
       state: await this.widgetState.computeById(resolved.widgetId),
       ...resolved.widget,
     };
-    client.emit(SOCKET_EVENTS.configUpdated, bootstrap);
+    client.emit(SOCKET_EVENTS.bootstrap, bootstrap);
 
     await this.widgets.touchOverlayToken(resolved.tokenId);
     this.logger.debug({ widgetId: resolved.widgetId }, 'Оверлей подключился');
@@ -108,12 +109,18 @@ export class OverlayGateway implements OnGatewayConnection, OnModuleInit, OnModu
         }
 
         case 'widget-config': {
-          this.server.local.to(widgetRoom(message.widgetId)).emit(SOCKET_EVENTS.configUpdated, {
+          // Ни имени, ни состояния: это сообщение отвечает только за настройки.
+          // Состояние приезжает своим сообщением следом — сервис виджетов
+          // публикует его сразу после конфига.
+          const payload: ConfigUpdatedMessage = {
             widgetId: message.widgetId,
             isEnabled: message.isEnabled,
             type: message.type,
             config: message.config,
-          });
+          } as ConfigUpdatedMessage;
+          this.server.local
+            .to(widgetRoom(message.widgetId))
+            .emit(SOCKET_EVENTS.configUpdated, payload);
           break;
         }
 

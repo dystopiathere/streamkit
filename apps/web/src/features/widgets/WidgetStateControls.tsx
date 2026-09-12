@@ -2,6 +2,7 @@ import {
   type Widget,
   type WidgetState,
   formatDuration,
+  formatMinorForInput,
   formatMoney,
   parseMajorToMinor,
 } from '@streamkit/contracts';
@@ -75,8 +76,28 @@ function GoalControls({
 
   // Поле в рублях, состояние в копейках. Просить у стримера копейки значит
   // заставлять его печатать 100000 там, где он думает про тысячу.
-  const [value, setValue] = useState('0');
+  //
+  // Начальное значение — заданное смещение, а не ноль. Поле, которое всегда
+  // открывается нулём, выглядит как потерянная настройка, а нажатие «Сохранить»
+  // рядом с ним эту настройку действительно затирало.
+  const [value, setValue] = useState(() => formatMinorForInput(raised?.offsetMinor ?? 0));
   const offsetMinor = parseMajorToMinor(value);
+
+  // Снимок состояния приходит запросом, то есть уже после первого рендера:
+  // без этого поле так и осталось бы нулём, ради которого всё и затевалось.
+  // Правка состояния в рендере, а не в эффекте — так React и предлагает
+  // подстраивать состояние под изменившийся пропс.
+  //
+  // Своё же значение не переписываем: иначе набранное стиралось бы на каждом
+  // обновлении состояния с сервера.
+  const stored = raised?.offsetMinor ?? null;
+  const [seen, setSeen] = useState(stored);
+  if (stored !== seen) {
+    setSeen(stored);
+    if (stored !== null && parseMajorToMinor(value) !== stored) {
+      setValue(formatMinorForInput(stored));
+    }
+  }
 
   return (
     <div className="space-y-3">

@@ -1,9 +1,11 @@
 import {
   type AlertEvent,
+  type ConfigUpdatedMessage,
   type OverlayBootstrap,
   SOCKET_EVENTS,
   type WidgetState,
   alertEventSchema,
+  configUpdatedMessageSchema,
   overlayBootstrapSchema,
   widgetStateMessageSchema,
 } from '@streamkit/contracts';
@@ -14,7 +16,10 @@ export type ConnectionState = 'connecting' | 'connected' | 'revoked' | 'invalid-
 
 export interface OverlayConnectionHandlers {
   onAlert: (event: AlertEvent) => void;
+  /** Первое сообщение соединения: имя, настройки и состояние разом. */
   onBootstrap: (bootstrap: OverlayBootstrap) => void;
+  /** Настройки поменялись. Состояние при этом НЕ трогается — его здесь нет. */
+  onConfig: (config: ConfigUpdatedMessage) => void;
   /** Пересчитанное сервером состояние: собрано по цели, топ, конец таймера. */
   onState: (state: WidgetState) => void;
 }
@@ -43,8 +48,8 @@ const MAX_REJECTIONS = 3;
  * ссылке, вставленной в OBS). Сервер намеренно не говорит, что не так: подбор
  * ссылок не должен получать обратную связь. Снаружи это выглядит как обычный
  * обрыв, и раньше оверлей вечно переподключался по мёртвой ссылке. Признак,
- * который отличает этот случай, — соединение установилось, но конфиг так и не
- * пришёл: сервер шлёт его сразу после успешной проверки токена.
+ * который отличает этот случай, — соединение установилось, но bootstrap так и
+ * не пришёл: сервер шлёт его сразу после успешной проверки токена.
  */
 export function useOverlayConnection(
   token: string | null,
@@ -101,7 +106,7 @@ export function useOverlayConnection(
       setState('connecting');
     });
 
-    socket.on(SOCKET_EVENTS.configUpdated, (payload: unknown) => {
+    socket.on(SOCKET_EVENTS.bootstrap, (payload: unknown) => {
       // Сервер валидирует то, что отправляет, но overlay живёт неделями и может
       // пережить деплой с другой формой конфига. Мусор лучше проигнорировать,
       // чем упасть посреди стрима.
@@ -110,6 +115,13 @@ export function useOverlayConnection(
         accepted = true;
         rejections = 0;
         handlersRef.current.onBootstrap(parsed.data);
+      }
+    });
+
+    socket.on(SOCKET_EVENTS.configUpdated, (payload: unknown) => {
+      const parsed = configUpdatedMessageSchema.safeParse(payload);
+      if (parsed.success) {
+        handlersRef.current.onConfig(parsed.data);
       }
     });
 

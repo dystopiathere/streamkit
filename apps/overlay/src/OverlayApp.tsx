@@ -1,6 +1,7 @@
 import {
   type AlertEvent,
   type AlertWidgetConfig,
+  type ConfigUpdatedMessage,
   type OverlayBootstrap,
   type WidgetState,
   defaultWidgetConfig,
@@ -54,11 +55,27 @@ export function OverlayApp(): React.JSX.Element | null {
     setState(bootstrap.state);
   }, []);
 
+  /**
+   * Настройки поменялись — состояние остаётся прежним.
+   *
+   * Это не мелочь: правка заголовка цели во время эфира не должна обнулять
+   * собранную сумму на экране. Пересчитанное состояние приедет своим
+   * сообщением, если настройки на него повлияли.
+   */
+  const handleConfig = useCallback((next: ConfigUpdatedMessage) => {
+    setWidget((current) => (current ? { ...current, ...next } : current));
+  }, []);
+
   const handleState = useCallback((next: WidgetState) => setState(next), []);
 
   const handlers = useMemo(
-    () => ({ onAlert: handleAlert, onBootstrap: handleBootstrap, onState: handleState }),
-    [handleAlert, handleBootstrap, handleState],
+    () => ({
+      onAlert: handleAlert,
+      onBootstrap: handleBootstrap,
+      onConfig: handleConfig,
+      onState: handleState,
+    }),
+    [handleAlert, handleBootstrap, handleConfig, handleState],
   );
 
   const connection = useOverlayConnection(token, handlers);

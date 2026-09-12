@@ -61,6 +61,16 @@ describe('переходы таймера', () => {
     expect(next.endsAt).toBe(new Date(NOW + BOUNDS.maxSeconds * 1000).toISOString());
   });
 
+  it('потолок не укорачивает уже идущий таймер', () => {
+    // Начальная длительность и потолок задаются независимо, и «не больше шести
+    // часов» легко поставить марафону, заведённому на двенадцать. Донат обязан
+    // в худшем случае не изменить ничего — но никак не срезать половину
+    // марафона на глазах зрителей.
+    const long: TimerSnapshot = { endsAt: null, pausedSeconds: 43_200 };
+    const next = applyTimerAction(long, 'add', { ...BOUNDS, maxSeconds: 21_600, seconds: 300 });
+    expect(next.pausedSeconds).toBe(43_200);
+  });
+
   it('досчитавший до нуля таймер не уходит в минус', () => {
     const expired: TimerSnapshot = { endsAt: '2026-09-12T11:00:00.000Z', pausedSeconds: null };
     expect(applyTimerAction(expired, 'pause', BOUNDS).pausedSeconds).toBe(0);

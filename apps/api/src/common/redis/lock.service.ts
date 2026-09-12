@@ -18,6 +18,10 @@ end
 return 0
 `;
 
+/** Сколько раз ждём освобождения занятой блокировки и с каким шагом. */
+const WAIT_ATTEMPTS = 20;
+const WAIT_STEP_MS = 100;
+
 /**
  * Взаимное исключение между процессами поверх Redis.
  *
@@ -44,9 +48,8 @@ export class RedisLock {
    *          `null` это штатный исход, а не ошибка: работу делает другая реплика.
    */
   async withLock<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T | null> {
-    const token = randomUUID();
-    const acquired = await this.redis.set(key, token, 'PX', ttlMs, 'NX');
-    if (acquired !== 'OK') {
+    const token = await this.acquire(key, ttlMs);
+    if (!token) {
       this.logger.debug({ key }, 'Блокировка занята, задача пропущена');
       return null;
     }
@@ -54,13 +57,68 @@ export class RedisLock {
     try {
       return await fn();
     } finally {
-      // Падение снятия не должно подменять собой исходную ошибку: ключ всё
-      // равно истечёт по TTL.
-      await this.redis
-        .eval(RELEASE_SCRIPT, 1, key, token)
-        .catch((error: unknown) =>
-          this.logger.warn({ err: error, key }, 'Не удалось снять блокировку'),
-        );
+      await this.release(key, token);
     }
   }
+
+  /**
+   * Выполняет `fn`, ДОЖДАВШИСЬ освобождения блокировки.
+   *
+   * Отличие от `withLock` не в механике, а в смысле отказа. Там «занято»
+   * означает «работу делает другая реплика, и делать её второй раз не нужно» —
+   * уборка и опрос идемпотентны. Здесь занято означает «ту же строку прямо
+   * сейчас меняет кто-то другой», и пропустить работу нельзя: это потерянный
+   * донат, а не сэкономленный запрос.
+   *
+   * Ожидание ограничено, и при неудаче метод бросает. Применить изменение
+   * поверх чужого молча — ровно та потеря, ради которой блокировка заводилась.
+   *
+   * Возвращаемое значение `fn` здесь не перегружено смыслом «занято», в отличие
+   * от `withLock`: ожидание устроено вокруг самой блокировки, а не вокруг
+   * результата, поэтому `fn` вправе вернуть и `null`.
+   */
+  async withLockWaiting<T>(
+    key: string,
+    ttlMs: number,
+    fn: () => Promise<T>,
+    options: { attempts?: number; stepMs?: number } = {},
+  ): Promise<T> {
+    const attempts = options.attempts ?? WAIT_ATTEMPTS;
+    const stepMs = options.stepMs ?? WAIT_STEP_MS;
+
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const token = await this.acquire(key, ttlMs);
+      if (token) {
+        try {
+          return await fn();
+        } finally {
+          await this.release(key, token);
+        }
+      }
+      await sleep(stepMs);
+    }
+
+    throw new Error(`Не удалось получить блокировку ${key} за ${attempts} попыток`);
+  }
+
+  /** @returns токен владения, либо null — ключ занят. */
+  private async acquire(key: string, ttlMs: number): Promise<string | null> {
+    const token = randomUUID();
+    const acquired = await this.redis.set(key, token, 'PX', ttlMs, 'NX');
+    return acquired === 'OK' ? token : null;
+  }
+
+  private async release(key: string, token: string): Promise<void> {
+    // Падение снятия не должно подменять собой исходную ошибку: ключ всё
+    // равно истечёт по TTL.
+    await this.redis
+      .eval(RELEASE_SCRIPT, 1, key, token)
+      .catch((error: unknown) =>
+        this.logger.warn({ err: error, key }, 'Не удалось снять блокировку'),
+      );
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
