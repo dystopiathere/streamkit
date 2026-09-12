@@ -1,5 +1,7 @@
 import {
   type AlertEvent,
+  type ChatMessage,
+  chatMessageSchema,
   type ConfigUpdatedMessage,
   type OverlayBootstrap,
   SOCKET_EVENTS,
@@ -22,6 +24,8 @@ export interface OverlayConnectionHandlers {
   onConfig: (config: ConfigUpdatedMessage) => void;
   /** Пересчитанное сервером состояние: собрано по цели, топ, конец таймера. */
   onState: (state: WidgetState) => void;
+  /** Новое сообщение чата. Приходит потоком: состояния у чата нет. */
+  onChat: (message: ChatMessage) => void;
 }
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
@@ -129,6 +133,13 @@ export function useOverlayConnection(
       const parsed = widgetStateMessageSchema.safeParse(payload);
       if (parsed.success) {
         handlersRef.current.onState(parsed.data.state);
+      }
+    });
+
+    socket.on(SOCKET_EVENTS.chatMessage, (payload: unknown) => {
+      const parsed = chatMessageSchema.safeParse(payload);
+      if (parsed.success) {
+        handlersRef.current.onChat(parsed.data);
       }
     });
 

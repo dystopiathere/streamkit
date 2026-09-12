@@ -4,6 +4,7 @@ import {
   emoteUrl,
   type ChatPart,
 } from '@streamkit/contracts';
+import { useEffect, useState } from 'react';
 import { textStyleToCss } from './text-style';
 
 export interface ChatBoxProps {
@@ -22,8 +23,10 @@ export interface ChatBoxProps {
  * разные ники, и серверный фильтр потребовал бы комнату на каждый виджет.
  */
 export function ChatBox({ config, messages }: ChatBoxProps): React.JSX.Element | null {
+  const clock = useFadeClock(messages, config.messageLifetimeSeconds);
+
   const visible = messages
-    .filter((message) => isVisible(message, config))
+    .filter((message) => isVisible(message, config) && !isFaded(message, config, clock))
     .slice(-config.maxMessages);
   if (visible.length === 0) return null;
 
@@ -125,6 +128,55 @@ const BADGE_SIGNS: Record<string, string> = {
   turbo: '⚡',
   premium: '👑',
 };
+
+interface FadeClock {
+  now: number;
+  /** На сколько часы машины с OBS расходятся с часами площадки. */
+  skewMs: number;
+}
+
+/**
+ * Часы для гашения строк.
+ *
+ * Время живёт в состоянии и двигается только из таймера: `Date.now()` в теле
+ * компонента делает рендер нечистым, и линтер React Compiler это ловит.
+ *
+ * Поправка на расхождение часов считается по САМОМУ СВЕЖЕМУ сообщению. Метка
+ * времени в сообщении — серверная, а часы машины с OBS уезжают на что угодно:
+ * убежавшие вперёд заставили бы чат гаснуть мгновенно, отставшие — не гаснуть
+ * никогда, и заметить это можно только сравнив с чужим экраном. Свежее
+ * сообщение по определению только что отправлено, поэтому разница между его
+ * меткой и местным временем и есть расхождение.
+ */
+function useFadeClock(messages: ChatMessage[], lifetimeSeconds: number): FadeClock {
+  const newest = messages.at(-1);
+  const newestSentAt = newest?.sentAt;
+  const [clock, setClock] = useState<FadeClock>(() => ({ now: Date.now(), skewMs: 0 }));
+
+  useEffect(() => {
+    if (lifetimeSeconds === 0) return;
+
+    const skewMs = newestSentAt ? Date.now() - Date.parse(newestSentAt) : 0;
+    const apply = (): void => setClock({ now: Date.now(), skewMs });
+
+    // Первый пересчёт через setTimeout(0), а не сразу: синхронный setState
+    // внутри эффекта запускает каскад лишних рендеров.
+    const immediate = setTimeout(apply, 0);
+    const interval = setInterval(apply, 1000);
+    return () => {
+      clearTimeout(immediate);
+      clearInterval(interval);
+    };
+  }, [newestSentAt, lifetimeSeconds]);
+
+  return clock;
+}
+
+function isFaded(message: ChatMessage, config: ChatWidgetConfig, clock: FadeClock): boolean {
+  if (config.messageLifetimeSeconds === 0) return false;
+  const ageMs = clock.now - clock.skewMs - Date.parse(message.sentAt);
+  return ageMs > config.messageLifetimeSeconds * 1000;
+}
 
 function isVisible(message: ChatMessage, config: ChatWidgetConfig): boolean {
   if (config.hiddenUsers.includes(message.login)) return false;

@@ -21,6 +21,12 @@ async function registerStreamer(page: Page, prefix: string): Promise<void> {
   }
   await page.getByRole('button', { name: 'Создать аккаунт' }).click();
   await expect(page).toHaveURL(/\/widgets$/);
+
+  // Баннер согласия висит внизу поверх страницы и перехватывает клики по
+  // кнопкам в нижней части формы. Выбираем «только необходимые» — тот же
+  // выбор, который сделал бы осторожный пользователь.
+  const banner = page.getByRole('button', { name: 'Только необходимые' });
+  if (await banner.isVisible()) await banner.click();
 }
 
 async function issueOverlayUrl(page: Page): Promise<string> {
@@ -48,6 +54,49 @@ test('цель отрисовывается в оверлее', async ({ page, c
   await expect(overlayPage.getByTestId('goal-bar')).toBeVisible({ timeout: 15_000 });
   // Полоса пустая: настоящих донатов ещё не было, и выдумывать их нельзя.
   await expect(overlayPage.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
+});
+
+test('виджет чата настраивается, а оверлей по нему подключается', async ({ page, context }) => {
+  // Сообщения сюда не доедут: их читает воркер, которого в сквозном прогоне
+  // нет, а живой IRC в тесте — это зависимость от чужой сети. Путь «сокет →
+  // JOIN → сообщение → шина» закрыт интеграционным тестом с поддельным
+  // сервером. Здесь проверяется то, что тот тест увидеть не может: собранный
+  // рендерер чата в настоящем браузере и приём токена оверлея виджетом чата.
+  await registerStreamer(page, 'e2e-chat');
+
+  await page.getByPlaceholder('Название виджета').fill('Чат в кадре');
+  await page.getByLabel('Тип виджета').selectOption('chat');
+  await page.getByRole('button', { name: 'Новый виджет' }).click();
+
+  await page.getByRole('link', { name: 'Настроить' }).first().click();
+
+  // Предпросмотр рисуется примером: настраивают чат до эфира, и пустая рамка
+  // ничего не сказала бы ни про шрифт, ни про читаемость обводки.
+  await expect(page.getByTestId('chat-box')).toBeVisible();
+  await expect(page.getByTestId('chat-box')).toContainText('Модератор');
+
+  await page.getByLabel('Канал Twitch').fill('Shroud');
+  await page.getByRole('button', { name: 'Сохранить' }).first().click();
+
+  // Логин нормализуется к нижнему регистру: иначе ключ комнаты доставки
+  // разошёлся бы с тегом канала в сообщении IRC.
+  await expect(page.getByLabel('Канал Twitch')).toHaveValue('shroud');
+
+  await page.getByRole('button', { name: 'Создать ссылку' }).click();
+  const field = page.locator('input[readonly]').first();
+  await expect(field).toHaveValue(/token=/, { timeout: 10_000 });
+
+  const overlayPage = await context.newPage();
+  await overlayPage.goto(await field.inputValue());
+
+  // Экран пустой — сообщений ещё нет, и надпись поверх эфира не нужна. Зато
+  // сервер обязан отметить подключение: значит, токен принят и оверлей вступил
+  // в комнату канала.
+  await page.reload();
+  await expect(page.getByText('Последняя активность: не подключалась')).toHaveCount(0, {
+    timeout: 15_000,
+  });
+  await overlayPage.close();
 });
 
 test('таймер запускается из дашборда и идёт в оверлее', async ({ page, context }) => {

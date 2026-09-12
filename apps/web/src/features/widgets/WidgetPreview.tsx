@@ -8,6 +8,7 @@ import type {
   WidgetState,
   WidgetType,
 } from '@streamkit/contracts';
+import { defaultWidgetConfig } from '@streamkit/contracts';
 import {
   AlertAnimationStyles,
   AlertCard,
@@ -62,15 +63,35 @@ export function WidgetPreview({
   );
 }
 
+/**
+ * Значения формы поверх дефолтов своего типа.
+ *
+ * Нужно из-за одного кадра на переходе: форма наполняется значениями виджета
+ * из эффекта, то есть уже ПОСЛЕ первого рендера с новым типом. В этом кадре
+ * `form.watch()` ещё отдаёт значения предыдущего типа, и рендерер получает
+ * конфиг не от того виджета. Для цели это безобидно (число превращается в NaN),
+ * а для чата — падение на первом же обращении к списку скрытых ников, то есть
+ * пустая страница редактора вместо предпросмотра.
+ *
+ * Слияние, а не разбор схемой: значение в поле бывает недописанным и схему не
+ * проходит, но показывать его в предпросмотре всё равно надо — ради этого
+ * предпросмотр и существует.
+ */
+function withDefaults(type: WidgetType, config: Record<string, unknown>): Record<string, unknown> {
+  return { ...defaultWidgetConfig(type).config, ...config };
+}
+
 function Surface({
   type,
-  config,
+  config: raw,
   state,
 }: {
   type: WidgetType;
   config: Record<string, unknown>;
   state: WidgetState | null;
 }): React.JSX.Element | null {
+  const config = withDefaults(type, raw);
+
   switch (type) {
     case 'alerts':
       return (

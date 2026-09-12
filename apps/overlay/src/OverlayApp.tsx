@@ -1,6 +1,7 @@
 import {
   type AlertEvent,
   type AlertWidgetConfig,
+  type ChatMessage,
   type ConfigUpdatedMessage,
   type OverlayBootstrap,
   type WidgetState,
@@ -23,6 +24,15 @@ import { readTokenFromLocation, useOverlayConnection } from './useOverlayConnect
 
 const token = readTokenFromLocation();
 
+/**
+ * Сколько сообщений чата держим в памяти.
+ *
+ * Заметно больше потолка виджета: фильтры срабатывают уже после буфера, и
+ * обрезка ровно по maxMessages оставляла бы на экране меньше строк, чем просил
+ * стример. Полсотни строк — это доли килобайта.
+ */
+const CHAT_BUFFER = 60;
+
 /** Дефолт алертов нужен очереди с первой секунды — до прихода bootstrap. */
 const DEFAULT_ALERT_CONFIG = defaultWidgetConfig('alerts').config as AlertWidgetConfig;
 
@@ -36,6 +46,7 @@ const DEFAULT_ALERT_CONFIG = defaultWidgetConfig('alerts').config as AlertWidget
 export function OverlayApp(): React.JSX.Element | null {
   const [widget, setWidget] = useState<OverlayBootstrap | null>(null);
   const [state, setState] = useState<WidgetState | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const alertConfig = widget?.type === 'alerts' ? widget.config : DEFAULT_ALERT_CONFIG;
   const { current, enqueue } = useAlertQueue(alertConfig);
@@ -69,14 +80,31 @@ export function OverlayApp(): React.JSX.Element | null {
 
   const handleState = useCallback((next: WidgetState) => setState(next), []);
 
+  /**
+   * Лента чата.
+   *
+   * Буфер обрезается с запасом над `maxMessages`: виджет показывает последние
+   * строки, но фильтры (боты, команды) отсекают часть уже после буфера, и
+   * обрезка ровно по `maxMessages` оставляла бы на экране меньше строк, чем
+   * просил стример. Дубли по идентификатору — от переподключения.
+   */
+  const handleChat = useCallback((next: ChatMessage) => {
+    setMessages((current) =>
+      current.some((message) => message.id === next.id)
+        ? current
+        : [...current, next].slice(-CHAT_BUFFER),
+    );
+  }, []);
+
   const handlers = useMemo(
     () => ({
       onAlert: handleAlert,
       onBootstrap: handleBootstrap,
       onConfig: handleConfig,
       onState: handleState,
+      onChat: handleChat,
     }),
-    [handleAlert, handleBootstrap, handleConfig, handleState],
+    [handleAlert, handleBootstrap, handleConfig, handleState, handleChat],
   );
 
   const connection = useOverlayConnection(token, handlers);
@@ -127,8 +155,8 @@ export function OverlayApp(): React.JSX.Element | null {
       );
 
     // Сообщения приезжают отдельным потоком, а не состоянием: у чата нечего
-    // пересчитывать, есть только лента. Источник подключается следующим шагом.
+    // пересчитывать, есть только лента, и накапливает её сам оверлей.
     case 'chat':
-      return <ChatBox config={widget.config} messages={[]} />;
+      return <ChatBox config={widget.config} messages={messages} />;
   }
 }

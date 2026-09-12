@@ -29,6 +29,8 @@ export const SOCKET_EVENTS = {
   analyticsUpdated: 'analytics:updated',
   /** Сервер → overlay: пересчитанное состояние виджета (цель, таймер, топ). */
   widgetState: 'widget:state',
+  /** Сервер → overlay: сообщение чата площадки. */
+  chatMessage: 'chat:message',
 } as const;
 
 export type SocketEventName = (typeof SOCKET_EVENTS)[keyof typeof SOCKET_EVENTS];
@@ -36,6 +38,31 @@ export type SocketEventName = (typeof SOCKET_EVENTS)[keyof typeof SOCKET_EVENTS]
 /** Комната overlay-соединения. Ключ — id токена, не сам токен. */
 export function overlayRoom(tokenId: string): string {
   return `overlay:${tokenId}`;
+}
+
+/**
+ * Комната всех сокетов одного виджета — по ней рассылается смена настроек.
+ *
+ * Живёт в контрактах, а не в шлюзе: по этой же комнате шлюз переселяет
+ * оверлеи чата, когда стример поменял канал в настройках.
+ */
+export function widgetRoom(widgetId: string): string {
+  return `widget:${widgetId}`;
+}
+
+/**
+ * Комната одного канала чата.
+ *
+ * Ключ — КАНАЛ, а не пользователь, и это выбор с последствиями. Сообщения чата
+ * идут сотнями в минуту: адресуй их по пользователю — и на каждое пришлось бы
+ * спрашивать у БД, какие у него виджеты, то есть повторять запрос, который уже
+ * числится в известных ограничениях на куда более редких донатах. По каналу
+ * сообщение уходит в комнату напрямую, без единого запроса.
+ *
+ * Побочная выгода: два стримера, смотрящие один канал, делят одну комнату.
+ */
+export function chatRoom(platform: string, channel: string): string {
+  return `chat:${platform}:${channel}`;
 }
 
 /** Комната личного кабинета пользователя. */
