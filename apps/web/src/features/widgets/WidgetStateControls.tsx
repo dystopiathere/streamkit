@@ -50,20 +50,7 @@ export function WidgetStateControls({ widget }: { widget: Widget }): React.JSX.E
         />
       ) : null}
 
-      {widget.type === 'top-donors' ? (
-        // У топа нет состояния, которым можно управлять: он целиком выводится
-        // из истории событий. Показываем то, что увидят зрители.
-        <p className="text-sm text-muted">
-          {state.data?.kind === 'top-donors' && state.data.entries.length > 0
-            ? state.data.entries
-                .map(
-                  (entry) =>
-                    `${entry.username} — ${formatMoney({ amountMinor: entry.amountMinor, currency: state.data?.kind === 'top-donors' ? state.data.currency : 'RUB' })}`,
-                )
-                .join(', ')
-            : t('widgets.state.topEmpty')}
-        </p>
-      ) : null}
+      {widget.type === 'top-donors' ? <TopDonorsSummary state={state.data ?? null} /> : null}
     </Card>
   );
 }
@@ -176,5 +163,30 @@ function TimerControls({
         </Button>
       </div>
     </div>
+  );
+}
+
+/**
+ * У топа нет состояния, которым можно управлять: он целиком выводится из
+ * истории событий. Показываем то, что прямо сейчас увидят зрители — иначе
+ * проверить настройки периода и валюты можно только через OBS.
+ */
+function TopDonorsSummary({ state }: { state: WidgetState | null }): React.JSX.Element {
+  const { t } = useTranslation();
+  if (state?.kind !== 'top-donors' || state.entries.length === 0) {
+    return <p className="text-sm text-muted">{t('widgets.state.topEmpty')}</p>;
+  }
+
+  return (
+    <ol className="space-y-1 text-sm">
+      {state.entries.map((entry) => (
+        <li key={entry.username} className="flex justify-between gap-3">
+          <span className="truncate">{entry.username}</span>
+          <span className="shrink-0 tabular-nums">
+            {formatMoney({ amountMinor: entry.amountMinor, currency: state.currency })}
+          </span>
+        </li>
+      ))}
+    </ol>
   );
 }
