@@ -3,6 +3,7 @@ import { AuditService } from './audit/audit.service';
 import { RealtimeBus } from './bus/realtime-bus.service';
 import { CryptoService } from './crypto/crypto.service';
 import { PasswordService } from './crypto/password.service';
+import { RedisLock } from './redis/lock.service';
 
 /**
  * Инфраструктурные сервисы без бизнес-смысла: шифрование, хэширование паролей,
@@ -10,7 +11,7 @@ import { PasswordService } from './crypto/password.service';
  */
 @Global()
 @Module({
-  providers: [CryptoService, PasswordService, AuditService, RealtimeBus],
-  exports: [CryptoService, PasswordService, AuditService, RealtimeBus],
+  providers: [CryptoService, PasswordService, AuditService, RealtimeBus, RedisLock],
+  exports: [CryptoService, PasswordService, AuditService, RealtimeBus, RedisLock],
 })
 export class CommonModule {}

@@ -3,7 +3,9 @@ import type { Widget as PrismaWidget } from '@prisma/client';
 import {
   type AlertWidgetConfig,
   alertWidgetConfigSchema,
+  type CreatedOverlayToken,
   type CreateWidgetInput,
+  type OverlayTokenView,
   type UpdateWidgetInput,
   type Widget,
 } from '@streamkit/contracts';
@@ -12,13 +14,6 @@ import { RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AppConfig } from '../../config/app-config.service';
-
-export interface OverlayTokenView {
-  id: string;
-  label: string | null;
-  createdAt: string;
-  lastSeenAt: string | null;
-}
 
 export interface ResolvedOverlayToken {
   tokenId: string;
@@ -133,7 +128,7 @@ export class WidgetsService {
     widgetId: string,
     label: string | null,
     context: AuditContext = {},
-  ): Promise<{ id: string; url: string }> {
+  ): Promise<CreatedOverlayToken> {
     await this.requireOwned(userId, widgetId);
 
     const raw = this.crypto.generateToken(32);

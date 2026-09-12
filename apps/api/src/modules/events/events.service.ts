@@ -41,8 +41,9 @@ export class EventsService {
       return { status: 'duplicate', event: null };
     }
 
+    let row;
     try {
-      const row = await this.prisma.alertEvent.create({
+      row = await this.prisma.alertEvent.create({
         data: {
           userId: incoming.userId,
           type: toPrismaEventType(incoming.type),
@@ -56,12 +57,6 @@ export class EventsService {
           occurredAt: incoming.occurredAt ? new Date(incoming.occurredAt) : new Date(),
         },
       });
-
-      const event = toContractEvent(row);
-      await this.bus.publish({ kind: 'alert', userId: incoming.userId, event });
-      await this.touchSource(incoming);
-
-      return { status: 'created', event };
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -72,11 +67,29 @@ export class EventsService {
         return { status: 'duplicate', event: null };
       }
 
-      // Сбой не связан с дублем: снимаем отметку, чтобы повтор провайдера
-      // не отбросился молча как «уже обработано».
+      // Записи нет — снимаем отметку, чтобы повтор провайдера не отбросился
+      // молча как «уже обработано».
       await this.dedup.release(incoming.userId, incoming.provider, incoming.externalId);
       throw error;
     }
+
+    const event = toContractEvent(row);
+
+    // Всё, что идёт ПОСЛЕ успешной записи, отметку дедупликации не снимает.
+    //
+    // Раньше снимало — и это теряло донат насовсем: строка в БД уже есть,
+    // ключ снят, провайдер честно повторяет событие, повтор упирается в
+    // уникальный индекс и возвращает «дубль». Донат в истории, зрители его
+    // не увидели, показать заново нечем. Лучше сохранённое событие без
+    // алерта, чем сохранённое событие, которое больше никогда не всплывёт.
+    await this.bus
+      .publish({ kind: 'alert', userId: incoming.userId, event })
+      .catch((error: unknown) =>
+        this.logger.error({ err: error, eventId: event.id }, 'Событие записано, но не доставлено'),
+      );
+    await this.touchSource(incoming);
+
+    return { status: 'created', event };
   }
 
   /**

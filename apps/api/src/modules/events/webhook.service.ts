@@ -1,5 +1,5 @@
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
-import { webhookAlertPayloadSchema } from '@streamkit/contracts';
+import { BadRequestException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { type WebhookAlertPayload, webhookAlertPayloadSchema } from '@streamkit/contracts';
 import type { Redis } from 'ioredis';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
@@ -70,7 +70,7 @@ export class WebhookService {
 
     await this.assertNotReplayed(signature, source.userId, context);
 
-    const payload = webhookAlertPayloadSchema.parse(JSON.parse(body));
+    const payload = parsePayload(body);
 
     return this.events.ingest({
       userId: source.userId,
@@ -159,6 +159,37 @@ export class WebhookService {
     });
     return new UnauthorizedException('Подпись недействительна');
   }
+}
+
+/**
+ * Разбор тела ПОСЛЕ проверки подписи.
+ *
+ * Отдельная функция и 400 вместо 401 здесь осознанны: подпись сошлась, значит
+ * отправитель свой, и ему нужно знать, что именно в теле не так. А главное —
+ * это не 500: ZodError и SyntaxError, брошенные наружу, Nest превращает в
+ * «внутреннюю ошибку сервера», и добросовестный интегратор уходит в очередь
+ * ретраев с тем же битым телом вместо того, чтобы починить формат.
+ */
+function parsePayload(body: string): WebhookAlertPayload {
+  let json: unknown;
+  try {
+    json = JSON.parse(body);
+  } catch {
+    throw new BadRequestException({ message: 'Тело запроса не является JSON' });
+  }
+
+  const result = webhookAlertPayloadSchema.safeParse(json);
+  if (!result.success) {
+    throw new BadRequestException({
+      message: 'Ошибка валидации',
+      errors: result.error.issues.map((issue) => ({
+        path: issue.path.join('.'),
+        message: issue.message,
+      })),
+    });
+  }
+
+  return result.data;
 }
 
 function singleHeader(value: string | string[] | undefined): string | null {

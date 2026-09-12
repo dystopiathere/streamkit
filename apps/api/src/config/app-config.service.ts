@@ -64,6 +64,10 @@ export class AppConfig {
     return this.value('IP_HASH_PEPPER');
   }
 
+  get tokenHashPepper(): string {
+    return this.value('TOKEN_HASH_PEPPER');
+  }
+
   get corsOrigins(): string[] {
     return this.value('CORS_ORIGINS');
   }

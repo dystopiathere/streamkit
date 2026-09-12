@@ -257,7 +257,12 @@ model Channel {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([platform, externalId])
+  /// Один канал на площадку у пользователя. Уникальность НЕ глобальная по
+  /// (platform, externalId): глобальная навсегда запирала бы канал за удалённым
+  /// аккаунтом и запрещала двум менеджерам одного канала подключить его каждому
+  /// к своему дашборду. Аналитика канала — не владение каналом.
+  @@unique([userId, platform])
+  @@index([platform, externalId])
   @@index([userId])
 }
 

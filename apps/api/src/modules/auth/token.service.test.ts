@@ -98,6 +98,7 @@ function createService() {
   const crypto = new CryptoService({
     encryptionKey: randomBytes(32),
     ipHashPepper: 'pepper-for-tests-0123456789',
+    tokenHashPepper: 'token-pepper-for-tests-0123456789',
   } as AppConfig);
 
   const jwt = { signAsync: vi.fn(async () => 'access.jwt.token') } as unknown as JwtService;

@@ -234,6 +234,26 @@ describe('Виджеты и приём событий (feature)', () => {
     expect(await harness.prisma.alertEvent.count()).toBe(1);
   });
 
+  it('на верную подпись с невалидным телом отвечает 400, а не 500', async () => {
+    const { sourceId, secret } = await createWebhookSource();
+    // Тело — валидный JSON, но amount прислан числом вместо объекта.
+    const body = JSON.stringify({ externalId: 'evt-bad', username: 'Зритель', amount: 500 });
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+
+    const response = await request(server())
+      .post(`/api/webhooks/${sourceId}`)
+      .set('Content-Type', 'application/json')
+      .set('x-streamkit-timestamp', timestamp)
+      .set('x-streamkit-signature', sign(secret, timestamp, body))
+      .send(body);
+
+    // 500 отправил бы добросовестного интегратора в очередь ретраев с тем же
+    // битым телом вместо того, чтобы он починил формат.
+    expect(response.status).toBe(400);
+    expect(response.body.errors).toBeDefined();
+    expect(await harness.prisma.alertEvent.count()).toBe(0);
+  });
+
   it('отзыв ссылки делает её нерабочей', async () => {
     const widgetId = await createWidget();
     const created = await request(server())

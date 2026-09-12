@@ -28,10 +28,12 @@ const FORMAT_PREFIX = 'v1.';
 export class CryptoService {
   private readonly key: Buffer;
   private readonly ipPepper: string;
+  private readonly tokenPepper: string;
 
   constructor(config: AppConfig) {
     this.key = config.encryptionKey;
     this.ipPepper = config.ipHashPepper;
+    this.tokenPepper = config.tokenHashPepper;
   }
 
   /** Возвращает строку вида `v1.<base64(iv|ciphertext|tag)>`. */
@@ -65,9 +67,17 @@ export class CryptoService {
     return randomBytes(bytes).toString('base64url');
   }
 
-  /** Хэш для хранения наших токенов в БД. Детерминированный — по нему ищем запись. */
+  /**
+   * Хэш для хранения наших токенов в БД. Детерминированный — по нему ищем запись.
+   *
+   * Ключ здесь СВОЙ, а не ключ шифрования. Раньше был общий, и это тихо
+   * связывало две независимые операции: ротация ENCRYPTION_KEY (штатная
+   * процедура, о которой думаешь как о перешифровке TOTP-секретов) заодно
+   * меняла все tokenHash — то есть разлогинивала всех и обрывала все ссылки
+   * оверлеев у всех стримеров одновременно.
+   */
   hashToken(token: string): string {
-    return createHmac('sha256', this.key).update(token).digest('hex');
+    return createHmac('sha256', this.tokenPepper).update(token).digest('hex');
   }
 
   /**

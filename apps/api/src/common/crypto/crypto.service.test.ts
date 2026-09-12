@@ -7,6 +7,7 @@ function createService(): CryptoService {
   const config = {
     encryptionKey: randomBytes(32),
     ipHashPepper: 'pepper-for-tests-0123456789',
+    tokenHashPepper: 'token-pepper-for-tests-0123456789',
   } as AppConfig;
   return new CryptoService(config);
 }

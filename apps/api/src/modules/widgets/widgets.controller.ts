@@ -13,8 +13,10 @@ import {
 } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import {
+  type CreatedOverlayToken,
   type CreateWidgetInput,
   createWidgetSchema,
+  type OverlayTokenView,
   type UpdateWidgetInput,
   updateWidgetSchema,
   type Widget,
@@ -24,7 +26,7 @@ import { z } from 'zod';
 import { AuditService } from '../../common/audit/audit.service';
 import { type AuthenticatedUser, CurrentUser } from '../../common/auth/auth.decorators';
 import { zodBody } from '../../common/pipes/zod-validation.pipe';
-import { type OverlayTokenView, WidgetsService } from './widgets.service';
+import { WidgetsService } from './widgets.service';
 
 const createTokenSchema = z.object({
   label: z.string().trim().max(80).nullable().default(null),
@@ -97,7 +99,7 @@ export class WidgetsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body(zodBody(createTokenSchema)) body: { label: string | null },
     @Req() request: Request,
-  ): Promise<{ id: string; url: string }> {
+  ): Promise<CreatedOverlayToken> {
     return this.widgets.createOverlayToken(
       user.id,
       id,

@@ -84,6 +84,30 @@ export const updateWidgetSchema = z.object({
 });
 export type UpdateWidgetInput = z.infer<typeof updateWidgetSchema>;
 
+/**
+ * Публичная ссылка на виджет для браузер-сорса OBS — то, что видно в дашборде.
+ *
+ * Сам токен здесь отсутствует: он показывается ровно один раз при выпуске, в
+ * БД лежит только хэш. Схема живёт в контрактах, потому что пересекает границу
+ * приложений — раньше этот тип был объявлен дважды, на бэкенде и на фронте,
+ * и новое поле в ответе молча не доезжало до интерфейса.
+ */
+export const overlayTokenViewSchema = z.object({
+  id: uuidSchema,
+  label: z.string().max(80).nullable(),
+  createdAt: isoDateSchema,
+  /** Когда оверлей последний раз подключался. null — ни разу. */
+  lastSeenAt: isoDateSchema.nullable(),
+});
+export type OverlayTokenView = z.infer<typeof overlayTokenViewSchema>;
+
+/** Ответ на выпуск ссылки. Значение токена возвращается единственный раз. */
+export const createdOverlayTokenSchema = z.object({
+  id: uuidSchema,
+  url: z.string().url(),
+});
+export type CreatedOverlayToken = z.infer<typeof createdOverlayTokenSchema>;
+
 /** Дефолтный конфиг для только что созданного виджета. */
 export function defaultAlertWidgetConfig(): AlertWidgetConfig {
   return alertWidgetConfigSchema.parse({});
