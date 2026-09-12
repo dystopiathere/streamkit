@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { configSchemaFor } from '@streamkit/contracts';
+import { configSchemaFor, hasWidgetState } from '@streamkit/contracts';
 import { useEffect } from 'react';
 import { type FieldValues, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -26,9 +26,8 @@ export function WidgetEditorPage(): React.JSX.Element {
   const { id = '' } = useParams();
   const widget = useWidget(id);
   const updateWidget = useUpdateWidget(id);
-  const state = useWidgetState(id, Boolean(widget.data) && widget.data?.type !== 'alerts');
-
   const type = widget.data?.type ?? 'alerts';
+  const state = useWidgetState(id, Boolean(widget.data) && hasWidgetState(type));
 
   const form = useForm<FieldValues>({
     resolver: zodResolver(configSchemaFor(type)),

@@ -328,3 +328,94 @@ export function CheckboxGroupField({
     />
   );
 }
+
+/**
+ * Список коротких значений одной строкой — например, ники скрытых ботов.
+ *
+ * Отдельными полями это было бы пять кнопок «добавить» ради пяти ников, а
+ * `<select multiple>` не годится: набор заранее не известен, стример вписывает
+ * своих. Сырая строка живёт в состоянии поля по той же причине, что и в поле
+ * суммы: пока человек печатает запятую, значение ещё не разобрано, и подставлять
+ * вместо него разобранное значит стирать ввод на каждом разделителе.
+ */
+export function TagsField({
+  form,
+  name,
+  label,
+  hint,
+}: BaseProps & { hint?: string }): React.JSX.Element {
+  return (
+    <Controller
+      control={form.control}
+      name={name}
+      render={({ field }) => (
+        <TagsInput
+          name={name}
+          label={label}
+          hint={hint}
+          error={errorAt(form, name)}
+          value={field.value}
+          onBlur={field.onBlur}
+          onChange={field.onChange}
+        />
+      )}
+    />
+  );
+}
+
+function TagsInput({
+  name,
+  label,
+  hint,
+  error,
+  value,
+  onBlur,
+  onChange,
+}: {
+  name: string;
+  label: string;
+  hint?: string;
+  error?: string;
+  value: unknown;
+  onBlur: () => void;
+  onChange: (next: string[]) => void;
+}): React.JSX.Element {
+  const [text, setText] = useState(() => tagsToText(value));
+  const [seen, setSeen] = useState(value);
+
+  if (value !== seen) {
+    setSeen(value);
+    const incoming = tagsToText(value);
+    if (splitTags(text).join(',') !== splitTags(incoming).join(',')) {
+      setText(incoming);
+    }
+  }
+
+  return (
+    <div>
+      <Label htmlFor={name}>{label}</Label>
+      <Input
+        id={name}
+        value={text}
+        onChange={(event) => {
+          setText(event.target.value);
+          onChange(splitTags(event.target.value));
+        }}
+        onBlur={onBlur}
+      />
+      {hint ? <p className="mt-1 text-xs text-muted">{hint}</p> : null}
+      <FieldError message={error} />
+    </div>
+  );
+}
+
+function splitTags(text: string): string[] {
+  return text
+    .split(/[\s,]+/)
+    .map((item) => item.trim().toLowerCase())
+    .filter((item) => item.length > 0);
+}
+
+function tagsToText(value: unknown): string {
+  return Array.isArray(value) ? (value as string[]).join(', ') : '';
+}

@@ -19,6 +19,7 @@ const TO_PRISMA: Record<WidgetType, PrismaWidgetType> = {
   goal: PrismaWidgetType.GOAL,
   timer: PrismaWidgetType.TIMER,
   'top-donors': PrismaWidgetType.TOP_DONORS,
+  chat: PrismaWidgetType.CHAT,
 };
 
 const FROM_PRISMA: Record<PrismaWidgetType, WidgetType> = {
@@ -26,6 +27,7 @@ const FROM_PRISMA: Record<PrismaWidgetType, WidgetType> = {
   GOAL: 'goal',
   TIMER: 'timer',
   TOP_DONORS: 'top-donors',
+  CHAT: 'chat',
 };
 
 export function toPrismaWidgetType(type: WidgetType): PrismaWidgetType {

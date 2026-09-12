@@ -11,6 +11,7 @@ import {
   ALERT_EXIT_DURATION_MS,
   AlertAnimationStyles,
   AlertCard,
+  ChatBox,
   GoalBar,
   TimerDisplay,
   TopDonorsList,
@@ -124,5 +125,10 @@ export function OverlayApp(): React.JSX.Element | null {
       return (
         <TopDonorsList config={widget.config} state={state?.kind === 'top-donors' ? state : null} />
       );
+
+    // Сообщения приезжают отдельным потоком, а не состоянием: у чата нечего
+    // пересчитывать, есть только лента. Источник подключается следующим шагом.
+    case 'chat':
+      return <ChatBox config={widget.config} messages={[]} />;
   }
 }

@@ -4,6 +4,7 @@ import {
   formatDuration,
   formatMinorForInput,
   formatMoney,
+  hasWidgetState,
   parseMajorToMinor,
 } from '@streamkit/contracts';
 import { useState } from 'react';
@@ -23,7 +24,7 @@ import { useWidgetCommand, useWidgetState } from './queries';
  */
 export function WidgetStateControls({ widget }: { widget: Widget }): React.JSX.Element | null {
   const { t } = useTranslation();
-  const hasState = widget.type !== 'alerts';
+  const hasState = hasWidgetState(widget.type);
   const state = useWidgetState(widget.id, hasState);
   const command = useWidgetCommand(widget.id);
 
