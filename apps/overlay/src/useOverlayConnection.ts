@@ -2,8 +2,10 @@ import {
   type AlertEvent,
   type OverlayBootstrap,
   SOCKET_EVENTS,
+  type WidgetState,
   alertEventSchema,
   overlayBootstrapSchema,
+  widgetStateMessageSchema,
 } from '@streamkit/contracts';
 import { useEffect, useRef, useState } from 'react';
 import { type Socket, io } from 'socket.io-client';
@@ -13,6 +15,8 @@ export type ConnectionState = 'connecting' | 'connected' | 'revoked' | 'invalid-
 export interface OverlayConnectionHandlers {
   onAlert: (event: AlertEvent) => void;
   onBootstrap: (bootstrap: OverlayBootstrap) => void;
+  /** Пересчитанное сервером состояние: собрано по цели, топ, конец таймера. */
+  onState: (state: WidgetState) => void;
 }
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
@@ -106,6 +110,13 @@ export function useOverlayConnection(
         accepted = true;
         rejections = 0;
         handlersRef.current.onBootstrap(parsed.data);
+      }
+    });
+
+    socket.on(SOCKET_EVENTS.widgetState, (payload: unknown) => {
+      const parsed = widgetStateMessageSchema.safeParse(payload);
+      if (parsed.success) {
+        handlersRef.current.onState(parsed.data.state);
       }
     });
 

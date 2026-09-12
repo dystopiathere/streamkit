@@ -1,4 +1,4 @@
-import { defaultAlertWidgetConfig } from '@streamkit/contracts';
+import { WIDGET_TYPES, type WidgetType, defaultWidgetConfig } from '@streamkit/contracts';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -14,6 +14,7 @@ import {
 export function WidgetsPage(): React.JSX.Element {
   const { t } = useTranslation();
   const [name, setName] = useState('');
+  const [type, setType] = useState<WidgetType>('alerts');
 
   const widgets = useWidgets();
   const createWidget = useCreateWidget();
@@ -24,11 +25,9 @@ export function WidgetsPage(): React.JSX.Element {
     const trimmed = name.trim();
     if (trimmed.length === 0) return;
 
-    await createWidget.mutateAsync({
-      name: trimmed,
-      type: 'alerts',
-      config: defaultAlertWidgetConfig(),
-    });
+    // Конфиг уходит пустым: дефолты досыпает схема на сервере, и они обязаны
+    // быть одни и те же независимо от того, кто создал виджет.
+    await createWidget.mutateAsync({ ...defaultWidgetConfig(type), name: trimmed });
     setName('');
   };
 
@@ -64,6 +63,21 @@ export function WidgetsPage(): React.JSX.Element {
               if (event.key === 'Enter') void handleCreate();
             }}
           />
+          {/* Тип выбирается ОДИН раз, при создании: у цели и таймера нет ни
+              одного общего поля конфига, и «сменить тип» означало бы стереть
+              все настройки. Отдельный виджет честнее. */}
+          <select
+            aria-label={t('widgets.field.type')}
+            className="rounded-lg border border-border bg-bg px-3 py-2 text-sm"
+            value={type}
+            onChange={(event) => setType(event.target.value as WidgetType)}
+          >
+            {WIDGET_TYPES.map((value) => (
+              <option key={value} value={value}>
+                {t(`widgets.type.${value}`)}
+              </option>
+            ))}
+          </select>
           <Button
             onClick={handleCreate}
             isLoading={createWidget.isPending}
@@ -88,6 +102,7 @@ export function WidgetsPage(): React.JSX.Element {
             <div className="min-w-0">
               <p className="truncate font-medium">{widget.name}</p>
               <p className="text-xs text-muted">
+                {t(`widgets.type.${widget.type}`)} ·{' '}
                 {widget.isEnabled ? t('widgets.enabled') : t('widgets.disabled')}
               </p>
             </div>

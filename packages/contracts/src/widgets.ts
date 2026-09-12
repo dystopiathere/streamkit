@@ -332,6 +332,46 @@ export const widgetStateSchema = z.discriminatedUnion('kind', [
 ]);
 export type WidgetState = z.infer<typeof widgetStateSchema>;
 
+/**
+ * Команда управления состоянием виджета из дашборда.
+ *
+ * Одна ручка на все типы, а не отдельная под каждый: команды различаются
+ * дискриминантом, и добавление типа не плодит эндпоинтов, которые потом надо
+ * помнить. Для алертов команд нет — их «состояние» это поток событий.
+ */
+export const widgetStateCommandSchema = z
+  .discriminatedUnion('kind', [
+    z.object({
+      kind: z.literal('goal'),
+      /** Стартовая сумма. Может быть отрицательной: цель бывает с долгом. */
+      offsetMinor: z.number().int().min(-1_000_000_000).max(1_000_000_000),
+    }),
+    z.object({
+      kind: z.literal('timer'),
+      action: z.enum(['start', 'pause', 'reset', 'add']),
+      /** Только для `add`. Секунды, а не минуты: сложение должно быть точным. */
+      seconds: z
+        .number()
+        .int()
+        .min(1)
+        .max(24 * 3600)
+        .optional(),
+    }),
+  ])
+  // Проверка связи полей висит на объединении, а не на его ветке: ветка
+  // дискриминированного объединения обязана оставаться ZodObject, иначе Zod
+  // не может по ней разветвиться.
+  .superRefine((value, ctx) => {
+    if (value.kind === 'timer' && value.action === 'add' && value.seconds === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['seconds'],
+        message: 'Для добавления времени нужно указать секунды',
+      });
+    }
+  });
+export type WidgetStateCommand = z.infer<typeof widgetStateCommandSchema>;
+
 /** Доля выполнения цели от 0 до 1. Перебор не обрезается по смыслу, а по шкале. */
 export function goalProgress(state: Pick<GoalState, 'raisedMinor' | 'targetMinor'>): number {
   if (state.targetMinor <= 0) return 0;

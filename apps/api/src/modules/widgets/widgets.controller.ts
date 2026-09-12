@@ -20,6 +20,9 @@ import {
   type UpdateWidgetInput,
   updateWidgetSchema,
   type Widget,
+  type WidgetState,
+  type WidgetStateCommand,
+  widgetStateCommandSchema,
 } from '@streamkit/contracts';
 import type { Request } from 'express';
 import { z } from 'zod';
@@ -53,6 +56,35 @@ export class WidgetsController {
     @Body(zodBody(createWidgetSchema)) body: CreateWidgetInput,
   ): Promise<Widget> {
     return this.widgets.create(user.id, body);
+  }
+
+  /**
+   * Текущее состояние виджета: собрано по цели, остаток таймера, топ.
+   *
+   * Отдельно от конфига: конфиг настраивает стример, состояние считает сервер.
+   */
+  @Get(':id/state')
+  async state(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<WidgetState | null> {
+    return this.widgets.readState(user.id, id);
+  }
+
+  /**
+   * Управление состоянием: стартовая сумма цели, кнопки таймера.
+   *
+   * Одна ручка на все типы вместо эндпоинта под каждую кнопку — команды
+   * различаются дискриминантом в теле, и новый тип виджета не добавляет
+   * маршрутов, о которых потом надо помнить.
+   */
+  @Patch(':id/state')
+  async command(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zodBody(widgetStateCommandSchema)) body: WidgetStateCommand,
+  ): Promise<WidgetState | null> {
+    return this.widgets.applyStateCommand(user.id, id, body);
   }
 
   @Get(':id')

@@ -8,6 +8,7 @@ import {
 } from '@streamkit/contracts';
 import type { Server, Socket } from 'socket.io';
 import { RealtimeBus, type BusMessage } from '../../common/bus/realtime-bus.service';
+import { WidgetStateService } from '../widgets/widget-state.service';
 import { WidgetsService } from '../widgets/widgets.service';
 
 /** Комната всех сокетов одного виджета — по ней рассылается смена конфига. */
@@ -36,6 +37,7 @@ export class OverlayGateway implements OnGatewayConnection, OnModuleInit, OnModu
 
   constructor(
     private readonly widgets: WidgetsService,
+    private readonly widgetState: WidgetStateService,
     private readonly bus: RealtimeBus,
   ) {}
 
@@ -71,9 +73,9 @@ export class OverlayGateway implements OnGatewayConnection, OnModuleInit, OnModu
       widgetId: resolved.widgetId,
       name: resolved.name,
       isEnabled: resolved.isEnabled,
-      // Состояние считает отдельный сервис и досылает сообщением: держать его
-      // здесь значило бы завязать шлюз на каждый новый тип виджета.
-      state: null,
+      // Состояние в первом же сообщении: цель, открытая в OBS, обязана
+      // показать собранную сумму сразу, а не через первый донат.
+      state: await this.widgetState.computeById(resolved.widgetId),
       ...resolved.widget,
     };
     client.emit(SOCKET_EVENTS.configUpdated, bootstrap);

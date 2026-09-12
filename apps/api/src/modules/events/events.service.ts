@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import type { AlertEvent, CursorPagination, IncomingAlertEvent, Page } from '@streamkit/contracts';
 import { RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { WidgetStateService } from '../widgets/widget-state.service';
 import { DedupService } from './dedup.service';
 import { toContractEvent, toPrismaEventType, toPrismaProvider } from './event.mappers';
 
@@ -21,6 +22,7 @@ export class EventsService {
     private readonly prisma: PrismaService,
     private readonly dedup: DedupService,
     private readonly bus: RealtimeBus,
+    private readonly widgetState: WidgetStateService,
   ) {}
 
   /**
@@ -88,6 +90,15 @@ export class EventsService {
         this.logger.error({ err: error, eventId: event.id }, 'Событие записано, но не доставлено'),
       );
     await this.touchSource(incoming);
+
+    // Цель, топ и таймер пересчитываются здесь, а не в шлюзе: шлюз живёт в
+    // каждой реплике API, и пересчёт из каждой размножил бы одни и те же
+    // сообщения по числу инстансов. Запись события случается ровно один раз.
+    await this.widgetState
+      .onAlertEvent(incoming.userId, event)
+      .catch((error: unknown) =>
+        this.logger.warn({ err: error, eventId: event.id }, 'Состояние виджетов не пересчитано'),
+      );
 
     return { status: 'created', event };
   }

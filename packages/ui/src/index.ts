@@ -12,4 +12,8 @@ export {
   AlertAnimationStyles,
   exitAnimationName,
 } from './alert-animations';
+export { GoalBar, type GoalBarProps } from './GoalBar';
+export { textStyleToCss } from './text-style';
+export { TimerDisplay, type TimerDisplayProps } from './TimerDisplay';
+export { TopDonorsList, type TopDonorsListProps } from './TopDonorsList';
 export { useAlertQueue, type QueuedAlert } from './useAlertQueue';

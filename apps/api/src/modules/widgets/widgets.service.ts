@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Widget as PrismaWidget } from '@prisma/client';
 import {
   type AlertWidgetConfig,
@@ -9,6 +9,8 @@ import {
   type UpdateWidgetInput,
   type Widget,
   type WidgetConfig,
+  type WidgetState,
+  type WidgetStateCommand,
 } from '@streamkit/contracts';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
 import { type BusMessage, RealtimeBus } from '../../common/bus/realtime-bus.service';
@@ -16,6 +18,7 @@ import { CryptoService } from '../../common/crypto/crypto.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { validationError } from '../../common/pipes/zod-validation.pipe';
 import { AppConfig } from '../../config/app-config.service';
+import { WidgetStateService } from './widget-state.service';
 import {
   parseWidgetConfig,
   toContractWidget,
@@ -41,6 +44,7 @@ export class WidgetsService {
     private readonly audit: AuditService,
     private readonly bus: RealtimeBus,
     private readonly config: AppConfig,
+    private readonly state: WidgetStateService,
   ) {}
 
   async list(userId: string): Promise<Widget[]> {
@@ -135,6 +139,42 @@ export class WidgetsService {
         reason: 'widget-deleted',
       });
     }
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Состояние                                                          */
+  /* ---------------------------------------------------------------- */
+
+  /** Снимок состояния. null у алертов: их состояние — это поток событий. */
+  async readState(userId: string, widgetId: string): Promise<WidgetState | null> {
+    return this.state.compute(await this.requireOwned(userId, widgetId));
+  }
+
+  /**
+   * Команда управления состоянием.
+   *
+   * Команда обязана соответствовать типу виджета: «запустить таймер» у цели —
+   * не половинчатая операция, а ошибка запроса, и отвечать на неё надо 400, а
+   * не молчаливым ничем.
+   */
+  async applyStateCommand(
+    userId: string,
+    widgetId: string,
+    command: WidgetStateCommand,
+  ): Promise<WidgetState | null> {
+    const widget = await this.requireOwned(userId, widgetId);
+    const type = toContractWidgetType(widget.type);
+
+    if (command.kind !== type) {
+      throw new BadRequestException(`Команда ${command.kind} не подходит виджету типа ${type}`);
+    }
+
+    if (command.kind === 'goal') {
+      await this.state.setGoalOffset(widget, command.offsetMinor);
+      return this.state.compute(widget);
+    }
+
+    return this.state.applyTimerAction(widget, command.action, command.seconds ?? 0);
   }
 
   /* ---------------------------------------------------------------- */
