@@ -1,5 +1,6 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import { resolve } from 'node:path';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { loadEnvFiles } from '../src/config/env-files';
 import { hash } from '@node-rs/argon2';
@@ -20,7 +21,11 @@ const DEMO_PASSWORD = 'streamkit-demo-password';
 // больше нет. Единственный .env лежит в корне репозитория.
 loadEnvFiles(resolve(import.meta.dirname, '..'));
 
-const prisma = new PrismaClient();
+// С Prisma 7 клиент подключается через драйвер-адаптер, а адрес БД приходит
+// из окружения, а не из схемы.
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL ?? '' }),
+});
 
 async function main(): Promise<void> {
   if (process.env.NODE_ENV === 'production') {

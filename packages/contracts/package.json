@@ -24,12 +24,12 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "zod": "^3.25.0"
+    "zod": "^4.6.2"
   },
   "devDependencies": {
     "@streamkit/config": "workspace:*",
-    "tsup": "^8.3.5",
-    "typescript": "^5.7.2",
-    "vitest": "^3.0.0"
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.0"
   }
 }

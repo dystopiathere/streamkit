@@ -8,9 +8,9 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.1",
+    "@playwright/test": "^1.63.0",
     "@streamkit/config": "workspace:*",
-    "@types/node": "^22.10.5",
-    "typescript": "^5.7.2"
+    "@types/node": "^26.5.1",
+    "typescript": "^5.9.3"
   }
 }

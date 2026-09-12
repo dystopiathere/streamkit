@@ -20,7 +20,7 @@
 
 ## Быстрый старт
 
-Нужны Node 22+, pnpm 11+, Docker.
+Нужны Node 26+, pnpm 12+, Docker.
 
 ```bash
 pnpm install

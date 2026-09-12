@@ -19,4 +19,7 @@ for (const file of [resolve(process.cwd(), '.env'), resolve(process.cwd(), '..',
 
 export default defineConfig({
   schema: 'prisma/schema.prisma',
+  // Адрес БД переехал сюда из схемы в Prisma 7. Читается он уже после
+  // загрузки .env выше — порядок здесь существенен.
+  datasource: { url: process.env.DATABASE_URL ?? '' },
 });

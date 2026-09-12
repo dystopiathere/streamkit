@@ -57,8 +57,8 @@ export const alertWidgetConfigSchema = z.object({
   imageUrl: httpsUrlSchema.nullable().default(null),
   titleTemplate: z.string().min(1).max(200).default('{username} — {amount}'),
   messageTemplate: z.string().max(300).default('{message}'),
-  text: textStyleSchema.default({}),
-  sound: alertSoundSchema.default({}),
+  text: textStyleSchema.prefault({}),
+  sound: alertSoundSchema.prefault({}),
   animationIn: alertAnimationSchema.default('slide-up'),
   animationOut: alertAnimationSchema.default('fade'),
 });
@@ -93,7 +93,7 @@ export const goalWidgetConfigSchema = z.object({
   showAmounts: z.boolean().default(true),
   barColor: hexColorSchema.default('#9167EA'),
   trackColor: hexColorSchema.default('#2A2B3680'),
-  text: textStyleSchema.default({}),
+  text: textStyleSchema.prefault({}),
 });
 export type GoalWidgetConfig = z.infer<typeof goalWidgetConfigSchema>;
 
@@ -127,7 +127,7 @@ export const timerWidgetConfigSchema = z.object({
     .max(30 * 24 * 3600)
     .default(24 * 3600),
   showHours: z.boolean().default(true),
-  text: textStyleSchema.default({}),
+  text: textStyleSchema.prefault({}),
 });
 export type TimerWidgetConfig = z.infer<typeof timerWidgetConfigSchema>;
 
@@ -167,7 +167,7 @@ export const topDonorsWidgetConfigSchema = z.object({
   limit: z.number().int().min(1).max(10).default(5),
   currency: currencySchema.default('RUB'),
   showAmounts: z.boolean().default(true),
-  text: textStyleSchema.default({}),
+  text: textStyleSchema.prefault({}),
 });
 export type TopDonorsWidgetConfig = z.infer<typeof topDonorsWidgetConfigSchema>;
 
@@ -197,9 +197,19 @@ export const WIDGET_CONFIG_SCHEMAS = {
   goal: goalWidgetConfigSchema,
   timer: timerWidgetConfigSchema,
   'top-donors': topDonorsWidgetConfigSchema,
-} as const satisfies Record<WidgetType, z.ZodTypeAny>;
+} as const satisfies Record<
+  WidgetType,
+  z.ZodType<Record<string, unknown>, Record<string, unknown>>
+>;
 
-export function configSchemaFor(type: WidgetType): z.ZodTypeAny {
+/**
+ * Тип результата намеренно широкий: конкретный тип виджета известен только в
+ * рантайме, а `Record<string, unknown>` — минимум, которого хватает и форме
+ * настроек в дашборде, и мержу конфига на сервере.
+ */
+export function configSchemaFor(
+  type: WidgetType,
+): z.ZodType<Record<string, unknown>, Record<string, unknown>> {
   return WIDGET_CONFIG_SCHEMAS[type];
 }
 
@@ -235,7 +245,7 @@ export type CreateWidgetInput = z.infer<typeof createWidgetSchema>;
 export const updateWidgetSchema = z.object({
   name: z.string().min(1).max(80).optional(),
   isEnabled: z.boolean().optional(),
-  config: z.record(z.unknown()).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
 });
 export type UpdateWidgetInput = z.infer<typeof updateWidgetSchema>;
 

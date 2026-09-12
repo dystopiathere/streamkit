@@ -4,10 +4,21 @@
 #   docker build -f infra/docker/web.Dockerfile --build-arg APP=web .
 #   docker build -f infra/docker/web.Dockerfile --build-arg APP=overlay .
 
-FROM node:24-alpine AS base
+FROM node:26-alpine AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+# corepack в образ Node больше не входит: начиная с 25-й версии его вынесли из
+# дистрибутива, и `corepack enable` падает с «not found». Ставим его отдельно —
+# он читает версию pnpm из поля packageManager, то есть версия остаётся
+# зафиксированной в одном месте, а не дублируется в Dockerfile.
+#
+# Тем же шагом удаляется npm: пакетами здесь управляет pnpm, а собственные
+# вложенные зависимости npm (tar, ip-address, brace-expansion) попадают в отчёт
+# сканера как уязвимости ОБРАЗА. Чинить их нечем — это чужой код внутри базового
+# образа, — а не использовать и держать незачем.
+RUN npm install -g corepack@latest \
+    && corepack enable \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 WORKDIR /app
 
 FROM base AS build
@@ -27,7 +38,6 @@ COPY apps/overlay/package.json apps/overlay/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
-COPY tsconfig.base.json ./
 COPY packages/ packages/
 COPY apps/web/ apps/web/
 COPY apps/overlay/ apps/overlay/

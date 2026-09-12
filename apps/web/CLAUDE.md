@@ -5,7 +5,7 @@
 источники донатов, раздел приватности.
 
 ## Технологии
-React 19, Vite 7, TypeScript (strict), TanStack Query (серверное состояние),
+React 19, Vite 8, TypeScript (strict), TanStack Query (серверное состояние),
 Zustand (сессия), react-hook-form + Zod (формы), Tailwind 4, react-i18next,
 socket.io-client, sonner.
 

@@ -7,7 +7,7 @@
 `apps/web` и управляет рендером в `apps/overlay`.
 
 ## Технологии
-- **Zod 3** — схемы и вывод типов (`z.infer`)
+- **Zod 4** — схемы и вывод типов (`z.infer`)
 - **tsup** — сборка в ESM + CJS + `.d.ts`: `apps/api` на CommonJS, Vite-приложения на ESM
 - **Vitest** — юнит-тесты чистых функций
 

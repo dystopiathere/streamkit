@@ -9,7 +9,7 @@
 дублирование, либо искусственный слой ради структуры папок.
 
 ## Технологии
-NestJS 11 (Express), Prisma 6 + PostgreSQL, ioredis, Socket.IO + redis-adapter,
+NestJS 11 (Express), Prisma 7 + PostgreSQL, ioredis, Socket.IO + redis-adapter,
 `@node-rs/argon2`, otplib, Zod для валидации, pino для логов, Vitest + supertest.
 
 ## Структура

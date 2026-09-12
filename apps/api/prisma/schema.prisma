@@ -11,9 +11,12 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Адрес БД в схеме больше не живёт: Prisma 7 забрал его отсюда, потому что
+// один и тот же файл читают и CLI, и клиент, а подключаются они по-разному.
+// Для CLI адрес задаётся в prisma.config.ts, для клиента — драйвер-адаптером
+// в PrismaService.
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 /* ------------------------------------------------------------------ */
