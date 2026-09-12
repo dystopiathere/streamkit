@@ -93,6 +93,13 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @streamkit/contracts build
+
+      # Клиент Prisma — сгенерированный код, в репозитории его нет. Без этого
+      # шага падают все четыре набора разом, ещё на импорте: энумы приезжают
+      # undefined, и ошибка выглядит как «Cannot read properties of undefined»,
+      # а не как «клиент не сгенерирован».
+      - run: pnpm --filter @streamkit/api exec prisma generate
+
       - run: pnpm --filter @streamkit/api exec prisma migrate deploy
       - run: pnpm --filter @streamkit/api test:int
 
@@ -160,6 +167,16 @@ jobs:
   security:
     name: Проверки безопасности
     runs-on: ubuntu-latest
+
+    # Права выданы явно и по минимуму.
+    #
+    # Токен workflow по умолчанию только на чтение, и gitleaks падал с
+    # «Resource not accessible by integration» — не потому, что нашёл секреты,
+    # а потому что не смог оставить комментарий в pull request.
+    permissions:
+      contents: read
+      pull-requests: read
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -184,6 +201,9 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Комментарии в PR не нужны: результат виден в логе задания, а ради
+          # них пришлось бы выдавать токену право записи в pull requests.
+          GITLEAKS_ENABLE_COMMENTS: false
 
   docker:
     name: Сборка образов
@@ -228,7 +248,7 @@ jobs:
 
       # Уязвимости в образе: базовый образ и системные пакеты pnpm audit не видит.
       - name: Сканирование образа API
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: streamkit-api:ci
           format: table
