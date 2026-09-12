@@ -59,6 +59,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?нужно задать JWT_SECRET}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?нужно задать ENCRYPTION_KEY}
       IP_HASH_PEPPER: ${IP_HASH_PEPPER:?нужно задать IP_HASH_PEPPER}
+      TOKEN_HASH_PEPPER: ${TOKEN_HASH_PEPPER:?нужно задать TOKEN_HASH_PEPPER}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:8081}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
       OVERLAY_BASE_URL: ${OVERLAY_BASE_URL:-http://localhost:8081}
@@ -86,6 +87,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       IP_HASH_PEPPER: ${IP_HASH_PEPPER}
+      TOKEN_HASH_PEPPER: ${TOKEN_HASH_PEPPER}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
       OVERLAY_BASE_URL: ${OVERLAY_BASE_URL:-http://localhost:8081}
       PORT: 3001

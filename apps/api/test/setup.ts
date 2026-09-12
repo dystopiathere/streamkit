@@ -1,5 +1,5 @@
-import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { loadEnvFiles } from '../src/config/env-files';
 
 /**
  * Окружение интеграционных тестов.
@@ -15,10 +15,7 @@ import { resolve } from 'node:path';
  *  - NODE_ENV из файла остаётся development, поднимается транспорт pino-pretty
  *    в отдельном потоке, и процесс vitest висит три минуты после последнего теста.
  */
-const envFile = resolve(import.meta.dirname, '..', '.env');
-if (existsSync(envFile)) {
-  process.loadEnvFile(envFile);
-}
+loadEnvFiles(resolve(import.meta.dirname, '..'));
 
 // Перебиваем то, что пришло из файла.
 process.env.NODE_ENV = 'test';
@@ -28,3 +25,18 @@ process.env.LOG_LEVEL = 'error';
 // проде, но перестаёт зависеть от количества тестов в прогоне.
 process.env.THROTTLE_LIMIT = '100000';
 process.env.THROTTLE_AUTH_LIMIT = '100000';
+
+// Учётные данные площадок вычищаются всегда.
+//
+// Иначе прогон зависит от того, завёл ли разработчик приложение Twitch или
+// YouTube на своей машине: с ключами площадка считается настроенной, без них —
+// нет, и один и тот же тест даёт разный результат у разных людей и в CI.
+// Тесту, которому нужна настроенная площадка, проще выставить ключи самому.
+for (const key of [
+  'TWITCH_CLIENT_ID',
+  'TWITCH_CLIENT_SECRET',
+  'YOUTUBE_CLIENT_ID',
+  'YOUTUBE_CLIENT_SECRET',
+]) {
+  delete process.env[key];
+}

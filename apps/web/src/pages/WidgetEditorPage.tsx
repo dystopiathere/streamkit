@@ -10,10 +10,10 @@ import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Button, Card, FieldError, Input, Label } from '../components/ui';
-import { OverlayTokens } from '../features/widgets/OverlayTokens';
-import { useUpdateWidget, useWidget } from '../features/widgets/queries';
-import { ApiError } from '../lib/api';
+import { Button, Card, FieldError, Input, Label } from '@/components/ui';
+import { OverlayTokens } from '@/features/widgets/OverlayTokens';
+import { useUpdateWidget, useWidget } from '@/features/widgets/queries';
+import { ApiError } from '@/lib/api';
 
 /** Событие-пустышка для предпросмотра: показывает, как алерт выглядит в эфире. */
 const PREVIEW_EVENT = {

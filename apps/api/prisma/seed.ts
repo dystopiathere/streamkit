@@ -1,5 +1,7 @@
 import { createHmac, randomBytes } from 'node:crypto';
+import { resolve } from 'node:path';
 import { PrismaClient } from '@prisma/client';
+import { loadEnvFiles } from '../src/config/env-files';
 import { hash } from '@node-rs/argon2';
 import { alertWidgetConfigSchema } from '@streamkit/contracts';
 
@@ -12,6 +14,11 @@ import { alertWidgetConfigSchema } from '@streamkit/contracts';
  */
 const DEMO_EMAIL = 'streamer@streamkit.local';
 const DEMO_PASSWORD = 'streamkit-demo-password';
+
+// Окружение грузится до создания клиента: tsx файлы .env не читает, а сам
+// клиент ищет их только в текущем каталоге — то есть в apps/api, где файла
+// больше нет. Единственный .env лежит в корне репозитория.
+loadEnvFiles(resolve(import.meta.dirname, '..'));
 
 const prisma = new PrismaClient();
 

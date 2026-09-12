@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  NotFoundException,
   Param,
   ParseUUIDPipe,
   Post,
@@ -140,7 +141,15 @@ export class AuthController {
     return this.tokens.listSessions(user.id, readRefreshCookie(request) ?? undefined);
   }
 
-  /** Завершение конкретной сессии: гасим всё семейство токенов устройства. */
+  /**
+   * Завершение конкретной сессии: гасим всё семейство токенов устройства.
+   *
+   * Чужое семейство выглядит так же, как несуществующее — но отвечаем 404, а не
+   * 401. Разница не косметическая: 401 клиент трактует как протухший access-токен,
+   * идёт обновляться, получает 401 снова и разлогинивает пользователя. То есть
+   * попытка удалить уже удалённую с другого устройства сессию выкидывала из
+   * аккаунта.
+   */
   @Delete('sessions/:familyId')
   @HttpCode(HttpStatus.NO_CONTENT)
   async revokeSession(
@@ -149,8 +158,7 @@ export class AuthController {
   ): Promise<void> {
     const sessions = await this.tokens.listSessions(user.id);
     if (!sessions.some((session) => session.id === familyId)) {
-      // Чужое семейство выглядит так же, как несуществующее.
-      throw new UnauthorizedException('Сессия не найдена');
+      throw new NotFoundException('Сессия не найдена');
     }
     await this.tokens.revokeFamily(familyId);
   }

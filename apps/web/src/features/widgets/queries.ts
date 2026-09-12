@@ -1,19 +1,14 @@
 import type {
   AlertEvent,
+  CreatedOverlayToken,
   CreateWidgetInput,
+  OverlayTokenView,
   Page,
   UpdateWidgetInput,
   Widget,
 } from '@streamkit/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../lib/api';
-
-export interface OverlayTokenView {
-  id: string;
-  label: string | null;
-  createdAt: string;
-  lastSeenAt: string | null;
-}
+import { api } from '@/lib/api';
 
 export const widgetKeys = {
   all: ['widgets'] as const,
@@ -75,7 +70,7 @@ export function useCreateOverlayToken(widgetId: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (label: string | null) =>
-      api.post<{ id: string; url: string }>(`/widgets/${widgetId}/tokens`, { label }),
+      api.post<CreatedOverlayToken>(`/widgets/${widgetId}/tokens`, { label }),
     onSuccess: () => client.invalidateQueries({ queryKey: widgetKeys.tokens(widgetId) }),
   });
 }

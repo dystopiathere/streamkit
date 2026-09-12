@@ -64,6 +64,10 @@ export class AppConfig {
     return this.value('IP_HASH_PEPPER');
   }
 
+  get tokenHashPepper(): string {
+    return this.value('TOKEN_HASH_PEPPER');
+  }
+
   get corsOrigins(): string[] {
     return this.value('CORS_ORIGINS');
   }
@@ -75,6 +79,34 @@ export class AppConfig {
 
   get overlayBaseUrl(): string {
     return this.value('OVERLAY_BASE_URL');
+  }
+
+  get webBaseUrl(): string {
+    return this.value('WEB_BASE_URL');
+  }
+
+  get oauthRedirectBaseUrl(): string {
+    return this.value('OAUTH_REDIRECT_BASE_URL');
+  }
+
+  get youtubeDailyQuota(): number {
+    return this.value('YOUTUBE_DAILY_QUOTA');
+  }
+
+  /**
+   * Учётные данные приложения площадки, либо null, если оно не настроено.
+   *
+   * Через `config.get`, а не `value`: `value` использует getOrThrow и уронил бы
+   * приложение там, где отсутствие ключа — штатная ситуация.
+   */
+  oauthCredentials(
+    platform: 'twitch' | 'youtube',
+  ): { clientId: string; clientSecret: string } | null {
+    const prefix = platform === 'twitch' ? 'TWITCH' : 'YOUTUBE';
+    const clientId = this.config.get<string>(`${prefix}_CLIENT_ID` as keyof Env);
+    const clientSecret = this.config.get<string>(`${prefix}_CLIENT_SECRET` as keyof Env);
+    if (!clientId || !clientSecret) return null;
+    return { clientId, clientSecret };
   }
 
   get throttleLimit(): number {

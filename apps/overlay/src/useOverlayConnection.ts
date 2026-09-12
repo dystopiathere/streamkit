@@ -18,6 +18,14 @@ export interface OverlayConnectionHandlers {
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
 /**
+ * Сколько подряд отвергнутых подключений считать приговором ссылке.
+ *
+ * Не один: первое подключение может совпасть с перезапуском API, и объявлять
+ * ссылку мёртвой из-за деплоя нельзя — сцену никто не перезагрузит.
+ */
+const MAX_REJECTIONS = 3;
+
+/**
  * Соединение overlay с сервером.
  *
  * Переподключение отдано socket.io: OBS держит страницу открытой часами, и за
@@ -26,6 +34,13 @@ const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
  *
  * Исключение — отозванный токен: тут переподключаться бессмысленно, сервер будет
  * отвергать каждую попытку. Поэтому по `revoked` соединение закрывается навсегда.
+ *
+ * Отдельный случай — токен, неверный уже на момент подключения (опечатка в
+ * ссылке, вставленной в OBS). Сервер намеренно не говорит, что не так: подбор
+ * ссылок не должен получать обратную связь. Снаружи это выглядит как обычный
+ * обрыв, и раньше оверлей вечно переподключался по мёртвой ссылке. Признак,
+ * который отличает этот случай, — соединение установилось, но конфиг так и не
+ * пришёл: сервер шлёт его сразу после успешной проверки токена.
  */
 export function useOverlayConnection(
   token: string | null,
@@ -54,11 +69,32 @@ export function useOverlayConnection(
     });
 
     let revoked = false;
+    /** Пришёл ли конфиг на текущем соединении — то есть принял ли сервер токен. */
+    let accepted = false;
+    let rejections = 0;
 
-    socket.on('connect', () => setState('connected'));
+    socket.on('connect', () => {
+      accepted = false;
+      setState('connected');
+    });
 
     socket.on('disconnect', () => {
-      if (!revoked) setState('connecting');
+      if (revoked) return;
+
+      if (accepted) {
+        // Обычный обрыв сети или перезапуск сервера: счётчик сбрасывается.
+        rejections = 0;
+        setState('connecting');
+        return;
+      }
+
+      rejections += 1;
+      if (rejections >= MAX_REJECTIONS) {
+        setState('invalid-token');
+        socket.disconnect();
+        return;
+      }
+      setState('connecting');
     });
 
     socket.on(SOCKET_EVENTS.configUpdated, (payload: unknown) => {
@@ -67,6 +103,8 @@ export function useOverlayConnection(
       // чем упасть посреди стрима.
       const parsed = overlayBootstrapSchema.safeParse(payload);
       if (parsed.success) {
+        accepted = true;
+        rejections = 0;
         handlersRef.current.onBootstrap(parsed.data);
       }
     });

@@ -38,6 +38,7 @@ node -e "console.log('ENCRYPTION_KEY=' + require('crypto').randomBytes(32).toStr
 
 ```bash
 node -e "console.log('IP_HASH_PEPPER=' + require('crypto').randomBytes(24).toString('base64url'))"
+node -e "console.log('TOKEN_HASH_PEPPER=' + require('crypto').randomBytes(24).toString('base64url'))"
 ```
 
 Поднимите базы и накатите схему:

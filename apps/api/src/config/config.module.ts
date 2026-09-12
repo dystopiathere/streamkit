@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigModule as NestConfigModule } from '@nestjs/config';
 import { AppConfig } from './app-config.service';
+import { envFiles } from './env-files';
 import { validateEnv } from './env';
 
 /**
@@ -12,6 +13,7 @@ import { validateEnv } from './env';
   imports: [
     NestConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: envFiles(),
       validate: validateEnv,
       cache: true,
       // В тестах конфигурация задаётся переменными процесса. Файл `.env`

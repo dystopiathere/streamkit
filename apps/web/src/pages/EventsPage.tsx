@@ -5,13 +5,16 @@ import {
   formatMoney,
 } from '@streamkit/contracts';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { io } from 'socket.io-client';
-import { Card } from '../components/ui';
-import { useRecentEvents } from '../features/widgets/queries';
-import { useAuthStore } from '../lib/auth-store';
-import { SOCKET_URL } from '../lib/config';
+import { Card } from '@/components/ui';
+import { useRecentEvents } from '@/features/widgets/queries';
+import { useAuthStore } from '@/lib/auth-store';
+import { SOCKET_URL } from '@/lib/config';
+
+/** Сколько живых событий держим в памяти. Остальное есть в истории. */
+const LIVE_BUFFER = 50;
 
 /**
  * Лента событий. История подтягивается запросом, новые события приходят сокетом —
@@ -20,23 +23,33 @@ import { SOCKET_URL } from '../lib/config';
 export function EventsPage(): React.JSX.Element {
   const { t } = useTranslation();
   const history = useRecentEvents();
-  const accessToken = useAuthStore((state) => state.accessToken);
   const queryClient = useQueryClient();
   const [live, setLive] = useState<AlertEvent[]>([]);
 
-  useEffect(() => {
-    if (!accessToken) return;
+  /**
+   * Токен читается из стора в ref, а не через подписку.
+   *
+   * Подписка делала его зависимостью эффекта, а access-токен меняется при
+   * каждом обновлении пары — то есть примерно раз в 15 минут. Эффект
+   * перезапускался, сокет рвался и переподключался, и события, пришедшие в это
+   * окно, не попадали в ленту вовсе: в live их нет, инвалидации истории тоже.
+   */
+  const tokenRef = useRef(useAuthStore.getState().accessToken);
+  useEffect(() => useAuthStore.subscribe((state) => (tokenRef.current = state.accessToken)), []);
 
+  useEffect(() => {
     const socket = io(`${SOCKET_URL}/dashboard`, {
       transports: ['websocket'],
-      auth: { token: accessToken },
+      // Функция, а не объект: при каждом переподключении сокет спрашивает токен
+      // заново и получает актуальный, а не тот, что был на момент монтирования.
+      auth: (cb: (data: { token: string | null }) => void) => cb({ token: tokenRef.current }),
     });
 
     socket.on(SOCKET_EVENTS.eventCreated, (payload: unknown) => {
       const parsed = alertEventSchema.safeParse((payload as { event?: unknown })?.event);
       if (!parsed.success) return;
 
-      setLive((current) => [parsed.data, ...current]);
+      setLive((current) => [parsed.data, ...current].slice(0, LIVE_BUFFER));
       // История в кэше устарела — пусть перезапросится при следующем заходе.
       void queryClient.invalidateQueries({ queryKey: ['events'] });
     });
@@ -45,7 +58,7 @@ export function EventsPage(): React.JSX.Element {
       socket.removeAllListeners();
       socket.disconnect();
     };
-  }, [accessToken, queryClient]);
+  }, [queryClient]);
 
   // Живые события идут первыми; дубли отсекаем по id, потому что после
   // инвалидации то же событие придёт и из истории.

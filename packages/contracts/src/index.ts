@@ -7,6 +7,7 @@
  * приложения — ей здесь не место.
  */
 export * from './common.js';
+export * from './analytics.js';
 export * from './events.js';
 export * from './widgets.js';
 export * from './auth.js';

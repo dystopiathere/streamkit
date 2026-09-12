@@ -24,7 +24,11 @@ export type AuditAction =
   | 'privacy.data.exported'
   | 'privacy.account.anonymized'
   | 'consent.granted'
-  | 'consent.revoked';
+  | 'consent.revoked'
+  | 'integration.connected'
+  | 'integration.disconnected'
+  | 'integration.token.expired'
+  | 'integration.state.invalid';
 
 export interface AuditContext {
   ipHash?: string | null;

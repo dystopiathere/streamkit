@@ -27,7 +27,16 @@ export function useAlertQueue(config: Pick<AlertWidgetConfig, 'durationMs' | 'ga
   const [pending, setPending] = useState(0);
 
   const queue = useRef<AlertEvent[]>([]);
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  /**
+   * Ровно один отложенный вызов за раз.
+   *
+   * Цепочка показа строго последовательна: держать пауза → уход → пауза, и
+   * каждый следующий таймер ставится только когда предыдущий уже сработал.
+   * Раньше здесь был массив, куда тайм-ауты только добавлялись, а очищался он
+   * лишь при размонтировании — но страница оверлея в OBS не перезагружается
+   * между сценами, и за долгий стрим там копились тысячи мёртвых записей.
+   */
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Идёт показ. Флаг в ref, а не в состоянии: он нужен синхронно внутри колбэка. */
   const isBusy = useRef(false);
 
@@ -45,7 +54,11 @@ export function useAlertQueue(config: Pick<AlertWidgetConfig, 'durationMs' | 'ga
   const showNextRef = useRef<() => void>(() => undefined);
 
   const schedule = useCallback((callback: () => void, delay: number) => {
-    timers.current.push(setTimeout(callback, delay));
+    if (timer.current !== null) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      timer.current = null;
+      callback();
+    }, delay);
   }, []);
 
   const showNext = useCallback(() => {
@@ -87,12 +100,14 @@ export function useAlertQueue(config: Pick<AlertWidgetConfig, 'durationMs' | 'ga
     }
   }, []);
 
-  // Таймеры обязательно снимаются: при отключении сокета и размонтировании
+  // Таймер обязательно снимается: при отключении сокета и размонтировании
   // компонент иначе продолжит дёргать состояние и уронит страницу в OBS.
   useEffect(
     () => () => {
-      for (const timer of timers.current) clearTimeout(timer);
-      timers.current = [];
+      if (timer.current !== null) {
+        clearTimeout(timer.current);
+        timer.current = null;
+      }
     },
     [],
   );

@@ -52,13 +52,30 @@ export class DashboardGateway implements OnGatewayConnection, OnModuleInit, OnMo
   }
 
   private async handleBusMessage(message: BusMessage): Promise<void> {
-    if (message.kind !== 'alert') return;
     try {
-      this.server.local
-        .to(dashboardRoom(message.userId))
-        .emit(SOCKET_EVENTS.eventCreated, { event: message.event });
+      switch (message.kind) {
+        case 'alert':
+          this.server.local
+            .to(dashboardRoom(message.userId))
+            .emit(SOCKET_EVENTS.eventCreated, { event: message.event });
+          break;
+
+        case 'analytics':
+          this.server.local.to(dashboardRoom(message.userId)).emit(SOCKET_EVENTS.analyticsUpdated, {
+            channelId: message.channelId,
+            stats: message.stats,
+          });
+          break;
+
+        // Остальные сообщения шины адресованы оверлею, а не дашборду.
+        default:
+          break;
+      }
     } catch (error) {
-      this.logger.error({ err: error }, 'Не удалось доставить событие в дашборд');
+      this.logger.error(
+        { err: error, kind: message.kind },
+        'Не удалось доставить событие в дашборд',
+      );
     }
   }
 }

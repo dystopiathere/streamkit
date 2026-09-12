@@ -244,6 +244,17 @@ enum Platform {
   TROVO
 }
 
+/// Состояние сбора метрик. Отдельное поле, а не «последняя ошибка строкой»:
+/// «переподключите площадку» и «квота исчерпана» — разные действия пользователя.
+enum ChannelSyncState {
+  OK
+  /// Площадка отвергла токен: нужен повторный вход. Опрос прекращается.
+  AUTH_EXPIRED
+  /// Суточная квота внешнего API исчерпана. Опрос возобновится сам.
+  RATE_LIMITED
+  ERROR
+}
+
 model Channel {
   id          String   @id @default(uuid()) @db.Uuid
   userId      String   @db.Uuid
@@ -252,13 +263,52 @@ model Channel {
   login       String
   displayName String
   avatarUrl   String?
+  isEnabled   Boolean  @default(true)
+  /// Когда метрики собирались в последний раз. NULL — ещё ни разу.
+  lastSyncedAt DateTime?
+  syncState   ChannelSyncState @default(OK)
+  /// Текст последней ошибки — только для диагностики, наружу не отдаётся.
+  syncError   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  snapshots AnalyticsSnapshot[]
 
-  @@unique([platform, externalId])
+  /// Один канал на площадку у пользователя. Уникальность НЕ глобальная по
+  /// (platform, externalId): глобальная навсегда запирала бы канал за удалённым
+  /// аккаунтом и запрещала двум менеджерам одного канала подключить его каждому
+  /// к своему дашборду. Аналитика канала — не владение каналом.
+  @@unique([userId, platform])
+  @@index([platform, externalId])
   @@index([userId])
+}
+
+/// Снимок метрик канала.
+///
+/// Хранятся сырые снимки, а не предагрегаты: диапазоны в интерфейсе будут
+/// меняться, и пересчитать агрегат из снимков можно, а восстановить снимки из
+/// агрегата — нет. Прореживание до читаемого числа точек делает запрос.
+model AnalyticsSnapshot {
+  id          String   @id @default(uuid()) @db.Uuid
+  channelId   String   @db.Uuid
+  capturedAt  DateTime
+  isLive      Boolean
+  /// Зрители в момент снимка. NULL, когда эфира нет — не ноль: ноль означал бы
+  /// «шёл эфир, и никто не смотрел», а это другое утверждение.
+  viewers     Int?
+  followers   Int?
+  subscribers Int?
+  /// Суммарные просмотры канала. BigInt: у крупного канала они не влезают в Int32.
+  totalViews  BigInt?
+  title       String?  @db.VarChar(200)
+  category    String?  @db.VarChar(120)
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  /// Защита от двойной записи, если тик опроса выполнится дважды.
+  @@unique([channelId, capturedAt])
+  @@index([channelId, capturedAt])
 }
 
 /// OAuth-токены пользователя к внешним сервисам. Только шифротекст; наружу не

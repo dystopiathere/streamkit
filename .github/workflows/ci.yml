@@ -16,7 +16,7 @@ env:
 
 jobs:
   quality:
-    name: Типы, формат, юнит-тесты
+    name: Типы, линтер, формат, юнит-тесты
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +35,7 @@ jobs:
 
       - run: pnpm build
       - run: pnpm typecheck
+      - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm test
 
@@ -74,6 +75,7 @@ jobs:
       JWT_SECRET: test-secret-value-for-ci-at-least-32-chars
       ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcy0hIQ==
       IP_HASH_PEPPER: test-pepper-for-ci
+      TOKEN_HASH_PEPPER: test-token-pepper-for-ci
       CORS_ORIGINS: http://localhost:5173
       OVERLAY_BASE_URL: http://localhost:5174
 
@@ -124,6 +126,7 @@ jobs:
       JWT_SECRET: test-secret-value-for-ci-at-least-32-chars
       ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcy0hIQ==
       IP_HASH_PEPPER: test-pepper-for-ci
+      TOKEN_HASH_PEPPER: test-token-pepper-for-ci
       CORS_ORIGINS: http://localhost:5173,http://localhost:5174
       OVERLAY_BASE_URL: http://localhost:5174
       VITE_API_URL: http://localhost:3000

@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { AlertEvent, AlertWidgetConfig } from '@streamkit/contracts';
+import type { AlertEvent, AlertWidgetConfig, ChannelStats } from '@streamkit/contracts';
 import type { Redis } from 'ioredis';
 import { REDIS_PUBLISHER, REDIS_SUBSCRIBER } from '../redis/redis.module';
 
@@ -14,7 +14,8 @@ export type BusMessage =
       isEnabled: boolean;
       config: AlertWidgetConfig;
     }
-  | { kind: 'overlay-revoked'; tokenId: string; reason: 'token-revoked' | 'widget-deleted' };
+  | { kind: 'overlay-revoked'; tokenId: string; reason: 'token-revoked' | 'widget-deleted' }
+  | { kind: 'analytics'; userId: string; channelId: string; stats: ChannelStats };
 
 /**
  * Шина реального времени поверх Redis pub/sub.

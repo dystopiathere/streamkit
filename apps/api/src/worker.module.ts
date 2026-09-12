@@ -6,9 +6,10 @@ import { PrismaModule } from './common/prisma/prisma.module';
 import { RedisModule } from './common/redis/redis.module';
 import { AppConfig } from './config/app-config.service';
 import { AppConfigModule } from './config/config.module';
+import { AnalyticsSchedulerModule } from './modules/analytics/analytics.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { EventsModule } from './modules/events/events.module';
-import { IntegrationsModule } from './modules/integrations/integrations.module';
+import { DonationConnectorsModule } from './modules/integrations/integrations.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 
 /**
@@ -44,7 +45,10 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 
     AuthModule,
     EventsModule,
-    IntegrationsModule,
+    DonationConnectorsModule,
+    // Опрос площадок по расписанию. Планировщик подключается только здесь:
+    // в API ScheduleModule не поднят, и @Interval там просто не запустится.
+    AnalyticsSchedulerModule,
     MaintenanceModule,
   ],
 })

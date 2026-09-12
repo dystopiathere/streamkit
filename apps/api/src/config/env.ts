@@ -5,6 +5,26 @@ import { z } from 'zod';
  * значение бессмысленно — это лучше, чем узнать о пустом секрете в проде через
  * неделю. Значения по умолчанию заданы только для того, что безопасно по умолчанию.
  */
+/**
+ * Необязательная переменная, у которой пустая строка означает «не задана».
+ *
+ * Обычный `.optional()` этого не делает: `FOO=` в файле окружения — это
+ * присутствующее значение, просто пустое, и проверка `min(1)` на нём падает.
+ * Ровно так и вышло: в `.env.example` ключи площадок стоят пустыми, и
+ * приложение, прочитав такой файл, отказывалось стартовать целиком — вместо
+ * того чтобы просто не предлагать ненастроенную площадку.
+ *
+ * Пробелы срезаются заодно: значение, скопированное из консоли площадки,
+ * регулярно приезжает с хвостовым пробелом, а секрет с пробелом не сходится
+ * молча и необъяснимо.
+ */
+function optionalValue() {
+  return z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.string().trim().min(1).optional(),
+  );
+}
+
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
@@ -34,6 +54,11 @@ export const envSchema = z.object({
   /** Отдельный перец для хэширования IP. Позволяет менять его, не трогая шифрование. */
   IP_HASH_PEPPER: z.string().min(16),
 
+  // Отдельный ключ для хэшей наших токенов. Не переиспользуем ENCRYPTION_KEY:
+  // один ключ на два примитива связывает ротацию шифрования с обнулением всех
+  // сессий и всех ссылок для OBS разом.
+  TOKEN_HASH_PEPPER: z.string().min(16),
+
   /** Разрешённые Origin через запятую. Пустого значения быть не должно. */
   CORS_ORIGINS: z
     .string()
@@ -46,12 +71,40 @@ export const envSchema = z.object({
     ),
 
   /** Домен для cookie. Пусто — cookie для текущего хоста (так и надо на localhost). */
-  COOKIE_DOMAIN: z.string().optional(),
+  COOKIE_DOMAIN: optionalValue(),
 
   /** Базовый публичный URL overlay-приложения: из него собираются ссылки для OBS. */
   OVERLAY_BASE_URL: z.string().url(),
 
   /** Лимит запросов в минуту на IP для обычных ручек. */
+  /** Куда возвращать пользователя после OAuth площадки. */
+  WEB_BASE_URL: z.string().url().default('http://localhost:5173'),
+
+  /**
+   * Базовый адрес самого API — из него собирается redirect_uri.
+   *
+   * Отдельно от WEB_BASE_URL: callback принимает бэкенд, и адрес обязан
+   * посимвольно совпадать с зарегистрированным в приложении площадки.
+   */
+  OAUTH_REDIRECT_BASE_URL: z.string().url().default('http://localhost:3000'),
+
+  // Учётные данные площадок необязательны: без них площадка просто не
+  // предлагается к подключению. Требовать их означало бы, что ни одно
+  // существующее окружение и ни один прогон CI больше не стартует.
+  TWITCH_CLIENT_ID: optionalValue(),
+  TWITCH_CLIENT_SECRET: optionalValue(),
+  YOUTUBE_CLIENT_ID: optionalValue(),
+  YOUTUBE_CLIENT_SECRET: optionalValue(),
+
+  /**
+   * Суточный бюджет запросов к YouTube Data API.
+   *
+   * Лимит Google — 10 000 единиц на проект в сутки, и это лимит НА ВСЕХ
+   * пользователей сразу, а не на каждого. Держим запас: остаток нужен на
+   * подключение новых каналов и на ручные проверки.
+   */
+  YOUTUBE_DAILY_QUOTA: z.coerce.number().int().min(0).default(9000),
+
   THROTTLE_LIMIT: z.coerce.number().int().min(1).default(120),
   /** Лимит попыток логина в минуту на IP. Жёстче общего. */
   THROTTLE_AUTH_LIMIT: z.coerce.number().int().min(1).default(10),

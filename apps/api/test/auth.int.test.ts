@@ -196,4 +196,49 @@ describe('Аутентификация (feature)', () => {
     await request(server()).post('/api/auth/logout').set('Cookie', cookie).expect(204);
     await request(server()).post('/api/auth/refresh').set('Cookie', cookie).expect(401);
   });
+
+  it('удаление несуществующей сессии отдаёт 404, а не 401', async () => {
+    const registration = await request(harness.app.getHttpServer())
+      .post('/api/auth/register')
+      .send(registrationPayload())
+      .expect(201);
+    const token = registration.body.accessToken as string;
+
+    // 401 клиент трактует как протухший access-токен: пойдёт обновляться,
+    // получит 401 снова и разлогинит пользователя. То есть попытка завершить
+    // уже завершённую с другого устройства сессию выкидывала из аккаунта.
+    await request(harness.app.getHttpServer())
+      .delete('/api/auth/sessions/00000000-0000-4000-8000-000000000000')
+      .set({ Authorization: `Bearer ${token}` })
+      .expect(404);
+  });
+
+  it('чужую сессию завершить нельзя, и она выглядит как несуществующая', async () => {
+    const mine = await request(harness.app.getHttpServer())
+      .post('/api/auth/register')
+      .send(registrationPayload())
+      .expect(201);
+    const other = await request(harness.app.getHttpServer())
+      .post('/api/auth/register')
+      .send(registrationPayload())
+      .expect(201);
+
+    const otherSessions = await request(harness.app.getHttpServer())
+      .get('/api/auth/sessions')
+      .set({ Authorization: `Bearer ${other.body.accessToken as string}` })
+      .expect(200);
+    const foreignFamilyId = otherSessions.body[0].id as string;
+
+    await request(harness.app.getHttpServer())
+      .delete(`/api/auth/sessions/${foreignFamilyId}`)
+      .set({ Authorization: `Bearer ${mine.body.accessToken as string}` })
+      .expect(404);
+
+    // И она действительно осталась живой.
+    const stillThere = await request(harness.app.getHttpServer())
+      .get('/api/auth/sessions')
+      .set({ Authorization: `Bearer ${other.body.accessToken as string}` })
+      .expect(200);
+    expect(stillThere.body).toHaveLength(1);
+  });
 });

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AppLayout } from './components/AppLayout';
@@ -13,6 +13,17 @@ import { RegisterPage } from './pages/RegisterPage';
 import { SourcesPage } from './pages/SourcesPage';
 import { WidgetEditorPage } from './pages/WidgetEditorPage';
 import { WidgetsPage } from './pages/WidgetsPage';
+
+/**
+ * Аналитика грузится отдельным чанком.
+ *
+ * Только она тянет библиотеку графиков — а это больше трети всего бандла.
+ * Стример, открывший дашборд ради ссылки для OBS, платить за неё загрузкой не
+ * должен: это единственный маршрут, который открывают не каждый раз.
+ */
+const AnalyticsPage = lazy(async () => ({
+  default: (await import('./pages/AnalyticsPage')).AnalyticsPage,
+}));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -64,6 +75,14 @@ export function App(): React.JSX.Element {
               <Route path="/widgets" element={<WidgetsPage />} />
               <Route path="/widgets/:id" element={<WidgetEditorPage />} />
               <Route path="/events" element={<EventsPage />} />
+              <Route
+                path="/analytics"
+                element={
+                  <Suspense fallback={<div className="p-8 text-muted">Загрузка…</div>}>
+                    <AnalyticsPage />
+                  </Suspense>
+                }
+              />
               <Route path="/sources" element={<SourcesPage />} />
               <Route path="/privacy" element={<PrivacyPage />} />
             </Route>
