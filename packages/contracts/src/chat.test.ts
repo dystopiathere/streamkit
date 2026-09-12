@@ -15,8 +15,13 @@ describe('логин канала', () => {
     expect(twitchLoginSchema.parse('  Shroud  ')).toBe('shroud');
   });
 
+  it('допускает короткие логины старых аккаунтов', () => {
+    // Twitch требует четыре символа от новых имён, но легаси-аккаунты бывают
+    // короче. Отбрасывать их сообщения значит молча терять живых зрителей.
+    expect(twitchLoginSchema.parse('ab')).toBe('ab');
+  });
+
   it('отвергает то, что каналом быть не может', () => {
-    expect(twitchLoginSchema.safeParse('ab').success).toBe(false);
     expect(twitchLoginSchema.safeParse('два слова').success).toBe(false);
     expect(twitchLoginSchema.safeParse('../admin').success).toBe(false);
   });

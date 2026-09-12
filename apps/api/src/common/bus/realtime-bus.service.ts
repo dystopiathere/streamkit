@@ -1,5 +1,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { AlertEvent, ChannelStats, WidgetConfig, WidgetState } from '@streamkit/contracts';
+import type {
+  AlertEvent,
+  ChannelStats,
+  ChatMessage,
+  WidgetConfig,
+  WidgetState,
+} from '@streamkit/contracts';
 import type { Redis } from 'ioredis';
 import { REDIS_PUBLISHER, REDIS_SUBSCRIBER } from '../redis/redis.module';
 
@@ -14,6 +20,9 @@ export type BusMessage =
       isEnabled: boolean;
     } & WidgetConfig)
   | { kind: 'widget-state'; widgetId: string; state: WidgetState }
+  // Чат адресуется КАНАЛОМ, а не пользователем: комната доставки общая на
+  // канал, и раскладывать сообщение по виджетам на каждой реплике не нужно.
+  | { kind: 'chat'; message: ChatMessage }
   | { kind: 'overlay-revoked'; tokenId: string; reason: 'token-revoked' | 'widget-deleted' }
   | { kind: 'analytics'; userId: string; channelId: string; stats: ChannelStats };
 

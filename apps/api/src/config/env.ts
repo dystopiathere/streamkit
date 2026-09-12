@@ -105,6 +105,16 @@ export const envSchema = z.object({
    */
   YOUTUBE_DAILY_QUOTA: z.coerce.number().int().min(0).default(9000),
 
+  /**
+   * Адрес IRC-шлюза Twitch. Переопределяется только в тестах.
+   *
+   * Чат читается анонимно, поэтому ни ключа, ни секрета здесь нет: достаточно
+   * логина канала в настройках виджета. Переменная существует ради
+   * интеграционного теста, который поднимает поддельный сервер вместо сети —
+   * иначе проверить весь путь «соединение → JOIN → сообщение» было бы нечем.
+   */
+  TWITCH_IRC_URL: optionalValue(),
+
   THROTTLE_LIMIT: z.coerce.number().int().min(1).default(120),
   /** Лимит попыток логина в минуту на IP. Жёстче общего. */
   THROTTLE_AUTH_LIMIT: z.coerce.number().int().min(1).default(10),

@@ -18,6 +18,20 @@ end
 return 0
 `;
 
+/**
+ * Продление сравнивает значение перед установкой срока.
+ *
+ * Та же защита, что и при снятии, но с обратным знаком: продлить чужую
+ * блокировку значит отобрать владение у того, кто его честно получил, пока мы
+ * не работали.
+ */
+const RENEW_SCRIPT = `
+if redis.call('get', KEYS[1]) == ARGV[1] then
+  return redis.call('pexpire', KEYS[1], ARGV[2])
+end
+return 0
+`;
+
 /** Сколько раз ждём освобождения занятой блокировки и с каким шагом. */
 const WAIT_ATTEMPTS = 20;
 const WAIT_STEP_MS = 100;
@@ -101,14 +115,40 @@ export class RedisLock {
     throw new Error(`Не удалось получить блокировку ${key} за ${attempts} попыток`);
   }
 
-  /** @returns токен владения, либо null — ключ занят. */
-  private async acquire(key: string, ttlMs: number): Promise<string | null> {
+  /**
+   * Взять владение ресурсом на время.
+   *
+   * В отличие от блокировки вокруг задачи, владение живёт дольше одного вызова:
+   * его держат, пока держат ресурс — например, единственное на кластер
+   * соединение с чатом. Держатель обязан продлевать срок сам, а смерть держателя
+   * освобождает ресурс по TTL.
+   *
+   * @returns токен владения, либо null — ресурс занят другой репликой.
+   */
+  async acquire(key: string, ttlMs: number): Promise<string | null> {
     const token = randomUUID();
     const acquired = await this.redis.set(key, token, 'PX', ttlMs, 'NX');
     return acquired === 'OK' ? token : null;
   }
 
-  private async release(key: string, token: string): Promise<void> {
+  /**
+   * Продлить своё владение.
+   *
+   * @returns false, если ключ уже не наш: сеть пропадала дольше TTL, и ресурс
+   *          забрала другая реплика. Владение в этом случае надо отпустить, а
+   *          не продолжать работать как ни в чём не бывало.
+   */
+  async renew(key: string, token: string, ttlMs: number): Promise<boolean> {
+    const renewed = await this.redis
+      .eval(RENEW_SCRIPT, 1, key, token, String(ttlMs))
+      .catch((error: unknown) => {
+        this.logger.warn({ err: error, key }, 'Не удалось продлить владение');
+        return 0;
+      });
+    return renewed === 1;
+  }
+
+  async release(key: string, token: string): Promise<void> {
     // Падение снятия не должно подменять собой исходную ошибку: ключ всё
     // равно истечёт по TTL.
     await this.redis

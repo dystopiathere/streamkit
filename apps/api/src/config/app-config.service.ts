@@ -93,6 +93,11 @@ export class AppConfig {
     return this.value('YOUTUBE_DAILY_QUOTA');
   }
 
+  /** Адрес IRC-шлюза Twitch. undefined — берём стандартный. */
+  get twitchIrcUrl(): string | undefined {
+    return this.value('TWITCH_IRC_URL');
+  }
+
   /**
    * Учётные данные приложения площадки, либо null, если оно не настроено.
    *
