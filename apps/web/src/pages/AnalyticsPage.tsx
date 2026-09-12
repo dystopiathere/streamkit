@@ -14,6 +14,7 @@ import {
   useChannels,
   useConnectPlatform,
   useDonationTotals,
+  useLiveChannelStats,
   usePlatforms,
 } from '@/features/analytics/queries';
 
@@ -32,6 +33,7 @@ export function AnalyticsPage(): React.JSX.Element {
   const donations = useDonationTotals(range);
 
   useConnectionResult();
+  useLiveChannelStats();
 
   return (
     <div className="space-y-6">

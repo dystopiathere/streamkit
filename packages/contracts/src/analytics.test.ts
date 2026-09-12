@@ -88,3 +88,23 @@ describe('donationTotalSchema', () => {
     ).toBe(false);
   });
 });
+
+describe('часовой пояс в запросе ряда', () => {
+  it('принимает зону IANA', () => {
+    expect(analyticsQuerySchema.parse({ timeZone: 'Europe/Moscow' }).timeZone).toBe(
+      'Europe/Moscow',
+    );
+  });
+
+  it('подставляет UTC, когда зона не прислана', () => {
+    // Старый клиент зону не шлёт, и его ответ меняться не должен.
+    expect(analyticsQuerySchema.parse({}).timeZone).toBe('UTC');
+  });
+
+  it('отвергает выдуманную зону', () => {
+    // До SQL такое доехать не должно: там неизвестная зона станет ошибкой
+    // запроса, то есть пятисоткой вместо внятного 400.
+    expect(analyticsQuerySchema.safeParse({ timeZone: 'Europe/Мосва' }).success).toBe(false);
+    expect(analyticsQuerySchema.safeParse({ timeZone: "'; DROP TABLE" }).success).toBe(false);
+  });
+});

@@ -20,6 +20,17 @@ const REFRESH_MARGIN_MS = 120_000;
 const REFRESH_LOCK_TTL_MS = 30_000;
 
 /**
+ * Сколько ждём, пока чужое обновление токена закончится.
+ *
+ * Пять попыток по полсекунды — две с половиной секунды. Обмен токена у Google и
+ * Twitch укладывается в сотни миллисекунд; таймаут HTTP-клиента — десять секунд,
+ * но ждать столько незачем: если обмен затянулся, следующий тик опроса попробует
+ * снова, а держать в это время пул соединений к БД не за чем.
+ */
+const REFRESH_WAIT_ATTEMPTS = 5;
+const REFRESH_WAIT_STEP_MS = 500;
+
+/**
  * Чьи учётные данные умеет хранить сервис.
  *
  * Шире, чем `Platform`: донат-площадки тоже кладут сюда OAuth-токены, хотя
@@ -87,15 +98,30 @@ export class PlatformTokenService {
 
     if (refreshed !== null) return refreshed;
 
-    // Блокировку держит кто-то другой: он как раз обновляет тот же токен.
-    // Перечитываем — к этому моменту запись, скорее всего, уже новая.
-    const fresh = await this.prisma.integrationCredential.findUnique({
-      where: { userId_provider: { userId, provider: platform } },
-    });
-    if (!fresh || this.isExpiring(fresh.expiresAt)) {
-      throw new PlatformAuthError(platform, 401, 'Не удалось обновить доступ к площадке');
+    // Блокировку держит кто-то другой — и держит ВСЁ время обмена токена.
+    // Значит обновление не «уже закончилось», а идёт прямо сейчас, и читать
+    // запись немедленно бессмысленно: там ещё прежний срок. Раньше код читал
+    // сразу и бросал PlatformAuthError, то есть здоровый канал уходил в
+    // AUTH_EXPIRED — терминальное состояние с требованием переподключить
+    // площадку. Достаточно было совпадения тика опроса и старта коннектора.
+    return this.awaitRefreshedBy(userId, platform);
+  }
+
+  /** Сколько ждём чужое обновление, прежде чем признать доступ мёртвым. */
+  private async awaitRefreshedBy(userId: string, platform: CredentialProvider): Promise<string> {
+    for (let attempt = 0; attempt < REFRESH_WAIT_ATTEMPTS; attempt += 1) {
+      await sleep(REFRESH_WAIT_STEP_MS);
+
+      const fresh = await this.prisma.integrationCredential.findUnique({
+        where: { userId_provider: { userId, provider: platform } },
+      });
+      if (!fresh) break;
+      if (!this.isExpiring(fresh.expiresAt)) return this.crypto.decrypt(fresh.accessTokenEncrypted);
     }
-    return this.crypto.decrypt(fresh.accessTokenEncrypted);
+
+    // Держатель блокировки не справился за отведённое время — либо обновление
+    // действительно не получилось, либо процесс умер и блокировка ещё не истекла.
+    throw new PlatformAuthError(platform, 401, 'Не удалось обновить доступ к площадке');
   }
 
   /** Сохраняет выданную площадкой пару. Наружу токены не отдаются никогда. */
@@ -159,4 +185,8 @@ export class PlatformTokenService {
     if (!expiresAt) return false;
     return expiresAt.getTime() - Date.now() <= REFRESH_MARGIN_MS;
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

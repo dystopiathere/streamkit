@@ -199,6 +199,47 @@ describe('Аналитика каналов (feature)', () => {
     expect(month.body.bucket).toBe('day');
   });
 
+  it('режет сутки по часовому поясу клиента, а не по UTC', async () => {
+    const channelId = await createChannel();
+
+    // Два снимка одного московского вечера, разнесённые полуночью по UTC:
+    // 22:00 и 02:00 UTC — это 01:00 и 05:00 по Москве того же дня. Пока корзины
+    // считались по UTC, один ночной эфир разваливался на графике за месяц на
+    // две соседние даты, и подпись оси называла день, которого у данных нет.
+    const evening = new Date();
+    evening.setUTCDate(evening.getUTCDate() - 2);
+    evening.setUTCHours(22, 0, 0, 0);
+    await harness.prisma.analyticsSnapshot.createMany({
+      data: [evening, new Date(evening.getTime() + 4 * HOUR)].map((capturedAt) => ({
+        channelId,
+        capturedAt,
+        isLive: true,
+        viewers: 10,
+      })),
+    });
+
+    const moscow = await request(server())
+      .get(`/api/channels/${channelId}/series?range=30d&timeZone=Europe%2FMoscow`)
+      .set(auth())
+      .expect(200);
+    expect(moscow.body.points).toHaveLength(1);
+
+    const utc = await request(server())
+      .get(`/api/channels/${channelId}/series?range=30d`)
+      .set(auth())
+      .expect(200);
+    expect(utc.body.points).toHaveLength(2);
+  });
+
+  it('отклоняет выдуманный часовой пояс', async () => {
+    const channelId = await createChannel();
+    // Неизвестная зона в SQL стала бы ошибкой запроса, то есть пятисоткой.
+    await request(server())
+      .get(`/api/channels/${channelId}/series?timeZone=Europe%2FАтлантида`)
+      .set(auth())
+      .expect(400);
+  });
+
   it('отклоняет неизвестный диапазон', async () => {
     const channelId = await createChannel();
     await request(server())

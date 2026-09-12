@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PlatformAuthError, PlatformError, PlatformRateLimitError } from './platform-errors';
+import {
+  PlatformAuthError,
+  PlatformError,
+  PlatformQuotaError,
+  PlatformRateLimitError,
+} from './platform-errors';
 
 /** Сколько ждём ответа площадки. Опрос идёт раз в минуту — висеть дольше незачем. */
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -97,6 +102,19 @@ export class HttpClient {
       'Площадка ответила ошибкой',
     );
 
+    // Причина разбирается ДО проверки на 401/403: Google отвечает 403 и на
+    // отозванный доступ, и на исчерпанную квоту, а это противоположные реакции —
+    // «переподключите площадку» против «вернёмся завтра».
+    const quota = quotaReason(response.status, detail);
+    if (quota) {
+      throw new PlatformQuotaError(
+        request.platform,
+        response.status,
+        'Квота площадки исчерпана',
+        quota,
+      );
+    }
+
     if (response.status === 401 || response.status === 403) {
       throw new PlatformAuthError(request.platform, response.status, 'Площадка отвергла токен');
     }
@@ -114,6 +132,47 @@ export class HttpClient {
       `Площадка ответила ${response.status}`,
     );
   }
+}
+
+/** Причины, которыми Google помечает исчерпание квоты и лимита частоты. */
+const QUOTA_REASONS = new Set([
+  'quotaExceeded',
+  'dailyLimitExceeded',
+  'rateLimitExceeded',
+  'userRateLimitExceeded',
+]);
+
+/**
+ * Причина отказа из тела ответа, если это отказ по квоте.
+ *
+ * Разбирать тело приходится потому, что код ответа тут ничего не различает:
+ * Google отдаёт 403 и когда пользователь отозвал доступ, и когда кончились
+ * суточные единицы проекта. Причина лежит в `error.errors[0].reason`.
+ *
+ * Чужой или неразобранный формат — не квота: молча считать отказ временным
+ * опаснее, чем наоборот, потому что тогда мёртвый токен будет опрашиваться вечно.
+ *
+ * Смотрим только 403. Код 429 разбирать незачем: он и так означает лимит
+ * частоты, и у него есть заголовок `Retry-After`, который эта ветка потеряла бы.
+ */
+export function quotaReason(status: number, body: string): string | null {
+  if (status !== 403) return null;
+
+  try {
+    const parsed = JSON.parse(body) as {
+      error?: { errors?: Array<{ reason?: unknown }>; status?: unknown };
+    };
+    for (const item of parsed.error?.errors ?? []) {
+      if (typeof item.reason === 'string' && QUOTA_REASONS.has(item.reason)) {
+        return item.reason;
+      }
+    }
+    // Новый формат ошибок Google: массива errors нет, есть только status.
+    if (parsed.error?.status === 'RESOURCE_EXHAUSTED') return 'quotaExceeded';
+  } catch {
+    // Не JSON — значит и не ошибка Google. Отказ разберут ветки ниже.
+  }
+  return null;
 }
 
 /** `Retry-After` приходит в секундах. Часа хватает: дольше ждать смысла нет. */

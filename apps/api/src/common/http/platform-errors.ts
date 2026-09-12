@@ -30,3 +30,34 @@ export class PlatformRateLimitError extends PlatformError {
     super(platform, status, message);
   }
 }
+
+/**
+ * Квота площадки исчерпана.
+ *
+ * Отдельный класс, потому что Google сообщает об этом кодом 403 — тем же, что и
+ * об отозванном доступе. Без разбора причины любое исчерпание квоты выглядело бы
+ * как мёртвый токен, и опрос всех каналов YouTube останавливался бы НАВСЕГДА,
+ * требуя от каждого стримера переподключить площадку руками. Между тем квота
+ * восстанавливается сама в полночь.
+ */
+export class PlatformQuotaError extends PlatformError {
+  constructor(
+    platform: string,
+    status: number,
+    message: string,
+    /** Причина из ответа площадки: `quotaExceeded`, `rateLimitExceeded` и т.п. */
+    readonly reason: string,
+  ) {
+    super(platform, status, message);
+  }
+
+  /**
+   * Кончился ли суточный бюджет — в отличие от мгновенного лимита частоты.
+   *
+   * Разница существенная: суточный означает «до завтра», и наш счётчик обязан
+   * об этом узнать; частотный проходит за секунды и трогать счётчик не должен.
+   */
+  get isDaily(): boolean {
+    return this.reason === 'quotaExceeded' || this.reason === 'dailyLimitExceeded';
+  }
+}

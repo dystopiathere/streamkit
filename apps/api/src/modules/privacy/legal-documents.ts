@@ -30,7 +30,10 @@ export const LEGAL_DOCUMENTS: Record<ConsentDocument, LegalDocument> = {
   },
   PRIVACY: {
     document: 'PRIVACY',
-    version: '2026-09-11',
+    // Добавлен срок хранения снимков метрик — новый раздел данных, новая
+    // редакция. Согласившиеся со старой увидят needsRenewal: это и есть смысл
+    // реестра версий.
+    version: '2026-09-12',
     title: 'Политика конфиденциальности',
     path: '/legal/privacy',
     requiredOnRegister: true,

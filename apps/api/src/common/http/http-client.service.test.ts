@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { backoffMs, isRetryable, retryAfterMs } from './http-client.service';
+import { backoffMs, isRetryable, quotaReason, retryAfterMs } from './http-client.service';
 
 describe('повтор запросов к площадке', () => {
   it('повторяет серверные ошибки', () => {
@@ -56,5 +56,54 @@ describe('заголовок Retry-After', () => {
 
   it('обрезает абсурдно долгое ожидание часом', () => {
     expect(retryAfterMs('86400')).toBe(3_600_000);
+  });
+});
+
+/**
+ * Отличать «кончилась квота» от «отозван доступ» приходится по телу ответа:
+ * Google отвечает 403 в обоих случаях. Раньше эта разница терялась, и штатное
+ * исчерпание суточного бюджета переводило ВСЕ каналы YouTube в состояние
+ * «переподключите площадку» — необратимое без действия каждого стримера.
+ */
+describe('причина отказа 403', () => {
+  const quotaBody = JSON.stringify({
+    error: { code: 403, errors: [{ reason: 'quotaExceeded', domain: 'youtube.quota' }] },
+  });
+  const forbiddenBody = JSON.stringify({
+    error: { code: 403, errors: [{ reason: 'forbidden', domain: 'youtube.channel' }] },
+  });
+
+  it('узнаёт исчерпание квоты', () => {
+    expect(quotaReason(403, quotaBody)).toBe('quotaExceeded');
+  });
+
+  it('узнаёт лимит частоты', () => {
+    expect(
+      quotaReason(403, JSON.stringify({ error: { errors: [{ reason: 'rateLimitExceeded' }] } })),
+    ).toBe('rateLimitExceeded');
+  });
+
+  it('понимает новый формат ошибок Google без массива errors', () => {
+    expect(quotaReason(403, JSON.stringify({ error: { status: 'RESOURCE_EXHAUSTED' } }))).toBe(
+      'quotaExceeded',
+    );
+  });
+
+  it('не принимает отозванный доступ за квоту', () => {
+    // Это и есть та самая развилка: здесь повтор бессмыслен, и канал обязан
+    // уйти в AUTH_EXPIRED, а не ждать полуночи.
+    expect(quotaReason(403, forbiddenBody)).toBeNull();
+  });
+
+  it('молчит на чужом формате и мусоре', () => {
+    expect(quotaReason(403, 'Forbidden')).toBeNull();
+    expect(quotaReason(403, '')).toBeNull();
+  });
+
+  it('смотрит только 403: у 401 и 429 своя обработка', () => {
+    expect(quotaReason(401, quotaBody)).toBeNull();
+    // 429 и так означает лимит частоты, и у него есть Retry-After —
+    // эта ветка его потеряла бы.
+    expect(quotaReason(429, quotaBody)).toBeNull();
   });
 });

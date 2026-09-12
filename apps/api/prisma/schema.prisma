@@ -224,6 +224,10 @@ model DonationSource {
   externalAccountId String?
   /// Секрет для проверки HMAC собственного вебхука. Шифротекст.
   webhookSecretEncrypted String?
+  /// Почему источник выключен, если выключен не пользователем. NULL — либо
+  /// работает, либо выключен вручную. Без этого поля истёкший доступ выглядел
+  /// в данных ровно как осознанное решение стримера.
+  disabledReason    String?
   lastEventAt       DateTime?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
@@ -269,6 +273,14 @@ model Channel {
   syncState   ChannelSyncState @default(OK)
   /// Текст последней ошибки — только для диагностики, наружу не отдаётся.
   syncError   String?
+  /// Сколько неудач подряд. Обнуляется первым же удачным сбором.
+  syncAttempts Int     @default(0)
+  /// Не опрашивать раньше этого момента. Отдельно от lastSyncedAt: «когда
+  /// удалось собрать» и «когда пробовать снова» расходятся ровно тогда, когда
+  /// собирать перестало получаться. Раньше каденция считалась по lastSyncedAt,
+  /// и сбойный канал повторялся каждую минуту вместо положенных пятнадцати,
+  /// занимая место в выборке и вытесняя из неё исправные.
+  nextAttemptAt DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
