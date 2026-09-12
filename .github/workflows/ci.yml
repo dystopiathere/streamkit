@@ -72,8 +72,12 @@ jobs:
       NODE_ENV: test
       # Значения тестовые и одноразовые: боевые секреты живут только в
       # окружении деплоя, в CI их быть не должно.
+      #
+      # ENCRYPTION_KEY обязан декодироваться ровно в 32 байта. Проверка:
+      #   node -e "console.log(Buffer.from(process.argv[1],'base64').length)" <ключ>
+      # Здесь это base64 от строки test-encryption-key-32-bytes!!!! длиной 32.
       JWT_SECRET: test-secret-value-for-ci-at-least-32-chars
-      ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcy0hIQ==
+      ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcyEhISE=
       IP_HASH_PEPPER: test-pepper-for-ci
       TOKEN_HASH_PEPPER: test-token-pepper-for-ci
       CORS_ORIGINS: http://localhost:5173
@@ -89,6 +93,13 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @streamkit/contracts build
+
+      # Клиент Prisma — сгенерированный код, в репозитории его нет. Без этого
+      # шага падают все четыре набора разом, ещё на импорте: энумы приезжают
+      # undefined, и ошибка выглядит как «Cannot read properties of undefined»,
+      # а не как «клиент не сгенерирован».
+      - run: pnpm --filter @streamkit/api exec prisma generate
+
       - run: pnpm --filter @streamkit/api exec prisma migrate deploy
       - run: pnpm --filter @streamkit/api test:int
 
@@ -124,7 +135,7 @@ jobs:
       DATABASE_URL: postgresql://streamkit:streamkit@localhost:5432/streamkit_e2e?schema=public
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: test-secret-value-for-ci-at-least-32-chars
-      ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcy0hIQ==
+      ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcyEhISE=
       IP_HASH_PEPPER: test-pepper-for-ci
       TOKEN_HASH_PEPPER: test-token-pepper-for-ci
       CORS_ORIGINS: http://localhost:5173,http://localhost:5174
@@ -144,7 +155,7 @@ jobs:
       - run: pnpm build
       - run: pnpm --filter @streamkit/api exec prisma migrate deploy
       - run: pnpm --filter @streamkit/e2e exec playwright install --with-deps chromium
-      - run: pnpm --filter @streamkit/e2e test
+      - run: pnpm --filter @streamkit/e2e test:e2e
 
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -156,6 +167,16 @@ jobs:
   security:
     name: Проверки безопасности
     runs-on: ubuntu-latest
+
+    # Права выданы явно и по минимуму.
+    #
+    # Токен workflow по умолчанию только на чтение, и gitleaks падал с
+    # «Resource not accessible by integration» — не потому, что нашёл секреты,
+    # а потому что не смог оставить комментарий в pull request.
+    permissions:
+      contents: read
+      pull-requests: read
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -180,6 +201,9 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Комментарии в PR не нужны: результат виден в логе задания, а ради
+          # них пришлось бы выдавать токену право записи в pull requests.
+          GITLEAKS_ENABLE_COMMENTS: false
 
   docker:
     name: Сборка образов
@@ -224,7 +248,7 @@ jobs:
 
       # Уязвимости в образе: базовый образ и системные пакеты pnpm audit не видит.
       - name: Сканирование образа API
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: streamkit-api:ci
           format: table

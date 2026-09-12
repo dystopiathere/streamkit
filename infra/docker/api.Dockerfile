@@ -4,7 +4,20 @@
 FROM node:24-alpine AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH="$PNPM_HOME:$PATH"
+
+# Системные пакеты базового образа. node:24-alpine собирается не каждый день и
+# отстаёт от alpine на свежие патчи — сканер образа справедливо находит в нём
+# libssl и libcrypto с известными уязвимостями.
+RUN apk upgrade --no-cache
+
 RUN corepack enable
+
+# npm из образа удаляется: пакетами здесь управляет pnpm через corepack, а
+# собственные вложенные зависимости npm (tar, ip-address, brace-expansion)
+# попадают в отчёт сканера как уязвимости ОБРАЗА. Чинить их нечем — это чужой
+# код внутри базового образа, — а не использовать и держать незачем.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+
 WORKDIR /app
 
 # --- Зависимости -----------------------------------------------------------
@@ -30,7 +43,11 @@ RUN pnpm --filter @streamkit/contracts build \
     && pnpm --filter @streamkit/api build
 
 # Выкидываем devDependencies: в рантайме нужны только production-зависимости.
-RUN pnpm --filter @streamkit/api --prod deploy /deploy
+# Флаг `--legacy` обязателен начиная с pnpm 10: по умолчанию `deploy` работает
+# только в воркспейсах с `inject-workspace-packages=true`. Включать это ради
+# сборки образа — значит поменять способ связывания пакетов и в разработке:
+# рабочие зависимости начнут копироваться вместо симлинков.
+RUN pnpm --filter @streamkit/api --prod deploy --legacy /deploy
 
 # --- Рантайм ---------------------------------------------------------------
 FROM base AS runtime
