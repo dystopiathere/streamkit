@@ -1,10 +1,11 @@
 import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
 import type { IncomingAlertEvent } from '@streamkit/contracts';
-import { CryptoService } from '../../common/crypto/crypto.service';
+import { PlatformAuthError } from '../../common/http/platform-errors';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { EventsService } from '../events/events.service';
 import type { DonationConnector } from './donation-provider';
 import { DonationAlertsConnector } from './donationalerts.connector';
+import { PlatformTokenService, type CredentialProvider } from './platform-token.service';
 
 /**
  * Менеджер живых подключений к площадкам.
@@ -22,7 +23,7 @@ export class ConnectorManager implements OnModuleInit, OnApplicationShutdown {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly crypto: CryptoService,
+    private readonly tokens: PlatformTokenService,
     private readonly events: EventsService,
     donationAlerts: DonationAlertsConnector,
   ) {
@@ -72,17 +73,25 @@ export class ConnectorManager implements OnModuleInit, OnApplicationShutdown {
     // Повторный запуск без остановки оставил бы два соединения и удвоил алерты.
     await this.stop(userId, provider);
 
-    const credential = await this.prisma.integrationCredential.findUnique({
-      where: { userId_provider: { userId, provider } },
-    });
-    if (!credential) {
-      this.logger.warn({ userId, provider }, 'Нет сохранённых учётных данных');
-      return;
+    // Токен берётся через общий сервис, а не расшифровывается здесь: тот
+    // проверяет срок и обновляет при необходимости. Раньше `expiresAt` не
+    // смотрели вовсе — протухший токен уезжал в коннектор, площадка отвечала
+    // 401, и источник молча умирал, оставаясь «включённым» в дашборде.
+    let accessToken: string;
+    try {
+      accessToken = await this.tokens.getAccessToken(userId, provider as CredentialProvider);
+    } catch (error) {
+      if (error instanceof PlatformAuthError) {
+        await this.disable(userId, provider);
+        this.logger.warn({ userId, provider }, 'Доступ к площадке истёк, источник выключен');
+        return;
+      }
+      throw error;
     }
 
     const stop = await connector.connect({
       userId,
-      accessToken: this.crypto.decrypt(credential.accessTokenEncrypted),
+      accessToken,
       emit: async (event: IncomingAlertEvent) => {
         await this.events.ingest(event);
       },
@@ -92,6 +101,21 @@ export class ConnectorManager implements OnModuleInit, OnApplicationShutdown {
     });
 
     this.active.set(key, stop);
+  }
+
+  /**
+   * Источник с мёртвым доступом выключается, а не остаётся «включённым».
+   *
+   * Иначе он переподключается при каждом старте воркера, каждый раз получает
+   * 401 — и в дашборде при этом выглядит рабочим.
+   */
+  private async disable(userId: string, provider: string): Promise<void> {
+    await this.prisma.donationSource
+      .updateMany({
+        where: { userId, provider: provider.toUpperCase() as never },
+        data: { isEnabled: false },
+      })
+      .catch(() => undefined);
   }
 
   async stop(userId: string, provider: string): Promise<void> {

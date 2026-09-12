@@ -57,6 +57,34 @@ export const envSchema = z.object({
   OVERLAY_BASE_URL: z.string().url(),
 
   /** Лимит запросов в минуту на IP для обычных ручек. */
+  /** Куда возвращать пользователя после OAuth площадки. */
+  WEB_BASE_URL: z.string().url().default('http://localhost:5173'),
+
+  /**
+   * Базовый адрес самого API — из него собирается redirect_uri.
+   *
+   * Отдельно от WEB_BASE_URL: callback принимает бэкенд, и адрес обязан
+   * посимвольно совпадать с зарегистрированным в приложении площадки.
+   */
+  OAUTH_REDIRECT_BASE_URL: z.string().url().default('http://localhost:3000'),
+
+  // Учётные данные площадок необязательны: без них площадка просто не
+  // предлагается к подключению. Требовать их означало бы, что ни одно
+  // существующее окружение и ни один прогон CI больше не стартует.
+  TWITCH_CLIENT_ID: z.string().min(1).optional(),
+  TWITCH_CLIENT_SECRET: z.string().min(1).optional(),
+  YOUTUBE_CLIENT_ID: z.string().min(1).optional(),
+  YOUTUBE_CLIENT_SECRET: z.string().min(1).optional(),
+
+  /**
+   * Суточный бюджет запросов к YouTube Data API.
+   *
+   * Лимит Google — 10 000 единиц на проект в сутки, и это лимит НА ВСЕХ
+   * пользователей сразу, а не на каждого. Держим запас: остаток нужен на
+   * подключение новых каналов и на ручные проверки.
+   */
+  YOUTUBE_DAILY_QUOTA: z.coerce.number().int().min(0).default(9000),
+
   THROTTLE_LIMIT: z.coerce.number().int().min(1).default(120),
   /** Лимит попыток логина в минуту на IP. Жёстче общего. */
   THROTTLE_AUTH_LIMIT: z.coerce.number().int().min(1).default(10),

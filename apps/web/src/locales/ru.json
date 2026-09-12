@@ -15,7 +15,8 @@
     "events": "События",
     "sources": "Источники",
     "privacy": "Приватность",
-    "logout": "Выйти"
+    "logout": "Выйти",
+    "analytics": "Аналитика"
   },
   "auth": {
     "loginTitle": "Вход",
@@ -118,5 +119,44 @@
     "acceptAll": "Принять все",
     "onlyNecessary": "Только необходимые",
     "more": "Подробнее"
+  },
+  "analytics": {
+    "title": "Аналитика площадок",
+    "empty": "Ни одна площадка не подключена. Подключите канал, и метрики начнут собираться автоматически.",
+    "connectTitle": "Подключить площадку",
+    "connect": "Подключить {{platform}}",
+    "notConfigured": "Площадка не настроена администратором",
+    "connected": "Площадка {{platform}} подключена",
+    "connectFailed": "Не удалось подключить площадку. Попробуйте ещё раз.",
+    "disconnect": "Отключить",
+    "live": "В эфире",
+    "viewersNow": "Зрителей",
+    "subscribers": "Подписчиков",
+    "followers": "Фолловеров",
+    "liveHours": "В эфире",
+    "hoursSuffix": "ч",
+    "noValue": "—",
+    "noData": "Данных пока нет",
+    "noLiveData": "Эфиров за период не было",
+    "chartViewers": "Зрители",
+    "chartSubscribers": "Подписчики",
+    "donationsTitle": "Донаты за период",
+    "donationsCount_one": "{{count}} донат",
+    "donationsCount_few": "{{count}} доната",
+    "donationsCount_many": "{{count}} донатов",
+    "range": {
+      "24h": "Сутки",
+      "7d": "Неделя",
+      "30d": "Месяц"
+    },
+    "platform": {
+      "twitch": "Twitch",
+      "youtube": "YouTube"
+    },
+    "syncState": {
+      "auth-expired": "Доступ к площадке истёк. Подключите её заново, чтобы возобновить сбор метрик.",
+      "rate-limited": "Суточный лимит запросов к площадке исчерпан. Сбор возобновится автоматически.",
+      "error": "Последний сбор метрик не удался. Попробуем снова через несколько минут."
+    }
   }
 }

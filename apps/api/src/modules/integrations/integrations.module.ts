@@ -1,16 +1,49 @@
 import { Module } from '@nestjs/common';
+import { HttpClient } from '../../common/http/http-client.service';
 import { EventsModule } from '../events/events.module';
 import { ConnectorManager } from './connector-manager.service';
 import { DonationAlertsConnector } from './donationalerts.connector';
+import { IntegrationsController } from './integrations.controller';
+import { OAuthStateService } from './oauth-state.service';
+import { PlatformConnectionService } from './platform-connection.service';
+import { PlatformRegistry } from './platform-registry.service';
+import { PlatformTokenService } from './platform-token.service';
+import { TwitchProvider } from './twitch.provider';
+import { YouTubeProvider } from './youtube.provider';
 
 /**
- * Коннекторы внешних площадок. Живут только в worker-процессе: держать
- * долгоживущие websocket-соединения в API-инстансе означало бы, что при каждом
- * рестарте по деплою у всех стримеров рвутся источники донатов.
+ * Площадки: OAuth-контур, хранение токенов, провайдеры метрик.
+ *
+ * Импортируется и API (подключение площадки), и воркером (сбор метрик).
+ * Ничего долгоживущего не поднимает: все провайдеры здесь — про запрос-ответ.
  */
 @Module({
   imports: [EventsModule],
+  controllers: [IntegrationsController],
+  providers: [
+    HttpClient,
+    TwitchProvider,
+    YouTubeProvider,
+    PlatformRegistry,
+    PlatformTokenService,
+    OAuthStateService,
+    PlatformConnectionService,
+  ],
+  exports: [PlatformRegistry, PlatformTokenService, PlatformConnectionService],
+})
+export class IntegrationsModule {}
+
+/**
+ * Коннекторы донатов. Живут ТОЛЬКО в воркере.
+ *
+ * Отдельный модуль, а не часть `IntegrationsModule`, именно из-за этого: у
+ * `ConnectorManager` есть `onModuleInit`, который поднимает долгоживущие
+ * websocket-соединения. Попади он в API, каждый деплой рвал бы источники
+ * донатов у всех стримеров разом — и тем чаще, чем больше инстансов API.
+ */
+@Module({
+  imports: [EventsModule, IntegrationsModule],
   providers: [DonationAlertsConnector, ConnectorManager],
   exports: [ConnectorManager],
 })
-export class IntegrationsModule {}
+export class DonationConnectorsModule {}

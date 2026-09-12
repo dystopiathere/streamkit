@@ -10,9 +10,11 @@ import { PrismaModule } from './common/prisma/prisma.module';
 import { REDIS_CLIENT, RedisModule } from './common/redis/redis.module';
 import { AppConfig } from './config/app-config.service';
 import { AppConfigModule } from './config/config.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { EventsModule } from './modules/events/events.module';
 import { HealthController } from './modules/health/health.controller';
+import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { PrivacyModule } from './modules/privacy/privacy.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { WidgetsModule } from './modules/widgets/widgets.module';
@@ -75,6 +77,10 @@ import { WidgetsModule } from './modules/widgets/widgets.module';
     EventsModule,
     RealtimeModule,
     PrivacyModule,
+    // Площадки без коннекторов донатов: в API нужен только OAuth-контур и
+    // чтение метрик. Долгоживущие соединения поднимает воркер.
+    IntegrationsModule,
+    AnalyticsModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -35,3 +35,14 @@ export class ZodValidationPipe<T> implements PipeTransform<unknown, T> {
 export function zodBody<T>(schema: ZodSchema<T>): ZodValidationPipe<T> {
   return new ZodValidationPipe(schema);
 }
+
+/**
+ * То же для строки запроса: `@Query(zodQuery(analyticsQuerySchema)) query: AnalyticsQuery`.
+ *
+ * Отдельное имя, хотя пайп тот же: в схеме для query числа и булевы обязаны
+ * идти через `z.coerce`, потому что из строки запроса всё приезжает строками.
+ * Разные имена напоминают об этом на месте вызова.
+ */
+export function zodQuery<T>(schema: ZodSchema<T>): ZodValidationPipe<T> {
+  return new ZodValidationPipe(schema);
+}

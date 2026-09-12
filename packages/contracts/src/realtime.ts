@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { channelStatsSchema } from './analytics.js';
 import { alertEventSchema } from './events.js';
 import { alertWidgetConfigSchema } from './widgets.js';
 
@@ -15,6 +16,8 @@ export const SOCKET_EVENTS = {
   revoked: 'revoked',
   /** Сервер → дашборд: новое событие в истории. */
   eventCreated: 'event:created',
+  /** Сервер → дашборд: свежие метрики канала. */
+  analyticsUpdated: 'analytics:updated',
 } as const;
 
 export type SocketEventName = (typeof SOCKET_EVENTS)[keyof typeof SOCKET_EVENTS];
@@ -45,6 +48,18 @@ export const revokedMessageSchema = z.object({
   reason: z.enum(['token-revoked', 'widget-deleted']),
 });
 export type RevokedMessage = z.infer<typeof revokedMessageSchema>;
+
+/**
+ * Свежий снимок метрик канала.
+ *
+ * Приходит в дашборд сам, а не запрашивается: иначе открытая вкладка
+ * «Аналитика» превратилась бы в генератор запросов к API раз в минуту.
+ */
+export const analyticsUpdatedMessageSchema = z.object({
+  channelId: z.string().uuid(),
+  stats: channelStatsSchema,
+});
+export type AnalyticsUpdatedMessage = z.infer<typeof analyticsUpdatedMessageSchema>;
 
 /** Начальное состояние, которое overlay получает сразу после подключения. */
 export const overlayBootstrapSchema = z.object({
