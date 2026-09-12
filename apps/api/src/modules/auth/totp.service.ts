@@ -1,29 +1,37 @@
 import { Injectable } from '@nestjs/common';
-import { authenticator } from 'otplib';
+import { generateSecret, generateURI, verifySync } from 'otplib';
 import { toDataURL } from 'qrcode';
+
+/**
+ * Допуск на расхождение часов, в секундах.
+ *
+ * Тридцать секунд в обе стороны — это ровно один шаг TOTP, то же самое, что
+ * задавал `window: 1` в otplib 12. Часы на телефоне почти всегда слегка
+ * расходятся с сервером, а без допуска пользователь получает необъяснимые
+ * отказы. Больше брать нельзя: каждый лишний шаг удваивает окно, в котором
+ * подсмотренный код ещё сработает.
+ */
+const EPOCH_TOLERANCE_SECONDS = 30;
 
 /**
  * Второй фактор по TOTP (RFC 6238) — совместим с Google Authenticator, Aegis,
  * 1Password и прочими.
  *
- * `window: 1` даёт допуск ±30 секунд: часы на телефоне почти всегда слегка
- * расходятся с сервером, а без допуска пользователь получает необъяснимые отказы.
+ * В otplib 13 объект `authenticator` с изменяемыми настройками убрали: теперь
+ * это чистые функции, которым параметры передаются на каждый вызов. Для нас это
+ * к лучшему — общие настройки на весь процесс были общим изменяемым состоянием.
  */
 @Injectable()
 export class TotpService {
   private readonly issuer = 'StreamKit';
 
-  constructor() {
-    authenticator.options = { window: 1 };
-  }
-
   generateSecret(): string {
-    return authenticator.generateSecret();
+    return generateSecret();
   }
 
   /** otpauth://-ссылка для QR-кода. */
   buildUri(accountEmail: string, secret: string): string {
-    return authenticator.keyuri(accountEmail, this.issuer, secret);
+    return generateURI({ issuer: this.issuer, label: accountEmail, secret });
   }
 
   async buildQrDataUrl(accountEmail: string, secret: string): Promise<string> {
@@ -32,8 +40,9 @@ export class TotpService {
 
   verify(secret: string, code: string): boolean {
     try {
-      return authenticator.verify({ token: code, secret });
+      return verifySync({ secret, token: code, epochTolerance: EPOCH_TOLERANCE_SECONDS }).valid;
     } catch {
+      // Битый секрет или мусор вместо кода — это «не подошло», а не авария.
       return false;
     }
   }

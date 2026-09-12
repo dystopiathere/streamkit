@@ -107,7 +107,7 @@ export class PrivacyService {
    * пользователя, а учётные данные доступа.
    */
   async exportData(userId: string, context: AuditContext = {}): Promise<Record<string, unknown>> {
-    const [user, consents, widgets, events, sources, channels] = await Promise.all([
+    const [user, consents, widgets, events, sources, channels, snapshots] = await Promise.all([
       this.prisma.user.findUniqueOrThrow({
         where: { id: userId },
         select: {
@@ -124,9 +124,22 @@ export class PrivacyService {
       this.prisma.alertEvent.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
       this.prisma.donationSource.findMany({
         where: { userId },
-        select: { provider: true, isEnabled: true, externalAccountId: true, lastEventAt: true },
+        select: {
+          provider: true,
+          isEnabled: true,
+          disabledReason: true,
+          externalAccountId: true,
+          lastEventAt: true,
+        },
       }),
       this.prisma.channel.findMany({ where: { userId } }),
+      // Снимки метрик — тоже данные субъекта: это поминутная история его
+      // эфиров. Отдаём их вместе с каналами, иначе выгрузка формально неполная,
+      // а по сути стример не может забрать собственную аналитику при уходе.
+      this.prisma.analyticsSnapshot.findMany({
+        where: { channel: { userId } },
+        orderBy: { capturedAt: 'desc' },
+      }),
     ]);
 
     await this.audit.record('privacy.data.exported', userId, context);
@@ -140,6 +153,13 @@ export class PrivacyService {
       events,
       donationSources: sources,
       channels,
+      // BigInt не сериализуется в JSON — приводим к строке, а не к number:
+      // просмотры крупного канала в number ещё влезают, но правило «не терять
+      // точность молча» дешевле соблюдать везде, чем помнить, где можно.
+      analyticsSnapshots: snapshots.map((snapshot) => ({
+        ...snapshot,
+        totalViews: snapshot.totalViews === null ? null : snapshot.totalViews.toString(),
+      })),
     };
   }
 

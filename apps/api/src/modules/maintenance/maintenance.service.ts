@@ -45,4 +45,24 @@ export class MaintenanceService {
     }
     return result.count;
   }
+
+  /**
+   * Снимки метрик старше срока хранения.
+   *
+   * Без уборки таблица растёт линейно и без потолка: канал в эфире даёт снимок
+   * в минуту, то есть 1440 строк в сутки, и каждый запрос ряда за месяц
+   * сканирует всё, что накопилось. Срок, как и у аудита, обязан совпадать с
+   * заявленным в политике обработки ПДн.
+   */
+  async purgeOldSnapshots(retentionDays: number): Promise<number> {
+    const threshold = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+    const result = await this.prisma.analyticsSnapshot.deleteMany({
+      where: { capturedAt: { lt: threshold } },
+    });
+
+    if (result.count > 0) {
+      this.logger.log({ count: result.count, retentionDays }, 'Удалены старые снимки метрик');
+    }
+    return result.count;
+  }
 }

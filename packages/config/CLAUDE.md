@@ -11,7 +11,7 @@ JSON-пресеты, от которых наследуются `tsconfig.json` 
 | `tsconfig/react.json` | Vite-приложения (`apps/web`, `apps/overlay`): JSX, DOM-библиотеки, `noEmit` |
 | `tsconfig/lib.json` | Публикуемые пакеты (`packages/contracts`, `packages/ui`): ESM, эмит в `dist` |
 
-Все три наследуются от корневого `tsconfig.base.json`, где включён `strict`,
+Все три наследуются от `tsconfig/base.json` в этом же пакете, где включён `strict`,
 `noUncheckedIndexedAccess` и `noImplicitOverride`.
 
 ## Правила

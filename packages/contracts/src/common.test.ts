@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { formatMoney, moneySchema, toMinor } from './common.js';
+import {
+  formatMinorForInput,
+  formatMoney,
+  moneySchema,
+  parseMajorToMinor,
+  toMinor,
+} from './common.js';
 import { dedupKey, incomingAlertEventSchema } from './events.js';
 
 describe('деньги', () => {
@@ -59,5 +65,51 @@ describe('входящее событие', () => {
     expect(dedupKey({ provider: 'donatepay', externalId: '42' })).not.toBe(
       dedupKey({ provider: 'donationalerts', externalId: '42' }),
     );
+  });
+});
+
+describe('ввод сумм в рублях', () => {
+  it('разбирает целые рубли', () => {
+    expect(parseMajorToMinor('1000')).toBe(100_000);
+  });
+
+  it('разбирает копейки после точки и запятой', () => {
+    expect(parseMajorToMinor('10.07')).toBe(1007);
+    expect(parseMajorToMinor('10,5')).toBe(1050);
+  });
+
+  it('не теряет копейку на плавающей точке', () => {
+    // Math.round(10.07 * 100) ещё угадывает, а на длинных суммах перестаёт.
+    // Поэтому строка разбирается посимвольно, а не умножается на сто.
+    expect(parseMajorToMinor('8999999.99')).toBe(899_999_999);
+    expect(parseMajorToMinor('1.005')).toBeNull();
+  });
+
+  it('отличает пустой ввод от нуля', () => {
+    expect(parseMajorToMinor('')).toBeNull();
+    expect(parseMajorToMinor('0')).toBe(0);
+  });
+
+  it('отвергает мусор', () => {
+    expect(parseMajorToMinor('тысяча')).toBeNull();
+    expect(parseMajorToMinor('1e3')).toBeNull();
+  });
+
+  it('принимает отрицательные: стартовая сумма цели бывает с долгом', () => {
+    expect(parseMajorToMinor('-500')).toBe(-50_000);
+  });
+
+  it('превращает копейки обратно в строку для поля ввода', () => {
+    expect(formatMinorForInput(100_000)).toBe('1000');
+    expect(formatMinorForInput(1007)).toBe('10.07');
+    expect(formatMinorForInput(1050)).toBe('10.50');
+    expect(formatMinorForInput(0)).toBe('0');
+    expect(formatMinorForInput(-50_000)).toBe('-500');
+  });
+
+  it('переживает круг туда-обратно', () => {
+    for (const minor of [0, 1, 99, 100, 1007, 100_000, 899_999_999]) {
+      expect(parseMajorToMinor(formatMinorForInput(minor))).toBe(minor);
+    }
   });
 });

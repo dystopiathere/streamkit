@@ -82,7 +82,7 @@ export class ConnectorManager implements OnModuleInit, OnApplicationShutdown {
       accessToken = await this.tokens.getAccessToken(userId, provider as CredentialProvider);
     } catch (error) {
       if (error instanceof PlatformAuthError) {
-        await this.disable(userId, provider);
+        await this.disable(userId, provider, 'Срок доступа истёк, подключите площадку заново');
         this.logger.warn({ userId, provider }, 'Доступ к площадке истёк, источник выключен');
         return;
       }
@@ -108,12 +108,18 @@ export class ConnectorManager implements OnModuleInit, OnApplicationShutdown {
    *
    * Иначе он переподключается при каждом старте воркера, каждый раз получает
    * 401 — и в дашборде при этом выглядит рабочим.
+   *
+   * Причина записывается рядом: выключенный нами источник в данных не должен
+   * быть неотличим от выключенного самим стримером. Продлить доступ у донат-
+   * площадок пока нечем — провайдера обновления для них нет, — поэтому такой
+   * источник чинится только повторным подключением, и повод об этом сказать
+   * обязан сохраниться.
    */
-  private async disable(userId: string, provider: string): Promise<void> {
+  private async disable(userId: string, provider: string, reason: string): Promise<void> {
     await this.prisma.donationSource
       .updateMany({
         where: { userId, provider: provider.toUpperCase() as never },
-        data: { isEnabled: false },
+        data: { isEnabled: false, disabledReason: reason },
       })
       .catch(() => undefined);
   }

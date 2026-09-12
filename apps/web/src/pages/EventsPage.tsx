@@ -5,13 +5,11 @@ import {
   formatMoney,
 } from '@streamkit/contracts';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { io } from 'socket.io-client';
 import { Card } from '@/components/ui';
 import { useRecentEvents } from '@/features/widgets/queries';
-import { useAuthStore } from '@/lib/auth-store';
-import { SOCKET_URL } from '@/lib/config';
+import { useDashboardSocket } from '@/lib/useDashboardSocket';
 
 /** Сколько живых событий держим в памяти. Остальное есть в истории. */
 const LIVE_BUFFER = 50;
@@ -26,39 +24,20 @@ export function EventsPage(): React.JSX.Element {
   const queryClient = useQueryClient();
   const [live, setLive] = useState<AlertEvent[]>([]);
 
-  /**
-   * Токен читается из стора в ref, а не через подписку.
-   *
-   * Подписка делала его зависимостью эффекта, а access-токен меняется при
-   * каждом обновлении пары — то есть примерно раз в 15 минут. Эффект
-   * перезапускался, сокет рвался и переподключался, и события, пришедшие в это
-   * окно, не попадали в ленту вовсе: в live их нет, инвалидации истории тоже.
-   */
-  const tokenRef = useRef(useAuthStore.getState().accessToken);
-  useEffect(() => useAuthStore.subscribe((state) => (tokenRef.current = state.accessToken)), []);
+  useDashboardSocket(
+    SOCKET_EVENTS.eventCreated,
+    useCallback(
+      (payload: unknown) => {
+        const parsed = alertEventSchema.safeParse((payload as { event?: unknown })?.event);
+        if (!parsed.success) return;
 
-  useEffect(() => {
-    const socket = io(`${SOCKET_URL}/dashboard`, {
-      transports: ['websocket'],
-      // Функция, а не объект: при каждом переподключении сокет спрашивает токен
-      // заново и получает актуальный, а не тот, что был на момент монтирования.
-      auth: (cb: (data: { token: string | null }) => void) => cb({ token: tokenRef.current }),
-    });
-
-    socket.on(SOCKET_EVENTS.eventCreated, (payload: unknown) => {
-      const parsed = alertEventSchema.safeParse((payload as { event?: unknown })?.event);
-      if (!parsed.success) return;
-
-      setLive((current) => [parsed.data, ...current].slice(0, LIVE_BUFFER));
-      // История в кэше устарела — пусть перезапросится при следующем заходе.
-      void queryClient.invalidateQueries({ queryKey: ['events'] });
-    });
-
-    return () => {
-      socket.removeAllListeners();
-      socket.disconnect();
-    };
-  }, [queryClient]);
+        setLive((current) => [parsed.data, ...current].slice(0, LIVE_BUFFER));
+        // История в кэше устарела — пусть перезапросится при следующем заходе.
+        void queryClient.invalidateQueries({ queryKey: ['events'] });
+      },
+      [queryClient],
+    ),
+  );
 
   // Живые события идут первыми; дубли отсекаем по id, потому что после
   // инвалидации то же событие придёт и из истории.

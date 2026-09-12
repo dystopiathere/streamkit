@@ -97,15 +97,26 @@ export class AnalyticsService {
    * это под сорок тысяч строк, которые иначе пришлось бы вытащить в память
    * целиком, чтобы отдать тридцать точек.
    */
-  async series(userId: string, channelId: string, range: AnalyticsRange): Promise<AnalyticsSeries> {
+  async series(
+    userId: string,
+    channelId: string,
+    range: AnalyticsRange,
+    timeZone: string,
+  ): Promise<AnalyticsSeries> {
     await this.requireOwned(userId, channelId);
 
     const bucket = rangeBucket(range);
     const since = new Date(Date.now() - rangeToMs(range));
 
+    // Двойное `AT TIME ZONE` — не описка. `capturedAt` хранится как timestamp
+    // без зоны и содержит UTC: первое приведение объявляет это явно, второе
+    // переводит в местное настенное время, по которому и режутся корзины.
+    // Последнее приведение возвращает границу корзины обратно в момент времени,
+    // чтобы наружу уехал корректный ISO, а не местное время под видом UTC.
     const rows = await this.prisma.$queryRaw<SeriesRow[]>`
       SELECT
-        date_trunc(${bucket}, "capturedAt") AS at,
+        date_trunc(${bucket}, "capturedAt" AT TIME ZONE 'UTC' AT TIME ZONE ${timeZone})
+          AT TIME ZONE ${timeZone} AS at,
         AVG("viewers")::float8 AS viewers,
         MAX("followers")::int AS followers,
         MAX("subscribers")::int AS subscribers,

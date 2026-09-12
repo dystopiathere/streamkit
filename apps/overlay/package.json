@@ -12,16 +12,16 @@
   "dependencies": {
     "@streamkit/contracts": "workspace:*",
     "@streamkit/ui": "workspace:*",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "socket.io-client": "^4.8.1"
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
     "@streamkit/config": "workspace:*",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "^5.7.2",
-    "vite": "^7.0.0"
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.0"
   }
 }

@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   alertWidgetConfigSchema,
+  configSchemaFor,
   defaultAlertWidgetConfig,
+  defaultWidgetConfig,
+  donationSeconds,
+  formatDuration,
+  goalProgress,
   renderTemplate,
   shouldShowAlert,
+  timerRemainingSeconds,
+  WIDGET_TYPES,
+  widgetConfigSchema,
 } from './widgets.js';
 import type { AlertEvent } from './events.js';
 
@@ -120,5 +128,131 @@ describe('alertWidgetConfigSchema', () => {
   it('отклоняет отрицательный порог суммы', () => {
     const result = alertWidgetConfigSchema.safeParse({ minAmountMinor: -1 });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('типы виджетов', () => {
+  it('у каждого типа есть схема конфига', () => {
+    // Реестр обязан быть полным: тип без схемы означает виджет, который
+    // нельзя ни создать, ни прочитать из БД.
+    for (const type of WIDGET_TYPES) {
+      expect(configSchemaFor(type)).toBeDefined();
+      expect(() => defaultWidgetConfig(type)).not.toThrow();
+    }
+  });
+
+  it('дефолтный конфиг проходит собственную схему', () => {
+    for (const type of WIDGET_TYPES) {
+      expect(widgetConfigSchema.safeParse(defaultWidgetConfig(type)).success).toBe(true);
+    }
+  });
+
+  it('отвергает неизвестный тип', () => {
+    expect(widgetConfigSchema.safeParse({ type: 'chat', config: {} }).success).toBe(false);
+  });
+
+  it('проверяет конфиг схемой своего типа, а не любой', () => {
+    // Отрицательная цель невозможна, и поймать это обязана ветка goal.
+    expect(
+      widgetConfigSchema.safeParse({ type: 'goal', config: { targetMinor: -5 } }).success,
+    ).toBe(false);
+    // А вот лишние поля схема отбрасывает, а не отвергает: так устроен разбор
+    // во всём проекте — наружу уходит ровно то, что описано схемой.
+    const parsed = widgetConfigSchema.parse({ type: 'goal', config: { durationMs: 9000 } });
+    expect(parsed.config).not.toHaveProperty('durationMs');
+  });
+
+  it('цель начинает считать с момента создания, а не с начала времён', () => {
+    // Иначе цель, подключённая сегодня, задним числом соберёт всё, что пришло
+    // за год, и окажется выполненной ещё до первого доната.
+    const config = defaultWidgetConfig('goal').config as { startedAt: string };
+    expect(Date.now() - new Date(config.startedAt).getTime()).toBeLessThan(5000);
+  });
+});
+
+describe('секунды за донат', () => {
+  it('считает по мажорной единице валюты', () => {
+    // 500 рублей при ставке 2 секунды за рубль.
+    expect(donationSeconds(50_000, 2)).toBe(1000);
+  });
+
+  it('округляет вниз и не выдумывает дробных секунд', () => {
+    // Правило 1 репозитория распространяется и на производные от сумм:
+    // ни одного float ни на каком этапе.
+    expect(donationSeconds(99, 1)).toBe(0);
+    expect(donationSeconds(150, 1)).toBe(1);
+    expect(Number.isInteger(donationSeconds(12_345, 7))).toBe(true);
+  });
+
+  it('ничего не добавляет при нулевой ставке или пустой сумме', () => {
+    expect(donationSeconds(100_000, 0)).toBe(0);
+    expect(donationSeconds(0, 10)).toBe(0);
+    expect(donationSeconds(-500, 10)).toBe(0);
+  });
+});
+
+describe('прогресс цели', () => {
+  it('считает долю от цели', () => {
+    expect(goalProgress({ raisedMinor: 25_000, targetMinor: 100_000 })).toBe(0.25);
+  });
+
+  it('не выходит за единицу при перевыполнении', () => {
+    // Шкала кончается на ста процентах; сама сумма при этом показывается как есть.
+    expect(goalProgress({ raisedMinor: 300_000, targetMinor: 100_000 })).toBe(1);
+  });
+});
+
+describe('остаток таймера', () => {
+  const now = new Date('2026-09-12T12:00:00.000Z').getTime();
+
+  it('считается от момента окончания, а не от счётчика', () => {
+    expect(
+      timerRemainingSeconds(
+        { kind: 'timer', endsAt: '2026-09-12T12:01:30.000Z', pausedSeconds: null, serverNow: '' },
+        now,
+      ),
+    ).toBe(90);
+  });
+
+  it('учитывает расхождение часов машины с OBS', () => {
+    // Без поправки таймер в эфире врёт ровно на разницу часов, и заметить это
+    // можно только сравнив с чужим экраном.
+    expect(
+      timerRemainingSeconds(
+        { kind: 'timer', endsAt: '2026-09-12T12:01:30.000Z', pausedSeconds: null, serverNow: '' },
+        now,
+        30_000,
+      ),
+    ).toBe(60);
+  });
+
+  it('на паузе отдаёт сохранённый остаток', () => {
+    expect(
+      timerRemainingSeconds(
+        { kind: 'timer', endsAt: null, pausedSeconds: 42, serverNow: '' },
+        now + 10_000_000,
+      ),
+    ).toBe(42);
+  });
+
+  it('не уходит в минус после окончания', () => {
+    expect(
+      timerRemainingSeconds(
+        { kind: 'timer', endsAt: '2026-09-12T11:00:00.000Z', pausedSeconds: null, serverNow: '' },
+        now,
+      ),
+    ).toBe(0);
+  });
+});
+
+describe('формат длительности', () => {
+  it('дополняет нулями', () => {
+    expect(formatDuration(3661)).toBe('01:01:01');
+  });
+
+  it('прячет часы, когда их не просили и когда их нет', () => {
+    expect(formatDuration(125, false)).toBe('02:05');
+    // А вот когда час набрался — показывает, иначе 01:00:05 стало бы 00:05.
+    expect(formatDuration(3605, false)).toBe('01:00:05');
   });
 });

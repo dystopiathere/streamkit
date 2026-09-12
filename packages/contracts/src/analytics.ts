@@ -88,8 +88,36 @@ export const ANALYTICS_RANGES = ['24h', '7d', '30d'] as const;
 export const analyticsRangeSchema = z.enum(ANALYTICS_RANGES);
 export type AnalyticsRange = z.infer<typeof analyticsRangeSchema>;
 
+/**
+ * Часовой пояс, в котором режется ряд на корзины.
+ *
+ * Не украшение: корзины считались по UTC, а аудитория продукта в РФ. Эфир с
+ * 22:00 до 02:00 по Москве разваливался на графике за месяц на две разные
+ * «даты», и подпись оси называла день, которого у этих данных нет.
+ *
+ * Проверяем зону через Intl, а не регуляркой: список зон меняется, а движок
+ * знает актуальный. Неизвестная зона до SQL доехать не должна — там она станет
+ * ошибкой запроса, то есть пятисоткой на ровном месте.
+ */
+export const timeZoneSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .refine(isKnownTimeZone, { message: 'Неизвестный часовой пояс' });
+
+function isKnownTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export const analyticsQuerySchema = z.object({
   range: analyticsRangeSchema.default('7d'),
+  /** UTC по умолчанию: старый клиент не присылает зону, и его ответ не меняется. */
+  timeZone: timeZoneSchema.default('UTC'),
 });
 export type AnalyticsQuery = z.infer<typeof analyticsQuerySchema>;
 

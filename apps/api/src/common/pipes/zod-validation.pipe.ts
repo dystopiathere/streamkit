@@ -1,5 +1,23 @@
 import { BadRequestException, Injectable, type PipeTransform } from '@nestjs/common';
-import type { ZodSchema } from 'zod';
+import type { ZodError, ZodSchema } from 'zod';
+
+/**
+ * Ошибка разбора схемы в виде 400 с тем же телом, что отдаёт пайп.
+ *
+ * Вынесено отдельно, потому что разбор случается не только на границе запроса:
+ * конфиг виджета валидируется уже в сервисе — схемой типа, который известен
+ * только после чтения из БД. Без этого ZodError доезжал бы до Nest как
+ * необработанное исключение, то есть пятисоткой на кривом поле формы.
+ */
+export function validationError(error: ZodError): BadRequestException {
+  return new BadRequestException({
+    message: 'Ошибка валидации',
+    errors: error.issues.map((issue) => ({
+      path: issue.path.join('.'),
+      message: issue.message,
+    })),
+  });
+}
 
 /**
  * Валидация входа схемой из @streamkit/contracts.
@@ -21,13 +39,7 @@ export class ZodValidationPipe<T> implements PipeTransform<unknown, T> {
       return result.data;
     }
 
-    throw new BadRequestException({
-      message: 'Ошибка валидации',
-      errors: result.error.issues.map((issue) => ({
-        path: issue.path.join('.'),
-        message: issue.message,
-      })),
-    });
+    throw validationError(result.error);
   }
 }
 

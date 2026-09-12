@@ -54,7 +54,7 @@ export class AnalyticsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Query(zodQuery(analyticsQuerySchema)) query: AnalyticsQuery,
   ): Promise<AnalyticsSeries> {
-    return this.analytics.series(user.id, id, query.range);
+    return this.analytics.series(user.id, id, query.range, query.timeZone);
   }
 
   /** Отключение площадки: канал, учётные данные и снимки метрик уходят вместе. */

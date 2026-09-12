@@ -54,17 +54,35 @@ export class QuotaService {
     const key = quotaKey(platform);
     const used = await this.redis.incrby(key, cost);
 
-    // TTL ставится после первого инкремента: ключ создаётся самим INCRBY, и без
-    // срока он остался бы навсегда, а счётчик — вечным.
-    if (used === cost) {
-      await this.redis.expire(key, KEY_TTL_SECONDS);
-    }
+    // TTL ставится безусловно, с флагом NX. Раньше — только когда `used === cost`,
+    // то есть после первого инкремента: разрыв связи с Redis ровно в этом окне
+    // оставлял ключ без срока НАВСЕГДА, счётчик упирался в лимит и больше
+    // никогда не обнулялся — сбор метрик YouTube не возобновлялся и назавтра.
+    await this.redis.expire(key, KEY_TTL_SECONDS, 'NX');
 
     if (used > limit) {
       this.logger.warn({ platform, used, limit }, 'Суточная квота площадки исчерпана');
       return false;
     }
     return true;
+  }
+
+  /**
+   * Признать бюджет исчерпанным по слову самой площадки.
+   *
+   * Наш счётчик — оценка, и она заведомо ниже правды: стоимость запросов взята
+   * из документации, а подключение канала и обновление токена мимо резерва
+   * проходят вовсе. Когда Google отвечает `quotaExceeded`, спорить не с чем —
+   * счётчик подтягивается к лимиту, чтобы остаток суток не тратился на запросы,
+   * которые заведомо не получатся.
+   */
+  async exhaust(platform: string): Promise<void> {
+    const limit = this.limitFor(platform);
+    if (limit <= 0) return;
+
+    const key = quotaKey(platform);
+    await this.redis.set(key, limit + 1, 'EX', KEY_TTL_SECONDS);
+    this.logger.warn({ platform }, 'Площадка сообщила об исчерпании квоты, счётчик выровнен');
   }
 
   /** Сколько единиц уже потрачено за сегодня. Для диагностики. */

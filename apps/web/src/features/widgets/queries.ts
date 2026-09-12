@@ -6,6 +6,8 @@ import type {
   Page,
   UpdateWidgetInput,
   Widget,
+  WidgetState,
+  WidgetStateCommand,
 } from '@streamkit/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -14,6 +16,7 @@ export const widgetKeys = {
   all: ['widgets'] as const,
   detail: (id: string) => ['widgets', id] as const,
   tokens: (id: string) => ['widgets', id, 'tokens'] as const,
+  state: (id: string) => ['widgets', id, 'state'] as const,
 };
 
 export function useWidgets() {
@@ -48,6 +51,25 @@ export function useUpdateWidget(id: string) {
       client.setQueryData(widgetKeys.detail(id), widget);
       void client.invalidateQueries({ queryKey: widgetKeys.all });
     },
+  });
+}
+
+/** Состояние виджета: собранная сумма, остаток таймера, топ. */
+export function useWidgetState(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: widgetKeys.state(id),
+    queryFn: () => api.get<WidgetState | null>(`/widgets/${id}/state`),
+    enabled,
+  });
+}
+
+export function useWidgetCommand(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (command: WidgetStateCommand) =>
+      api.patch<WidgetState | null>(`/widgets/${id}/state`, command),
+    // Ответ уже содержит пересчитанное состояние — второй запрос не нужен.
+    onSuccess: (state) => client.setQueryData(widgetKeys.state(id), state),
   });
 }
 

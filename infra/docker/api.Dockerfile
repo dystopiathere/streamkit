@@ -1,22 +1,27 @@
 # Образ API и worker-процесса: один и тот же код, разные команды запуска.
 # Собирается из корня монорепо: docker build -f infra/docker/api.Dockerfile .
 
-FROM node:24-alpine AS base
+FROM node:26-alpine AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH="$PNPM_HOME:$PATH"
 
-# Системные пакеты базового образа. node:24-alpine собирается не каждый день и
+# Системные пакеты базового образа. node:26-alpine собирается не каждый день и
 # отстаёт от alpine на свежие патчи — сканер образа справедливо находит в нём
 # libssl и libcrypto с известными уязвимостями.
 RUN apk upgrade --no-cache
 
-RUN corepack enable
-
-# npm из образа удаляется: пакетами здесь управляет pnpm через corepack, а
-# собственные вложенные зависимости npm (tar, ip-address, brace-expansion)
-# попадают в отчёт сканера как уязвимости ОБРАЗА. Чинить их нечем — это чужой
-# код внутри базового образа, — а не использовать и держать незачем.
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+# corepack в образ Node больше не входит: начиная с 25-й версии его вынесли из
+# дистрибутива, и `corepack enable` падает с «not found». Ставим его отдельно —
+# он читает версию pnpm из поля packageManager, то есть версия остаётся
+# зафиксированной в одном месте, а не дублируется в Dockerfile.
+#
+# Тем же шагом удаляется npm: пакетами здесь управляет pnpm, а собственные
+# вложенные зависимости npm (tar, ip-address, brace-expansion) попадают в отчёт
+# сканера как уязвимости ОБРАЗА. Чинить их нечем — это чужой код внутри базового
+# образа, — а не использовать и держать незачем.
+RUN npm install -g corepack@latest \
+    && corepack enable \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 WORKDIR /app
 
@@ -35,7 +40,6 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 
 # --- Сборка ----------------------------------------------------------------
 FROM deps AS build
-COPY tsconfig.base.json ./
 COPY packages/ packages/
 COPY apps/api/ apps/api/
 RUN pnpm --filter @streamkit/contracts build \
@@ -48,6 +52,16 @@ RUN pnpm --filter @streamkit/contracts build \
 # сборки образа — значит поменять способ связывания пакетов и в разработке:
 # рабочие зависимости начнут копироваться вместо симлинков.
 RUN pnpm --filter @streamkit/api --prod deploy --legacy /deploy
+
+# Клиент Prisma генерируется ПОВТОРНО, уже внутри /deploy.
+#
+# `pnpm deploy` собирает node_modules заново из store, а сгенерированный клиент
+# в store не попадает — он появляется рядом с пакетом @prisma/client после
+# `prisma generate`. Без этого шага образ собирается, но приложение падает при
+# старте на «Cannot find module '.prisma/client/default'», и узнать об этом
+# можно только запустив контейнер.
+COPY apps/api/prisma /deploy/prisma
+RUN cd /deploy     && /app/apps/api/node_modules/.bin/prisma generate --schema /deploy/prisma/schema.prisma
 
 # --- Рантайм ---------------------------------------------------------------
 FROM base AS runtime

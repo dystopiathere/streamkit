@@ -8,6 +8,7 @@ import {
 } from '@streamkit/contracts';
 import type { Server, Socket } from 'socket.io';
 import { RealtimeBus, type BusMessage } from '../../common/bus/realtime-bus.service';
+import { WidgetStateService } from '../widgets/widget-state.service';
 import { WidgetsService } from '../widgets/widgets.service';
 
 /** Комната всех сокетов одного виджета — по ней рассылается смена конфига. */
@@ -36,6 +37,7 @@ export class OverlayGateway implements OnGatewayConnection, OnModuleInit, OnModu
 
   constructor(
     private readonly widgets: WidgetsService,
+    private readonly widgetState: WidgetStateService,
     private readonly bus: RealtimeBus,
   ) {}
 
@@ -71,7 +73,10 @@ export class OverlayGateway implements OnGatewayConnection, OnModuleInit, OnModu
       widgetId: resolved.widgetId,
       name: resolved.name,
       isEnabled: resolved.isEnabled,
-      config: resolved.config,
+      // Состояние в первом же сообщении: цель, открытая в OBS, обязана
+      // показать собранную сумму сразу, а не через первый донат.
+      state: await this.widgetState.computeById(resolved.widgetId),
+      ...resolved.widget,
     };
     client.emit(SOCKET_EVENTS.configUpdated, bootstrap);
 
@@ -106,8 +111,16 @@ export class OverlayGateway implements OnGatewayConnection, OnModuleInit, OnModu
           this.server.local.to(widgetRoom(message.widgetId)).emit(SOCKET_EVENTS.configUpdated, {
             widgetId: message.widgetId,
             isEnabled: message.isEnabled,
+            type: message.type,
             config: message.config,
           });
+          break;
+        }
+
+        case 'widget-state': {
+          this.server.local
+            .to(widgetRoom(message.widgetId))
+            .emit(SOCKET_EVENTS.widgetState, { widgetId: message.widgetId, state: message.state });
           break;
         }
 

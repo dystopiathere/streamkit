@@ -11,9 +11,12 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Адрес БД в схеме больше не живёт: Prisma 7 забрал его отсюда, потому что
+// один и тот же файл читают и CLI, и клиент, а подключаются они по-разному.
+// Для CLI адрес задаётся в prisma.config.ts, для клиента — драйвер-адаптером
+// в PrismaService.
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 /* ------------------------------------------------------------------ */
@@ -131,6 +134,9 @@ model AuditLog {
 
 enum WidgetType {
   ALERTS
+  GOAL
+  TIMER
+  TOP_DONORS
 }
 
 model Widget {
@@ -148,8 +154,27 @@ model Widget {
 
   user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   tokens OverlayToken[]
+  state  WidgetState?
 
   @@index([userId])
+}
+
+/// Изменяемое состояние виджета: стартовая сумма цели, момент окончания таймера.
+///
+/// Отдельно от config, потому что это разные вещи по происхождению: config
+/// настраивает стример, state меняет сама работа виджета. Смешать их значило бы
+/// переписывать пользовательские настройки при каждом тике таймера.
+///
+/// В БД, а не в Redis: Redis здесь держит только производное и временное
+/// (дедупликация, счётчики квоты, блокировки), и его потеря не должна ничего
+/// стоить. Сброшенный посреди марафона таймер восстановить неоткуда.
+model WidgetState {
+  widgetId  String   @id @db.Uuid
+  /// Провалидировано схемой типа виджета из @streamkit/contracts.
+  state     Json
+  updatedAt DateTime @updatedAt
+
+  widget Widget @relation(fields: [widgetId], references: [id], onDelete: Cascade)
 }
 
 /// Публичная ссылка на виджет для браузер-сорса OBS. В БД только хэш токена,
@@ -224,6 +249,10 @@ model DonationSource {
   externalAccountId String?
   /// Секрет для проверки HMAC собственного вебхука. Шифротекст.
   webhookSecretEncrypted String?
+  /// Почему источник выключен, если выключен не пользователем. NULL — либо
+  /// работает, либо выключен вручную. Без этого поля истёкший доступ выглядел
+  /// в данных ровно как осознанное решение стримера.
+  disabledReason    String?
   lastEventAt       DateTime?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
@@ -269,6 +298,14 @@ model Channel {
   syncState   ChannelSyncState @default(OK)
   /// Текст последней ошибки — только для диагностики, наружу не отдаётся.
   syncError   String?
+  /// Сколько неудач подряд. Обнуляется первым же удачным сбором.
+  syncAttempts Int     @default(0)
+  /// Не опрашивать раньше этого момента. Отдельно от lastSyncedAt: «когда
+  /// удалось собрать» и «когда пробовать снова» расходятся ровно тогда, когда
+  /// собирать перестало получаться. Раньше каденция считалась по lastSyncedAt,
+  /// и сбойный канал повторялся каждую минуту вместо положенных пятнадцати,
+  /// занимая место в выборке и вытесняя из неё исправные.
+  nextAttemptAt DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
