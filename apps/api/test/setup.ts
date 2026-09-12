@@ -1,5 +1,5 @@
-import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { loadEnvFiles } from '../src/config/env-files';
 
 /**
  * Окружение интеграционных тестов.
@@ -15,16 +15,7 @@ import { resolve } from 'node:path';
  *  - NODE_ENV из файла остаётся development, поднимается транспорт pino-pretty
  *    в отдельном потоке, и процесс vitest висит три минуты после последнего теста.
  */
-// Порядок тот же, что у ConfigModule: ближний файл побеждает, потому что
-// loadEnvFile не перетирает уже заданные переменные.
-for (const envFile of [
-  resolve(import.meta.dirname, '..', '.env'),
-  resolve(import.meta.dirname, '..', '..', '..', '.env'),
-]) {
-  if (existsSync(envFile)) {
-    process.loadEnvFile(envFile);
-  }
-}
+loadEnvFiles(resolve(import.meta.dirname, '..'));
 
 // Перебиваем то, что пришло из файла.
 process.env.NODE_ENV = 'test';

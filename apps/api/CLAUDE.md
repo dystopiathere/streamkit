@@ -16,7 +16,7 @@ NestJS 11 (Express), Prisma 6 + PostgreSQL, ioredis, Socket.IO + redis-adapter,
 
 | Каталог | Что внутри |
 |---|---|
-| `src/config` | Схема окружения (Zod) и типизированный `AppConfig` |
+| `src/config` | Схема окружения (Zod), типизированный `AppConfig`, поиск файлов `.env` |
 | `src/common/crypto` | AES-256-GCM, хэши токенов, argon2id для паролей |
 | `src/common/auth` | Глобальный guard, декораторы `@Public`, `@CurrentUser` |
 | `src/common/bus` | Шина реального времени поверх Redis pub/sub |
