@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { AlertEvent, AlertWidgetConfig, ChannelStats } from '@streamkit/contracts';
+import type { AlertEvent, ChannelStats, WidgetConfig, WidgetState } from '@streamkit/contracts';
 import type { Redis } from 'ioredis';
 import { REDIS_PUBLISHER, REDIS_SUBSCRIBER } from '../redis/redis.module';
 
@@ -7,13 +7,13 @@ export const BUS_CHANNEL = 'streamkit:realtime';
 
 export type BusMessage =
   | { kind: 'alert'; userId: string; event: AlertEvent }
-  | {
+  | ({
       kind: 'widget-config';
       userId: string;
       widgetId: string;
       isEnabled: boolean;
-      config: AlertWidgetConfig;
-    }
+    } & WidgetConfig)
+  | { kind: 'widget-state'; widgetId: string; state: WidgetState }
   | { kind: 'overlay-revoked'; tokenId: string; reason: 'token-revoked' | 'widget-deleted' }
   | { kind: 'analytics'; userId: string; channelId: string; stats: ChannelStats };
 

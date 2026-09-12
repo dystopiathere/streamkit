@@ -71,7 +71,10 @@ export class OverlayGateway implements OnGatewayConnection, OnModuleInit, OnModu
       widgetId: resolved.widgetId,
       name: resolved.name,
       isEnabled: resolved.isEnabled,
-      config: resolved.config,
+      // Состояние считает отдельный сервис и досылает сообщением: держать его
+      // здесь значило бы завязать шлюз на каждый новый тип виджета.
+      state: null,
+      ...resolved.widget,
     };
     client.emit(SOCKET_EVENTS.configUpdated, bootstrap);
 
@@ -106,8 +109,16 @@ export class OverlayGateway implements OnGatewayConnection, OnModuleInit, OnModu
           this.server.local.to(widgetRoom(message.widgetId)).emit(SOCKET_EVENTS.configUpdated, {
             widgetId: message.widgetId,
             isEnabled: message.isEnabled,
+            type: message.type,
             config: message.config,
           });
+          break;
+        }
+
+        case 'widget-state': {
+          this.server.local
+            .to(widgetRoom(message.widgetId))
+            .emit(SOCKET_EVENTS.widgetState, { widgetId: message.widgetId, state: message.state });
           break;
         }
 

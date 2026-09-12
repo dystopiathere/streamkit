@@ -131,6 +131,9 @@ model AuditLog {
 
 enum WidgetType {
   ALERTS
+  GOAL
+  TIMER
+  TOP_DONORS
 }
 
 model Widget {
@@ -148,8 +151,27 @@ model Widget {
 
   user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   tokens OverlayToken[]
+  state  WidgetState?
 
   @@index([userId])
+}
+
+/// Изменяемое состояние виджета: стартовая сумма цели, момент окончания таймера.
+///
+/// Отдельно от config, потому что это разные вещи по происхождению: config
+/// настраивает стример, state меняет сама работа виджета. Смешать их значило бы
+/// переписывать пользовательские настройки при каждом тике таймера.
+///
+/// В БД, а не в Redis: Redis здесь держит только производное и временное
+/// (дедупликация, счётчики квоты, блокировки), и его потеря не должна ничего
+/// стоить. Сброшенный посреди марафона таймер восстановить неоткуда.
+model WidgetState {
+  widgetId  String   @id @db.Uuid
+  /// Провалидировано схемой типа виджета из @streamkit/contracts.
+  state     Json
+  updatedAt DateTime @updatedAt
+
+  widget Widget @relation(fields: [widgetId], references: [id], onDelete: Cascade)
 }
 
 /// Публичная ссылка на виджет для браузер-сорса OBS. В БД только хэш токена,

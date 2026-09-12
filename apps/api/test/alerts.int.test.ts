@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto';
 import { defaultAlertWidgetConfig } from '@streamkit/contracts';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { WidgetsService } from '../src/modules/widgets/widgets.service';
 import { createHarness, registrationPayload, type TestHarness } from './harness';
 
 /**
@@ -12,6 +13,7 @@ import { createHarness, registrationPayload, type TestHarness } from './harness'
 describe('Виджеты и приём событий (feature)', () => {
   let harness: TestHarness;
   let accessToken: string;
+  let userId: string;
 
   beforeAll(async () => {
     harness = await createHarness();
@@ -28,6 +30,7 @@ describe('Виджеты и приём событий (feature)', () => {
       .send(registrationPayload())
       .expect(201);
     accessToken = registration.body.accessToken as string;
+    userId = registration.body.user.id as string;
   });
 
   const server = () => harness.app.getHttpServer();
@@ -83,6 +86,86 @@ describe('Виджеты и приём событий (feature)', () => {
     // Остальные поля стиля не должны обнулиться.
     expect(response.body.config.text.color).toBe('#FFFFFF');
     expect(response.body.config.durationMs).toBe(6000);
+  });
+
+  it('создаёт виджет каждого типа с его собственными дефолтами', async () => {
+    // До этого этапа тип в сервисе был зашит литералом 'ALERTS', а схема
+    // конфига — единственной. Проверяем, что тип действительно доезжает до БД
+    // и обратно, а не подменяется алертами по дороге.
+    for (const [type, probe] of [
+      ['goal', (config: Record<string, unknown>) => expect(config.targetMinor).toBe(1_000_000)],
+      ['timer', (config: Record<string, unknown>) => expect(config.initialSeconds).toBe(3600)],
+      ['top-donors', (config: Record<string, unknown>) => expect(config.limit).toBe(5)],
+    ] as const) {
+      const created = await request(server())
+        .post('/api/widgets')
+        .set(auth())
+        .send({ name: `Виджет ${type}`, type, config: {} })
+        .expect(201);
+
+      const response = await request(server())
+        .get(`/api/widgets/${created.body.id as string}`)
+        .set(auth())
+        .expect(200);
+
+      expect(response.body.type).toBe(type);
+      probe(response.body.config as Record<string, unknown>);
+    }
+  });
+
+  it('накладывает патч на схему сохранённого типа, а не на схему алертов', async () => {
+    const created = await request(server())
+      .post('/api/widgets')
+      .set(auth())
+      .send({ name: 'Марафон', type: 'timer', config: {} })
+      .expect(201);
+    const widgetId = created.body.id as string;
+
+    await request(server())
+      .patch(`/api/widgets/${widgetId}`)
+      .set(auth())
+      .send({ config: { secondsPerUnit: 5 } })
+      .expect(200);
+
+    const response = await request(server())
+      .get(`/api/widgets/${widgetId}`)
+      .set(auth())
+      .expect(200);
+    expect(response.body.config.secondsPerUnit).toBe(5);
+    expect(response.body.config.initialSeconds).toBe(3600);
+  });
+
+  it('отвергает патч, ломающий конфиг сохранённого типа', async () => {
+    const created = await request(server())
+      .post('/api/widgets')
+      .set(auth())
+      .send({ name: 'Цель', type: 'goal', config: {} })
+      .expect(201);
+
+    await request(server())
+      .patch(`/api/widgets/${created.body.id as string}`)
+      .set(auth())
+      .send({ config: { targetMinor: -1 } })
+      .expect(400);
+  });
+
+  it('раскладка события не видит виджеты других типов', async () => {
+    // Иначе shouldShowAlert прочитал бы у конфига цели поле eventTypes,
+    // которого там нет, и первый же донат уронил бы обработчик шины —
+    // а вместе с ним доставку алертов ВСЕМ виджетам этого стримера.
+    const alerts = await createWidget();
+    await request(server())
+      .post('/api/widgets')
+      .set(auth())
+      .send({ name: 'Цель', type: 'goal', config: {} })
+      .expect(201);
+
+    const widgets = harness.app.get(WidgetsService);
+    const targets = await widgets.findDispatchTargets(userId);
+
+    expect(targets).toHaveLength(1);
+    expect(targets[0]?.widgetId).toBe(alerts);
+    expect(targets[0]?.config.eventTypes).toBeDefined();
   });
 
   it('не отдаёт чужой виджет', async () => {

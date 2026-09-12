@@ -1,7 +1,8 @@
 import {
   type AlertEvent,
+  type AlertWidgetConfig,
   type OverlayBootstrap,
-  defaultAlertWidgetConfig,
+  defaultWidgetConfig,
   shouldShowAlert,
 } from '@streamkit/contracts';
 import {
@@ -16,41 +17,50 @@ import { readTokenFromLocation, useOverlayConnection } from './useOverlayConnect
 
 const token = readTokenFromLocation();
 
-export function OverlayApp(): React.JSX.Element | null {
-  // До прихода конфига с сервера работаем на дефолтах: длительности нужны
-  // очереди с первой секунды, а реальный конфиг приезжает сразу после подключения.
-  const [config, setConfig] = useState(defaultAlertWidgetConfig);
-  const [isEnabled, setIsEnabled] = useState(true);
+/** Дефолт алертов нужен очереди с первой секунды — до прихода bootstrap. */
+const DEFAULT_ALERT_CONFIG = defaultWidgetConfig('alerts').config as AlertWidgetConfig;
 
-  const { current, enqueue } = useAlertQueue(config);
+/**
+ * Оверлей для браузер-сорса OBS.
+ *
+ * Тип виджета приходит с сервера вместе с конфигом: ссылка ведёт на конкретный
+ * виджет, а какой он — знает только БД. Раньше тип был ровно один, и его можно
+ * было не передавать вовсе.
+ */
+export function OverlayApp(): React.JSX.Element | null {
+  const [widget, setWidget] = useState<OverlayBootstrap | null>(null);
+
+  const alertConfig = widget?.type === 'alerts' ? widget.config : DEFAULT_ALERT_CONFIG;
+  const { current, enqueue } = useAlertQueue(alertConfig);
 
   const handleAlert = useCallback(
     (event: AlertEvent) => {
       // Фильтр уже применён на сервере. Проверяем повторно, потому что конфиг мог
       // поменяться в момент доставки, а показать донат ниже порога — значит
       // показать зрителям то, что стример просил не показывать.
-      if (!shouldShowAlert(event, config)) return;
+      if (!shouldShowAlert(event, alertConfig)) return;
       enqueue(event);
     },
-    [config, enqueue],
+    [alertConfig, enqueue],
   );
 
-  const handleBootstrap = useCallback((bootstrap: OverlayBootstrap) => {
-    setConfig(bootstrap.config);
-    setIsEnabled(bootstrap.isEnabled);
-  }, []);
+  const handleBootstrap = useCallback((bootstrap: OverlayBootstrap) => setWidget(bootstrap), []);
 
   const handlers = useMemo(
     () => ({ onAlert: handleAlert, onBootstrap: handleBootstrap }),
     [handleAlert, handleBootstrap],
   );
 
-  const state = useOverlayConnection(token, handlers);
+  const connection = useOverlayConnection(token, handlers);
 
   // Никаких сообщений об ошибках на экране: любой текст попадёт в эфир. Проблемы
   // видны в дашборде (оверлей не отмечался как активный) и в консоли браузера.
-  if (state === 'invalid-token' || state === 'revoked') return null;
-  if (!isEnabled) return null;
+  if (connection === 'invalid-token' || connection === 'revoked') return null;
+  if (!widget || !widget.isEnabled) return null;
+
+  // Остальные типы уже принимаются сервером, но рендерера у них пока нет.
+  // Пустой экран здесь честнее заглушки: оверлей висит поверх живого эфира.
+  if (widget.type !== 'alerts') return null;
 
   return (
     <>
@@ -62,11 +72,11 @@ export function OverlayApp(): React.JSX.Element | null {
             width: '100%',
             height: '100%',
             animation: current.isLeaving
-              ? `${exitAnimationName(config.animationOut)} ${ALERT_EXIT_DURATION_MS}ms ease-in both`
+              ? `${exitAnimationName(widget.config.animationOut)} ${ALERT_EXIT_DURATION_MS}ms ease-in both`
               : undefined,
           }}
         >
-          <AlertCard event={current.event} config={config} animate={!current.isLeaving} />
+          <AlertCard event={current.event} config={widget.config} animate={!current.isLeaving} />
         </div>
       ) : null}
     </>

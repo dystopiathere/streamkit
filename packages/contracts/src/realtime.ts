@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { channelStatsSchema } from './analytics.js';
 import { alertEventSchema } from './events.js';
-import { alertWidgetConfigSchema } from './widgets.js';
+import { widgetConfigSchema, widgetStateSchema } from './widgets.js';
 
 /**
  * Имена socket.io-событий. Вынесены в константы, чтобы опечатка в строке
@@ -18,6 +18,8 @@ export const SOCKET_EVENTS = {
   eventCreated: 'event:created',
   /** Сервер → дашборд: свежие метрики канала. */
   analyticsUpdated: 'analytics:updated',
+  /** Сервер → overlay: пересчитанное состояние виджета (цель, таймер, топ). */
+  widgetState: 'widget:state',
 } as const;
 
 export type SocketEventName = (typeof SOCKET_EVENTS)[keyof typeof SOCKET_EVENTS];
@@ -37,12 +39,26 @@ export const alertMessageSchema = z.object({
 });
 export type AlertMessage = z.infer<typeof alertMessageSchema>;
 
-export const configUpdatedMessageSchema = z.object({
-  widgetId: z.string().uuid(),
-  isEnabled: z.boolean(),
-  config: alertWidgetConfigSchema,
-});
+/**
+ * Конфиг приезжает вместе с типом виджета.
+ *
+ * Без типа оверлей не знает, чем именно рендерить присланный объект: раньше тип
+ * был ровно один, и его можно было не передавать.
+ */
+export const configUpdatedMessageSchema = z
+  .object({
+    widgetId: z.string().uuid(),
+    isEnabled: z.boolean(),
+  })
+  .and(widgetConfigSchema);
 export type ConfigUpdatedMessage = z.infer<typeof configUpdatedMessageSchema>;
+
+/** Пересчитанное сервером состояние виджета. */
+export const widgetStateMessageSchema = z.object({
+  widgetId: z.string().uuid(),
+  state: widgetStateSchema,
+});
+export type WidgetStateMessage = z.infer<typeof widgetStateMessageSchema>;
 
 export const revokedMessageSchema = z.object({
   reason: z.enum(['token-revoked', 'widget-deleted']),
@@ -62,10 +78,13 @@ export const analyticsUpdatedMessageSchema = z.object({
 export type AnalyticsUpdatedMessage = z.infer<typeof analyticsUpdatedMessageSchema>;
 
 /** Начальное состояние, которое overlay получает сразу после подключения. */
-export const overlayBootstrapSchema = z.object({
-  widgetId: z.string().uuid(),
-  name: z.string(),
-  isEnabled: z.boolean(),
-  config: alertWidgetConfigSchema,
-});
+export const overlayBootstrapSchema = z
+  .object({
+    widgetId: z.string().uuid(),
+    name: z.string(),
+    isEnabled: z.boolean(),
+    /** Состояние считается сервером; у alert-виджета его нет. */
+    state: widgetStateSchema.nullable().default(null),
+  })
+  .and(widgetConfigSchema);
 export type OverlayBootstrap = z.infer<typeof overlayBootstrapSchema>;

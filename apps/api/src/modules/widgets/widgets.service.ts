@@ -2,18 +2,26 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Widget as PrismaWidget } from '@prisma/client';
 import {
   type AlertWidgetConfig,
-  alertWidgetConfigSchema,
+  configSchemaFor,
   type CreatedOverlayToken,
   type CreateWidgetInput,
   type OverlayTokenView,
   type UpdateWidgetInput,
   type Widget,
+  type WidgetConfig,
 } from '@streamkit/contracts';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
-import { RealtimeBus } from '../../common/bus/realtime-bus.service';
+import { type BusMessage, RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { validationError } from '../../common/pipes/zod-validation.pipe';
 import { AppConfig } from '../../config/app-config.service';
+import {
+  parseWidgetConfig,
+  toContractWidget,
+  toContractWidgetType,
+  toPrismaWidgetType,
+} from './widget.mappers';
 
 export interface ResolvedOverlayToken {
   tokenId: string;
@@ -21,7 +29,8 @@ export interface ResolvedOverlayToken {
   userId: string;
   name: string;
   isEnabled: boolean;
-  config: AlertWidgetConfig;
+  /** Тип и конфиг вместе: оверлей без типа не знает, чем рендерить конфиг. */
+  widget: WidgetConfig;
 }
 
 @Injectable()
@@ -50,11 +59,11 @@ export class WidgetsService {
     const row = await this.prisma.widget.create({
       data: {
         userId,
-        type: 'ALERTS',
+        type: toPrismaWidgetType(input.type),
         name: input.name,
         // Прогоняем через схему ещё раз: дефолты должны попасть в БД целиком,
         // иначе старые записи будут отличаться от новых набором полей.
-        config: alertWidgetConfigSchema.parse(input.config) as never,
+        config: configSchemaFor(input.type).parse(input.config) as never,
       },
     });
     return toContractWidget(row);
@@ -66,13 +75,25 @@ export class WidgetsService {
    * Мержим поверх сохранённого и валидируем целиком: если прислать только
    * `config.text.fontSize`, остальные поля стиля обязаны сохраниться, а результат
    * обязан остаться валидным по схеме.
+   *
+   * Схема берётся по типу СОХРАНЁННОГО виджета, а не по присланному: тип
+   * менять нельзя (у цели и таймера нет ничего общего в конфиге), и запрос его
+   * не содержит вовсе. Валидация от этого не ослабла — она осталась ровно
+   * здесь, вместо того чтобы разойтись по схемам транспорта.
    */
   async update(userId: string, widgetId: string, input: UpdateWidgetInput): Promise<Widget> {
     const existing = await this.requireOwned(userId, widgetId);
 
-    const config = input.config
-      ? alertWidgetConfigSchema.parse(mergeConfig(existing.config as object, input.config))
-      : undefined;
+    let config: unknown;
+    if (input.config) {
+      const merged = configSchemaFor(toContractWidgetType(existing.type)).safeParse(
+        mergeConfig(existing.config as object, input.config),
+      );
+      // safeParse, а не parse: ZodError отсюда ушёл бы в Nest необработанным и
+      // стал пятисоткой, хотя это обычная ошибка в поле формы.
+      if (!merged.success) throw validationError(merged.error);
+      config = merged.data;
+    }
 
     const row = await this.prisma.widget.update({
       where: { id: widgetId },
@@ -90,8 +111,9 @@ export class WidgetsService {
       userId,
       widgetId,
       isEnabled: result.isEnabled,
+      type: result.type,
       config: result.config,
-    });
+    } as BusMessage);
 
     return result;
   }
@@ -198,7 +220,7 @@ export class WidgetsService {
       userId: row.widget.userId,
       name: row.widget.name,
       isEnabled: row.widget.isEnabled,
-      config: alertWidgetConfigSchema.parse(row.widget.config),
+      widget: parseWidgetConfig(row.widget.type, row.widget.config),
     };
   }
 
@@ -215,13 +237,16 @@ export class WidgetsService {
    */
   async findDispatchTargets(userId: string) {
     const widgets = await this.prisma.widget.findMany({
-      where: { userId, isEnabled: true },
+      // Только ALERTS. Без фильтра сюда попадали бы цели и таймеры, а
+      // `shouldShowAlert` читает у конфига `eventTypes` — поля, которого у них
+      // нет: первый же донат после создания цели уронил бы обработчик шины.
+      where: { userId, isEnabled: true, type: 'ALERTS' },
       include: { tokens: { where: { revokedAt: null }, select: { id: true } } },
     });
 
     return widgets.map((widget) => ({
       widgetId: widget.id,
-      config: alertWidgetConfigSchema.parse(widget.config),
+      config: configSchemaFor('alerts').parse(widget.config) as AlertWidgetConfig,
       tokenIds: widget.tokens.map((token) => token.id),
     }));
   }
@@ -244,7 +269,7 @@ export class WidgetsService {
   }
 }
 
-function mergeConfig(current: object, patch: Partial<AlertWidgetConfig>): object {
+function mergeConfig(current: object, patch: Record<string, unknown>): object {
   const merged: Record<string, unknown> = { ...(current as Record<string, unknown>) };
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) continue;
@@ -264,17 +289,4 @@ function mergeConfig(current: object, patch: Partial<AlertWidgetConfig>): object
     }
   }
   return merged;
-}
-
-function toContractWidget(row: PrismaWidget): Widget {
-  return {
-    id: row.id,
-    userId: row.userId,
-    name: row.name,
-    isEnabled: row.isEnabled,
-    type: 'alerts',
-    config: alertWidgetConfigSchema.parse(row.config),
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  };
 }
