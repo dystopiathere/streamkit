@@ -2,9 +2,9 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Button, Card, Input } from '../components/ui';
-import { api } from '../lib/api';
-import { API_BASE } from '../lib/config';
+import { Button, Card, Input } from '@/components/ui';
+import { api } from '@/lib/api';
+import { API_BASE } from '@/lib/config';
 
 /**
  * Подключение источников событий.

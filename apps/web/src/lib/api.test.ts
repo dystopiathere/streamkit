@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, api } from './api';
-import { useAuthStore } from './auth-store';
+import { ApiError, api } from '@/lib/api';
+import { useAuthStore } from '@/lib/auth-store';
 
 interface StubResponse {
   status: number;

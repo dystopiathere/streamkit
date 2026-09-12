@@ -4,9 +4,9 @@ import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Button, Card, FieldError, Input, Label } from '../components/ui';
-import { ApiError, api } from '../lib/api';
-import { useAuthStore } from '../lib/auth-store';
+import { Button, Card, FieldError, Input, Label } from '@/components/ui';
+import { ApiError, api } from '@/lib/api';
+import { useAuthStore } from '@/lib/auth-store';
 
 /**
  * Согласия оформлены отдельными чекбоксами и не проставлены заранее.

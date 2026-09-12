@@ -3,13 +3,13 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Button, Card, Input } from '../components/ui';
+import { Button, Card, Input } from '@/components/ui';
 import {
   useCreateWidget,
   useDeleteWidget,
   useSendTestAlert,
   useWidgets,
-} from '../features/widgets/queries';
+} from '@/features/widgets/queries';
 
 export function WidgetsPage(): React.JSX.Element {
   const { t } = useTranslation();

@@ -2,9 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Button, Card, Input, Label } from '../components/ui';
-import { ApiError, api } from '../lib/api';
-import { useAuthStore } from '../lib/auth-store';
+import { Button, Card, Input, Label } from '@/components/ui';
+import { ApiError, api } from '@/lib/api';
+import { useAuthStore } from '@/lib/auth-store';
 
 interface ConsentView {
   document: string;

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { api } from '../lib/api';
-import { useAuthStore, useCurrentUser } from '../lib/auth-store';
+import { api } from '@/lib/api';
+import { useAuthStore, useCurrentUser } from '@/lib/auth-store';
 import { CookieBanner } from './CookieBanner';
 import { Button, cn } from './ui';
 
