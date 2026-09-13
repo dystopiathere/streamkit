@@ -154,6 +154,17 @@ jobs:
       - run: pnpm --filter @streamkit/api exec prisma generate
       - run: pnpm build
       - run: pnpm --filter @streamkit/api exec prisma migrate deploy
+
+      # Настоящий LiveKit для сценария с комнатами — шагом, а не в `services`:
+      # сервисному контейнеру нельзя задать команду, а режиму --dev она нужна.
+      # Сеть хоста — чтобы адрес узла 127.0.0.1, который LiveKit сообщает
+      # браузеру, совпадал с тем, куда браузер на раннере действительно достаёт.
+      - name: LiveKit для сквозного сценария
+        run: |
+          docker run -d --name livekit --network host \
+            livekit/livekit-server:v1.13.6 --dev --bind 0.0.0.0 --node-ip 127.0.0.1
+          curl --silent --retry 20 --retry-delay 1 --retry-connrefused http://127.0.0.1:7880/
+
       - run: pnpm --filter @streamkit/e2e exec playwright install --with-deps chromium
       - run: pnpm --filter @streamkit/e2e test:e2e
 

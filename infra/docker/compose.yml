@@ -63,6 +63,14 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:8081}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
       OVERLAY_BASE_URL: ${OVERLAY_BASE_URL:-http://localhost:8081}
+      # Из него собираются ссылки-приглашения в комнаты: гость открывает дашборд.
+      WEB_BASE_URL: ${WEB_BASE_URL:-http://localhost:8080}
+      # Два адреса LiveKit, и это разные значения: API ходит внутри сети compose,
+      # браузеры — на опубликованный порт или домен с TLS.
+      LIVEKIT_URL: http://livekit:7880
+      LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:-ws://localhost:7880}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?нужно задать LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?нужно задать LIVEKIT_API_SECRET}
     ports:
       - '3000:3000'
     depends_on:
@@ -99,6 +107,26 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # Медиасервер приватных комнат. Без --dev: ключи из окружения, и секрет обязан
+  # быть не короче 32 символов — иначе LiveKit не стартует («secret is too
+  # short»), а dev-ключ «secret» из .env.example здесь не подходит.
+  #
+  # --node-ip — адрес, который LiveKit сообщает браузерам для медиа. Локально
+  # это 127.0.0.1, в проде — публичный IP сервера. TLS для wss:// и TURN
+  # на домене — задача выкатки, см. infra/livekit/README.md.
+  livekit:
+    image: livekit/livekit-server:v1.13.6
+    restart: unless-stopped
+    command: ['--config', '/etc/livekit.yaml', '--node-ip', '${LIVEKIT_NODE_IP:-127.0.0.1}']
+    environment:
+      LIVEKIT_KEYS: '${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}'
+    volumes:
+      - ../livekit/livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - '7880:7880'
+      - '7881:7881'
+      - '7882:7882/udp'
+
   web:
     build:
       context: ../..
@@ -106,6 +134,8 @@ services:
       args:
         APP: web
         VITE_API_URL: ${PUBLIC_API_URL:-http://localhost:3000}
+        # Локально API и LiveKit без TLS, и CSP без этого их не пустит. В проде пусто.
+        CSP_CONNECT_EXTRA: ${CSP_CONNECT_EXTRA-http://localhost:3000 ws://localhost:3000 ws://localhost:7880}
     restart: unless-stopped
     ports:
       - '8080:80'
@@ -117,6 +147,8 @@ services:
       args:
         APP: overlay
         VITE_API_URL: ${PUBLIC_API_URL:-http://localhost:3000}
+        # Локально API и LiveKit без TLS, и CSP без этого их не пустит. В проде пусто.
+        CSP_CONNECT_EXTRA: ${CSP_CONNECT_EXTRA-http://localhost:3000 ws://localhost:3000 ws://localhost:7880}
     restart: unless-stopped
     ports:
       - '8081:80'
