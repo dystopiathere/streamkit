@@ -155,6 +155,30 @@ describe('Состояние виджетов (feature)', () => {
     expect(response.body.raisedMinor).toBe(0);
   });
 
+  it('у чата состояния нет, и запрос это честно говорит', async () => {
+    // «Состояние» чата — поток сообщений: накапливать нечего, восстанавливать
+    // неоткуда. Дашборд по этому же признаку не рисует блок управления.
+    const widgetId = await createWidget('chat', { channel: 'shroud' });
+
+    const response = await request(server())
+      .get(`/api/widgets/${widgetId}/state`)
+      .set(auth())
+      .expect(200);
+    expect(response.body).toEqual({});
+  });
+
+  it('приводит логин канала к нижнему регистру при создании', async () => {
+    // Иначе ключ комнаты доставки разошёлся бы с тегом канала в сообщении IRC,
+    // и чат просто не доходил бы до оверлея.
+    const widgetId = await createWidget('chat', { channel: 'Shroud' });
+
+    const response = await request(server())
+      .get(`/api/widgets/${widgetId}`)
+      .set(auth())
+      .expect(200);
+    expect(response.body.config.channel).toBe('shroud');
+  });
+
   it('прибавляет стартовую сумму к собранному', async () => {
     const widgetId = await createWidget('goal');
     await seedDonation(10_000);
@@ -166,6 +190,16 @@ describe('Состояние виджетов (feature)', () => {
       .expect(200);
 
     expect(response.body.raisedMinor).toBe(35_000);
+    // Смещение отдаётся и отдельным полем: без него форме в дашборде нечем
+    // заполнить «стартовую сумму», она открывается нулём, и сохранение стирает
+    // заданное значение.
+    expect(response.body.offsetMinor).toBe(25_000);
+
+    const reread = await request(server())
+      .get(`/api/widgets/${widgetId}/state`)
+      .set(auth())
+      .expect(200);
+    expect(reread.body.offsetMinor).toBe(25_000);
   });
 
   it('управляет таймером, и состояние переживает перечитывание', async () => {

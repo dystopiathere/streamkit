@@ -12,6 +12,7 @@ export {
   AlertAnimationStyles,
   exitAnimationName,
 } from './alert-animations';
+export { ChatBox, type ChatBoxProps } from './ChatBox';
 export { GoalBar, type GoalBarProps } from './GoalBar';
 export { textStyleToCss } from './text-style';
 export { TimerDisplay, type TimerDisplayProps } from './TimerDisplay';

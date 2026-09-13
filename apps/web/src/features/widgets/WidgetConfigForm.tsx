@@ -8,6 +8,7 @@ import {
 import type { FieldValues, UseFormReturn } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui';
+import { useChannels } from '@/features/analytics/queries';
 import {
   CheckboxField,
   CheckboxGroupField,
@@ -15,6 +16,7 @@ import {
   MoneyField,
   NumberField,
   SelectField,
+  TagsField,
   TextField,
   TextStyleFields,
 } from './fields';
@@ -45,6 +47,8 @@ export function WidgetConfigForm({
       return <TimerFields form={form} />;
     case 'top-donors':
       return <TopDonorsFields form={form} />;
+    case 'chat':
+      return <ChatFields form={form} />;
   }
 }
 
@@ -267,6 +271,67 @@ function TopDonorsFields({ form }: { form: UseFormReturn<FieldValues> }): React.
       <Card className="space-y-4">
         <h2 className="font-medium">{t('widgets.section.appearance')}</h2>
         <TextStyleFields form={form} labels={textLabels} />
+      </Card>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+function ChatFields({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.Element {
+  const { t } = useTranslation();
+  const textLabels = useTextLabels();
+  // Подключённый канал Twitch подставляется подсказкой, а не молча: чат читается
+  // анонимно, и виджет обязан работать у того, кто площадку не подключал вовсе.
+  const channels = useChannels();
+  const twitch = channels.data?.find((channel) => channel.platform === 'twitch');
+
+  return (
+    <>
+      <Card className="space-y-4">
+        <h2 className="font-medium">{t('widgets.section.chat')}</h2>
+        <TextField
+          form={form}
+          name="channel"
+          label={t('widgets.field.channel')}
+          hint={
+            twitch
+              ? t('widgets.hint.channelConnected', { channel: twitch.login })
+              : t('widgets.hint.channel')
+          }
+        />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <NumberField form={form} name="maxMessages" label={t('widgets.field.maxMessages')} />
+          <NumberField
+            form={form}
+            name="messageLifetimeSeconds"
+            label={t('widgets.field.messageLifetime')}
+            step={10}
+            hint={t('widgets.hint.messageLifetime')}
+          />
+        </div>
+        <TagsField
+          form={form}
+          name="hiddenUsers"
+          label={t('widgets.field.hiddenUsers')}
+          hint={t('widgets.hint.hiddenUsers')}
+        />
+        <div className="grid gap-2 sm:grid-cols-2">
+          <CheckboxField form={form} name="hideCommands" label={t('widgets.field.hideCommands')} />
+          <CheckboxField form={form} name="showBadges" label={t('widgets.field.showBadges')} />
+          <CheckboxField form={form} name="showEmotes" label={t('widgets.field.showEmotes')} />
+          <CheckboxField form={form} name="newestFirst" label={t('widgets.field.newestFirst')} />
+          <CheckboxField
+            form={form}
+            name="useAuthorColors"
+            label={t('widgets.field.useAuthorColors')}
+          />
+        </div>
+      </Card>
+
+      <Card className="space-y-4">
+        <h2 className="font-medium">{t('widgets.section.appearance')}</h2>
+        <TextStyleFields form={form} labels={textLabels} withHighlight />
       </Card>
     </>
   );

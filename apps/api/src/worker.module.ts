@@ -9,6 +9,7 @@ import { AppConfigModule } from './config/config.module';
 import { AnalyticsSchedulerModule } from './modules/analytics/analytics.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { EventsModule } from './modules/events/events.module';
+import { ChatModule } from './modules/chat/chat.module';
 import { DonationConnectorsModule } from './modules/integrations/integrations.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 
@@ -46,6 +47,7 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
     AuthModule,
     EventsModule,
     DonationConnectorsModule,
+    ChatModule,
     // Опрос площадок по расписанию. Планировщик подключается только здесь:
     // в API ScheduleModule не поднят, и @Interval там просто не запустится.
     AnalyticsSchedulerModule,

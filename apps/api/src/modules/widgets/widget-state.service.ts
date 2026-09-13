@@ -14,6 +14,7 @@ import {
 import { z } from 'zod';
 import { RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { RedisLock } from '../../common/redis/lock.service';
 import { toPrismaEventType } from '../events/event.mappers';
 
 /**
@@ -44,6 +45,14 @@ const PERIOD_MS: Record<Exclude<TopDonorsPeriod, 'all'>, number> = {
 };
 
 export type TimerAction = 'start' | 'pause' | 'reset' | 'add';
+
+/** Блокировка на один виджет: соседние таймеры друг другу не мешают. */
+function timerLockKey(widgetId: string): string {
+  return `streamkit:lock:widget-timer:${widgetId}`;
+}
+
+/** Внутри блокировки два запроса к БД — секунды хватает с запасом. */
+const TIMER_LOCK_TTL_MS = 5_000;
 
 export interface TimerSnapshot {
   endsAt: string | null;
@@ -101,7 +110,12 @@ export function applyTimerAction(
       // длительности, и уже к ней прибавляется время. Иначе первые донаты
       // марафона исчезали бы бесследно.
       const from = current ?? bounds.initialSeconds;
-      const total = Math.min(from + bounds.seconds, bounds.maxSeconds);
+      // Потолок обрезает ПРИБАВКУ, а не сам таймер. Начальная длительность и
+      // потолок задаются независимо, и «не больше шести часов» легко поставить
+      // марафону, заведённому на двенадцать. Без нижней границы первый же донат
+      // срезал бы такой таймер вдвое на глазах зрителей — то есть донат отнимал
+      // бы время вместо того, чтобы его добавлять.
+      const total = Math.max(from, Math.min(from + bounds.seconds, bounds.maxSeconds));
       return running
         ? { endsAt: new Date(bounds.nowMs + total * 1000).toISOString(), pausedSeconds: null }
         : { endsAt: null, pausedSeconds: total };
@@ -129,6 +143,7 @@ export class WidgetStateService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly bus: RealtimeBus,
+    private readonly lock: RedisLock,
   ) {}
 
   /** Снимок состояния для оверлея. null — у типа состояния нет (алерты). */
@@ -213,6 +228,10 @@ export class WidgetStateService {
       raisedMinor: Math.max(0, raised + stored.offsetMinor),
       targetMinor: config.targetMinor,
       currency: config.currency,
+      // Смещение отдаётся отдельно от суммы: иначе поле «стартовая сумма» в
+      // дашборде нечем заполнить, оно всегда показывает ноль, и сохранение
+      // формы затирает заданное значение.
+      offsetMinor: stored.offsetMinor,
     };
   }
 
@@ -274,14 +293,23 @@ export class WidgetStateService {
     seconds = 0,
   ): Promise<WidgetState | null> {
     const config = timerWidgetConfigSchema.parse(widget.config);
-    const next = applyTimerAction(await this.readTimer(widget.id), action, {
-      nowMs: Date.now(),
-      initialSeconds: config.initialSeconds,
-      maxSeconds: config.maxSeconds,
-      seconds,
+
+    // Чтение и запись — под блокировкой, и это не перестраховка. Два доната в
+    // одну секунду (два запроса к вебхуку либо вебхук и коннектор в воркере)
+    // читают ОДИН снимок и оба пишут «плюс минуту» вместо «плюс две». У цели и
+    // топа такого нет: они считаются запросом по событиям и сходятся сами. У
+    // таймера состояние из событий не выводится, и потерянная минута марафона
+    // не восстановится уже ничем.
+    await this.lock.withLockWaiting(timerLockKey(widget.id), TIMER_LOCK_TTL_MS, async () => {
+      const next = applyTimerAction(await this.readTimer(widget.id), action, {
+        nowMs: Date.now(),
+        initialSeconds: config.initialSeconds,
+        maxSeconds: config.maxSeconds,
+        seconds,
+      });
+      await this.write(widget.id, next);
     });
 
-    await this.write(widget.id, next);
     const state = await this.compute(widget);
     if (state) await this.bus.publish({ kind: 'widget-state', widgetId: widget.id, state });
     return state;

@@ -6,6 +6,7 @@ import {
   defaultWidgetConfig,
   donationSeconds,
   formatDuration,
+  hasWidgetState,
   goalProgress,
   renderTemplate,
   shouldShowAlert,
@@ -148,7 +149,18 @@ describe('типы виджетов', () => {
   });
 
   it('отвергает неизвестный тип', () => {
-    expect(widgetConfigSchema.safeParse({ type: 'chat', config: {} }).success).toBe(false);
+    expect(widgetConfigSchema.safeParse({ type: 'poll', config: {} }).success).toBe(false);
+  });
+
+  it('знает, у каких типов есть состояние', () => {
+    // У алертов и чата его нет: их «состояние» — поток событий. Дашборд по
+    // этому признаку решает, показывать ли блок управления и запрашивать ли
+    // снимок, которого у виджета не бывает.
+    expect(hasWidgetState('goal')).toBe(true);
+    expect(hasWidgetState('timer')).toBe(true);
+    expect(hasWidgetState('top-donors')).toBe(true);
+    expect(hasWidgetState('alerts')).toBe(false);
+    expect(hasWidgetState('chat')).toBe(false);
   });
 
   it('проверяет конфиг схемой своего типа, а не любой', () => {

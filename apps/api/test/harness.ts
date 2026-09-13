@@ -1,4 +1,4 @@
-import type { INestApplication } from '@nestjs/common';
+import type { INestApplication, ModuleMetadata } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import type { Redis } from 'ioredis';
@@ -24,8 +24,15 @@ export interface TestHarness {
  * Адреса берутся из окружения (DATABASE_URL, REDIS_URL): локально их даёт
  * compose.dev.yml, в CI — сервисные контейнеры.
  */
-export async function createHarness(): Promise<TestHarness> {
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+export async function createHarness(
+  extraImports: NonNullable<ModuleMetadata['imports']> = [],
+): Promise<TestHarness> {
+  // Дополнительные модули нужны воркерным тестам: ChatModule в AppModule не
+  // входит намеренно — в API он поднимал бы соединение с чатом на каждом
+  // инстансе и рвал бы его при каждом деплое.
+  const moduleRef = await Test.createTestingModule({
+    imports: [AppModule, ...extraImports],
+  }).compile();
 
   const app = moduleRef.createNestApplication({ rawBody: true });
   app.setGlobalPrefix('api');

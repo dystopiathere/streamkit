@@ -1,21 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button, Card, Input, Label } from '@/components/ui';
+import { useConsents, useGrantConsent, useRevokeConsent } from '@/features/privacy/queries';
 import { ApiError, api } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
-
-interface ConsentView {
-  document: string;
-  title: string;
-  path: string;
-  required: boolean;
-  currentVersion: string;
-  acceptedVersion: string | null;
-  acceptedAt: string | null;
-  needsRenewal: boolean;
-}
 
 /**
  * Страница управления данными: что о пользователе хранится, какие согласия даны,
@@ -26,25 +16,12 @@ interface ConsentView {
  */
 export function PrivacyPage(): React.JSX.Element {
   const { t } = useTranslation();
-  const client = useQueryClient();
   const clearSession = useAuthStore((state) => state.clearSession);
   const [confirmation, setConfirmation] = useState('');
 
-  const consents = useQuery({
-    queryKey: ['privacy', 'consents'],
-    queryFn: () => api.get<ConsentView[]>('/privacy/consents'),
-  });
-
-  const grant = useMutation({
-    mutationFn: (document: string) => api.post<void>('/privacy/consents', { document }),
-    onSuccess: () => client.invalidateQueries({ queryKey: ['privacy', 'consents'] }),
-  });
-
-  const revoke = useMutation({
-    mutationFn: (document: string) => api.post<void>('/privacy/consents/revoke', { document }),
-    onSuccess: () => client.invalidateQueries({ queryKey: ['privacy', 'consents'] }),
-    onError: (error) => toast.error(error instanceof ApiError ? error.message : t('common.error')),
-  });
+  const consents = useConsents();
+  const grant = useGrantConsent();
+  const revoke = useRevokeConsent();
 
   const deleteAccount = useMutation({
     mutationFn: () => api.delete<void>('/privacy/account', { confirmation: 'УДАЛИТЬ' }),
@@ -95,7 +72,17 @@ export function PrivacyPage(): React.JSX.Element {
 
               {consent.acceptedVersion && !consent.needsRenewal ? (
                 consent.required ? null : (
-                  <Button variant="ghost" onClick={() => revoke.mutate(consent.document)}>
+                  <Button
+                    variant="ghost"
+                    onClick={() =>
+                      revoke.mutate(consent.document, {
+                        onError: (error) =>
+                          toast.error(
+                            error instanceof ApiError ? error.message : t('common.error'),
+                          ),
+                      })
+                    }
+                  >
                     {t('privacy.revoke')}
                   </Button>
                 )

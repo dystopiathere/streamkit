@@ -11,6 +11,7 @@
     "@playwright/test": "^1.63.0",
     "@streamkit/config": "workspace:*",
     "@types/node": "^26.5.1",
+    "ioredis": "^6.0.0",
     "typescript": "^5.9.3"
   }
 }

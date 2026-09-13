@@ -7,10 +7,11 @@ import {
   MINOR_UNITS_PER_MAJOR,
   uuidSchema,
 } from './common.js';
+import { chatChannelSchema, twitchLoginSchema } from './chat.js';
 import { type AlertEvent, alertEventTypeSchema } from './events.js';
 
 /** Типы виджетов. Новый тип = новая ветка в widgetConfigSchema + рендерер в packages/ui. */
-export const WIDGET_TYPES = ['alerts', 'goal', 'timer', 'top-donors'] as const;
+export const WIDGET_TYPES = ['alerts', 'goal', 'timer', 'top-donors', 'chat'] as const;
 export const widgetTypeSchema = z.enum(WIDGET_TYPES);
 export type WidgetType = z.infer<typeof widgetTypeSchema>;
 
@@ -172,6 +173,43 @@ export const topDonorsWidgetConfigSchema = z.object({
 export type TopDonorsWidgetConfig = z.infer<typeof topDonorsWidgetConfigSchema>;
 
 /* ------------------------------------------------------------------ */
+/* Чат                                                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Конфиг виджета чата.
+ *
+ * Канал задан ЗДЕСЬ, а не берётся из подключённой площадки, и это решение, а не
+ * упрощение. Чтобы читать чат Twitch, достаточно логина: анонимный IRC не
+ * требует ни OAuth, ни токена, ни зарегистрированного приложения. Значит,
+ * виджет работает у стримера, который вообще не подключал аналитику, — а
+ * приложение Twitch в этом проекте до сих пор не зарегистрировано. Форма
+ * подставляет логин уже подключённого канала, если он есть.
+ */
+export const chatWidgetConfigSchema = z.object({
+  channel: chatChannelSchema,
+  /** Сколько строк держим на экране. Больше полусотни не читает никто. */
+  maxMessages: z.number().int().min(1).max(50).default(20),
+  /** Через сколько секунд строка гаснет. 0 — не гаснет вовсе. */
+  messageLifetimeSeconds: z.number().int().min(0).max(3600).default(0),
+  /** Новые сверху — для чата, закреплённого в верхнем углу кадра. */
+  newestFirst: z.boolean().default(false),
+  showBadges: z.boolean().default(true),
+  showEmotes: z.boolean().default(true),
+  /** Сообщения, начинающиеся с «!»: команды ботов зрителям не интересны. */
+  hideCommands: z.boolean().default(true),
+  /**
+   * Кого не показывать. По умолчанию — привычные боты: их сообщения занимают
+   * место в кадре, а адресованы механике канала, а не зрителям.
+   */
+  hiddenUsers: z.array(twitchLoginSchema).max(20).default(['nightbot', 'streamelements', 'moobot']),
+  /** Ник цветом, который выбрал сам автор. Иначе — цветом подсветки виджета. */
+  useAuthorColors: z.boolean().default(true),
+  text: textStyleSchema.prefault({}),
+});
+export type ChatWidgetConfig = z.infer<typeof chatWidgetConfigSchema>;
+
+/* ------------------------------------------------------------------ */
 /* Объединение по типу                                                 */
 /* ------------------------------------------------------------------ */
 
@@ -181,6 +219,7 @@ export const widgetConfigSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('goal'), config: goalWidgetConfigSchema }),
   z.object({ type: z.literal('timer'), config: timerWidgetConfigSchema }),
   z.object({ type: z.literal('top-donors'), config: topDonorsWidgetConfigSchema }),
+  z.object({ type: z.literal('chat'), config: chatWidgetConfigSchema }),
 ]);
 export type WidgetConfig = z.infer<typeof widgetConfigSchema>;
 
@@ -197,6 +236,7 @@ export const WIDGET_CONFIG_SCHEMAS = {
   goal: goalWidgetConfigSchema,
   timer: timerWidgetConfigSchema,
   'top-donors': topDonorsWidgetConfigSchema,
+  chat: chatWidgetConfigSchema,
 } as const satisfies Record<
   WidgetType,
   z.ZodType<Record<string, unknown>, Record<string, unknown>>
@@ -211,6 +251,17 @@ export function configSchemaFor(
   type: WidgetType,
 ): z.ZodType<Record<string, unknown>, Record<string, unknown>> {
   return WIDGET_CONFIG_SCHEMAS[type];
+}
+
+/**
+ * Есть ли у типа состояние, которое считает сервер.
+ *
+ * У алертов и чата его нет: их «состояние» — это поток событий, он ничего не
+ * накапливает и восстанавливать его неоткуда. Спрашивать снимок у таких
+ * виджетов бессмысленно, и дашборд не должен рисовать им блок управления.
+ */
+export function hasWidgetState(type: WidgetType): boolean {
+  return type === 'goal' || type === 'timer' || type === 'top-donors';
 }
 
 export const widgetSchema = z
@@ -300,6 +351,14 @@ export const goalStateSchema = z.object({
   raisedMinor: z.number().int().nonnegative(),
   targetMinor: z.number().int().positive(),
   currency: currencySchema,
+  /**
+   * Стартовая сумма, уже включённая в raisedMinor.
+   *
+   * Отдаётся отдельно, чтобы форма в дашборде могла показать заданное значение.
+   * Без него поле всегда открывалось нулём, и сохранение настроек затирало
+   * смещение — собранная сумма на экране падала без всякой причины.
+   */
+  offsetMinor: z.number().int(),
 });
 export type GoalState = z.infer<typeof goalStateSchema>;
 

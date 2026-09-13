@@ -1,4 +1,5 @@
 import { formatMinorForInput, parseMajorToMinor } from '@streamkit/contracts';
+import { useState } from 'react';
 import { Controller, type FieldValues, type UseFormReturn } from 'react-hook-form';
 import { FieldError, Input, Label } from '@/components/ui';
 
@@ -155,6 +156,14 @@ export function TextStyleFields({
  * Перевод идёт разбором строки, а не умножением на сто: `10.07 * 100` даёт
  * 1006.9999999999999, и это ровно тот промежуточный float, который правило
  * запрещает.
+ *
+ * Поле ТЕКСТОВОЕ, и это вынужденно. У `<input type="number">` значение «12.»
+ * невалидно, поэтому `event.target.value` возвращает пустую строку: браузер
+ * прячет от скрипта набранное, пока оно не станет числом целиком. Управляемое
+ * числовое поле из-за этого стирало ввод ровно на десятичной точке, и «12.50»
+ * молча превращалось в 50 ₽. Сырая строка живёт в состоянии поля, число
+ * пересчитывается из неё — ровно так, как это уже сделано в форме стартовой
+ * суммы цели.
  */
 export function MoneyField({
   form,
@@ -168,34 +177,85 @@ export function MoneyField({
       control={form.control}
       name={name}
       render={({ field }) => (
-        <div>
-          <Label htmlFor={name}>
-            {label}
-            {currency ? `, ${CURRENCY_SIGNS[currency] ?? currency}` : ''}
-          </Label>
-          <Input
-            id={name}
-            type="number"
-            step="0.01"
-            value={
-              typeof field.value === 'number'
-                ? formatMinorForInput(field.value)
-                : String(field.value ?? '')
-            }
-            onChange={(event) => {
-              // Пустое поле не превращаем в ноль: пока стример стирает старое
-              // значение, чтобы ввести новое, форма не должна подставлять своё.
-              const parsed = parseMajorToMinor(event.target.value);
-              field.onChange(parsed ?? Number.NaN);
-            }}
-            onBlur={field.onBlur}
-          />
-          {hint ? <p className="mt-1 text-xs text-muted">{hint}</p> : null}
-          <FieldError message={errorAt(form, name)} />
-        </div>
+        <MoneyInput
+          name={name}
+          label={label}
+          hint={hint}
+          currency={currency}
+          error={errorAt(form, name)}
+          value={field.value}
+          onBlur={field.onBlur}
+          onChange={field.onChange}
+        />
       )}
     />
   );
+}
+
+function MoneyInput({
+  name,
+  label,
+  hint,
+  currency,
+  error,
+  value,
+  onBlur,
+  onChange,
+}: {
+  name: string;
+  label: string;
+  hint?: string;
+  currency?: string;
+  error?: string;
+  value: unknown;
+  onBlur: () => void;
+  onChange: (next: number) => void;
+}): React.JSX.Element {
+  const [text, setText] = useState(() => minorToText(value));
+  const [seen, setSeen] = useState(value);
+
+  // Значение пришло извне — форму наполнили после загрузки виджета. Правка
+  // состояния прямо в рендере, а не в эффекте: это штатный приём React для
+  // «подстроить состояние под изменившийся пропс», и он не вызывает лишнего
+  // прохода по дереву, в отличие от setState внутри useEffect.
+  //
+  // Своё же значение переписывать нельзя: набранное «12.» вернулось бы к «12».
+  if (value !== seen) {
+    setSeen(value);
+    if (typeof value === 'number' && Number.isFinite(value) && parseMajorToMinor(text) !== value) {
+      setText(minorToText(value));
+    }
+  }
+
+  return (
+    <div>
+      <Label htmlFor={name}>
+        {label}
+        {currency ? `, ${CURRENCY_SIGNS[currency] ?? currency}` : ''}
+      </Label>
+      <Input
+        id={name}
+        type="text"
+        inputMode="decimal"
+        value={text}
+        onChange={(event) => {
+          const next = event.target.value;
+          setText(next);
+          // Пустое поле не превращаем в ноль: пока стример стирает старое
+          // значение, чтобы ввести новое, форма не должна подставлять своё.
+          // NaN отвергнет схема — это честнее молчаливого нуля.
+          onChange(parseMajorToMinor(next) ?? Number.NaN);
+        }}
+        onBlur={onBlur}
+      />
+      {hint ? <p className="mt-1 text-xs text-muted">{hint}</p> : null}
+      <FieldError message={error} />
+    </div>
+  );
+}
+
+function minorToText(value: unknown): string {
+  return typeof value === 'number' && Number.isFinite(value) ? formatMinorForInput(value) : '';
 }
 
 const CURRENCY_SIGNS: Record<string, string> = {
@@ -267,4 +327,95 @@ export function CheckboxGroupField({
       }}
     />
   );
+}
+
+/**
+ * Список коротких значений одной строкой — например, ники скрытых ботов.
+ *
+ * Отдельными полями это было бы пять кнопок «добавить» ради пяти ников, а
+ * `<select multiple>` не годится: набор заранее не известен, стример вписывает
+ * своих. Сырая строка живёт в состоянии поля по той же причине, что и в поле
+ * суммы: пока человек печатает запятую, значение ещё не разобрано, и подставлять
+ * вместо него разобранное значит стирать ввод на каждом разделителе.
+ */
+export function TagsField({
+  form,
+  name,
+  label,
+  hint,
+}: BaseProps & { hint?: string }): React.JSX.Element {
+  return (
+    <Controller
+      control={form.control}
+      name={name}
+      render={({ field }) => (
+        <TagsInput
+          name={name}
+          label={label}
+          hint={hint}
+          error={errorAt(form, name)}
+          value={field.value}
+          onBlur={field.onBlur}
+          onChange={field.onChange}
+        />
+      )}
+    />
+  );
+}
+
+function TagsInput({
+  name,
+  label,
+  hint,
+  error,
+  value,
+  onBlur,
+  onChange,
+}: {
+  name: string;
+  label: string;
+  hint?: string;
+  error?: string;
+  value: unknown;
+  onBlur: () => void;
+  onChange: (next: string[]) => void;
+}): React.JSX.Element {
+  const [text, setText] = useState(() => tagsToText(value));
+  const [seen, setSeen] = useState(value);
+
+  if (value !== seen) {
+    setSeen(value);
+    const incoming = tagsToText(value);
+    if (splitTags(text).join(',') !== splitTags(incoming).join(',')) {
+      setText(incoming);
+    }
+  }
+
+  return (
+    <div>
+      <Label htmlFor={name}>{label}</Label>
+      <Input
+        id={name}
+        value={text}
+        onChange={(event) => {
+          setText(event.target.value);
+          onChange(splitTags(event.target.value));
+        }}
+        onBlur={onBlur}
+      />
+      {hint ? <p className="mt-1 text-xs text-muted">{hint}</p> : null}
+      <FieldError message={error} />
+    </div>
+  );
+}
+
+function splitTags(text: string): string[] {
+  return text
+    .split(/[\s,]+/)
+    .map((item) => item.trim().toLowerCase())
+    .filter((item) => item.length > 0);
+}
+
+function tagsToText(value: unknown): string {
+  return Array.isArray(value) ? (value as string[]).join(', ') : '';
 }

@@ -19,10 +19,10 @@ jobs:
     name: Типы, линтер, формат, юнит-тесты
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -84,9 +84,9 @@ jobs:
       OVERLAY_BASE_URL: http://localhost:5174
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -143,9 +143,9 @@ jobs:
       VITE_API_URL: http://localhost:3000
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -157,7 +157,7 @@ jobs:
       - run: pnpm --filter @streamkit/e2e exec playwright install --with-deps chromium
       - run: pnpm --filter @streamkit/e2e test:e2e
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
@@ -178,13 +178,13 @@ jobs:
       pull-requests: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # gitleaks нужна история, иначе он проверит только последний коммит.
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -198,56 +198,60 @@ jobs:
         continue-on-error: false
 
       - name: Поиск утёкших секретов
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Комментарии в PR не нужны: результат виден в логе задания, а ради
           # них пришлось бы выдавать токену право записи в pull requests.
           GITLEAKS_ENABLE_COMMENTS: false
 
+  # Три образа собираются ПАРАЛЛЕЛЬНО, по раннеру на образ, и у каждого СВОЙ
+  # кэш. Раньше они шли одним заданием подряд и писали в общий scope кэша
+  # GitHub Actions: образ, собранный последним, затирал кэш предыдущего. В
+  # логах все три импортировали один и тот же манифест, попаданий в кэш не
+  # было, а выгрузка заведомо бесполезного кэша занимала больше половины из
+  # восьми минут задания.
   docker:
-    name: Сборка образов
+    name: Сборка образов (${{ matrix.image }})
     runs-on: ubuntu-latest
     needs: quality
+    strategy:
+      # Сломанный образ дашборда не должен прятать результат сборки API.
+      fail-fast: false
+      matrix:
+        include:
+          - image: api
+            file: infra/docker/api.Dockerfile
+            build-args: ''
+          - image: web
+            file: infra/docker/web.Dockerfile
+            build-args: APP=web
+          - image: overlay
+            file: infra/docker/web.Dockerfile
+            build-args: APP=overlay
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
 
-      - name: API
-        uses: docker/build-push-action@v6
+      - name: Сборка
+        uses: docker/build-push-action@v7
         with:
           context: .
-          file: infra/docker/api.Dockerfile
+          file: ${{ matrix.file }}
+          build-args: ${{ matrix.build-args }}
           push: false
-          load: true
-          tags: streamkit-api:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Дашборд
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: infra/docker/web.Dockerfile
-          build-args: APP=web
-          push: false
-          tags: streamkit-web:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Overlay
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: infra/docker/web.Dockerfile
-          build-args: APP=overlay
-          push: false
-          tags: streamkit-overlay:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # В локальный Docker загружается только API: его сканирует trivy.
+          # Загрузка остальных стоила бы времени, которое никто не использует.
+          load: ${{ matrix.image == 'api' }}
+          tags: streamkit-${{ matrix.image }}:ci
+          # mode=max, а не min: самый дорогой шаг — установка зависимостей — живёт
+          # в промежуточной стадии, и min его бы не сохранил.
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,scope=${{ matrix.image }},mode=max
 
       # Уязвимости в образе: базовый образ и системные пакеты pnpm audit не видит.
       - name: Сканирование образа API
+        if: matrix.image == 'api'
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: streamkit-api:ci

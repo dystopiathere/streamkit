@@ -1,14 +1,18 @@
 import type {
   AlertWidgetConfig,
+  ChatMessage,
+  ChatWidgetConfig,
   GoalWidgetConfig,
   TimerWidgetConfig,
   TopDonorsWidgetConfig,
   WidgetState,
   WidgetType,
 } from '@streamkit/contracts';
+import { defaultWidgetConfig } from '@streamkit/contracts';
 import {
   AlertAnimationStyles,
   AlertCard,
+  ChatBox,
   GoalBar,
   TimerDisplay,
   TopDonorsList,
@@ -59,15 +63,35 @@ export function WidgetPreview({
   );
 }
 
+/**
+ * Значения формы поверх дефолтов своего типа.
+ *
+ * Нужно из-за одного кадра на переходе: форма наполняется значениями виджета
+ * из эффекта, то есть уже ПОСЛЕ первого рендера с новым типом. В этом кадре
+ * `form.watch()` ещё отдаёт значения предыдущего типа, и рендерер получает
+ * конфиг не от того виджета. Для цели это безобидно (число превращается в NaN),
+ * а для чата — падение на первом же обращении к списку скрытых ников, то есть
+ * пустая страница редактора вместо предпросмотра.
+ *
+ * Слияние, а не разбор схемой: значение в поле бывает недописанным и схему не
+ * проходит, но показывать его в предпросмотре всё равно надо — ради этого
+ * предпросмотр и существует.
+ */
+function withDefaults(type: WidgetType, config: Record<string, unknown>): Record<string, unknown> {
+  return { ...defaultWidgetConfig(type).config, ...config };
+}
+
 function Surface({
   type,
-  config,
+  config: raw,
   state,
 }: {
   type: WidgetType;
   config: Record<string, unknown>;
   state: WidgetState | null;
 }): React.JSX.Element | null {
+  const config = withDefaults(type, raw);
+
   switch (type) {
     case 'alerts':
       return (
@@ -95,6 +119,7 @@ function Surface({
                   raisedMinor: Math.round(goal.targetMinor / 3),
                   targetMinor: goal.targetMinor,
                   currency: goal.currency,
+                  offsetMinor: 0,
                 }
           }
         />
@@ -118,6 +143,13 @@ function Surface({
           }
         />
       );
+    }
+
+    case 'chat': {
+      const chat = config as unknown as ChatWidgetConfig;
+      // Пример показываем всегда: настраивают чат до эфира, а пустая рамка
+      // ничего не говорит ни про размер шрифта, ни про читаемость обводки.
+      return <ChatBox config={chat} messages={SAMPLE_CHAT} />;
     }
 
     case 'top-donors': {
@@ -151,4 +183,47 @@ const SAMPLE_DONORS = [
   { username: 'Соня', amountMinor: 12_000, count: 2 },
   { username: 'Игорь', amountMinor: 9_000, count: 1 },
   { username: 'Вика', amountMinor: 5_000, count: 1 },
+];
+
+/**
+ * Пример чата. Ники и реплики выдуманы, эмоут настоящий (Kappa, id 25) — без
+ * него не видно, как строка живёт с картинкой внутри.
+ */
+const SAMPLE_CHAT: ChatMessage[] = [
+  {
+    id: 'sample-1',
+    platform: 'twitch',
+    channel: 'example',
+    login: 'zritel',
+    username: 'Зритель',
+    color: '#7FD1B9',
+    badges: ['subscriber'],
+    parts: [{ kind: 'text', value: 'привет, как настройка идёт?' }],
+    sentAt: '2026-09-12T20:00:00.000Z',
+  },
+  {
+    id: 'sample-2',
+    platform: 'twitch',
+    channel: 'example',
+    login: 'moder',
+    username: 'Модератор',
+    color: '#E0A3F5',
+    badges: ['moderator', 'vip'],
+    parts: [
+      { kind: 'text', value: 'сейчас проверим ' },
+      { kind: 'emote', id: '25', alt: 'Kappa' },
+    ],
+    sentAt: '2026-09-12T20:00:05.000Z',
+  },
+  {
+    id: 'sample-3',
+    platform: 'twitch',
+    channel: 'example',
+    login: 'gost',
+    username: 'Гость',
+    color: null,
+    badges: [],
+    parts: [{ kind: 'text', value: 'шрифт читается, обводки хватает' }],
+    sentAt: '2026-09-12T20:00:09.000Z',
+  },
 ];

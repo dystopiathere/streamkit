@@ -94,6 +94,16 @@ export class AppConfig {
   }
 
   /**
+   * Адрес IRC-шлюза Twitch. undefined — берём стандартный.
+   *
+   * Через `get`, а не `value`: последний бросает на незаданном ключе, а эта
+   * переменная необязательна и в боевом окружении пуста всегда.
+   */
+  get twitchIrcUrl(): string | undefined {
+    return this.config.get<string>('TWITCH_IRC_URL');
+  }
+
+  /**
    * Учётные данные приложения площадки, либо null, если оно не настроено.
    *
    * Через `config.get`, а не `value`: `value` использует getOrThrow и уронил бы

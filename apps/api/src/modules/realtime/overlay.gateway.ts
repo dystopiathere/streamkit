@@ -2,18 +2,23 @@ import { Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common'
 import { type OnGatewayConnection, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import {
   SOCKET_EVENTS,
+  chatRoom,
+  type ConfigUpdatedMessage,
   type OverlayBootstrap,
   overlayRoom,
   shouldShowAlert,
+  type WidgetConfig,
+  widgetRoom,
 } from '@streamkit/contracts';
 import type { Server, Socket } from 'socket.io';
 import { RealtimeBus, type BusMessage } from '../../common/bus/realtime-bus.service';
 import { WidgetStateService } from '../widgets/widget-state.service';
 import { WidgetsService } from '../widgets/widgets.service';
 
-/** Комната всех сокетов одного виджета — по ней рассылается смена конфига. */
-function widgetRoom(widgetId: string): string {
-  return `widget:${widgetId}`;
+/** Канал чата у виджета, если он вообще чат и канал в нём указан. */
+function chatChannelOf(widget: WidgetConfig): string | null {
+  if (widget.type !== 'chat') return null;
+  return widget.config.channel.length > 0 ? widget.config.channel : null;
 }
 
 /**
@@ -69,6 +74,12 @@ export class OverlayGateway implements OnGatewayConnection, OnModuleInit, OnModu
     await client.join(overlayRoom(resolved.tokenId));
     await client.join(widgetRoom(resolved.widgetId));
 
+    // Чат адресуется каналом, а не пользователем: комната общая на канал, и
+    // сообщение уходит в неё напрямую, без запроса «чьи это виджеты» на каждую
+    // строку. Сообщений в чате сотни в минуту, а не единицы, как донатов.
+    const channel = chatChannelOf(resolved.widget);
+    if (channel) await client.join(chatRoom('twitch', channel));
+
     const bootstrap: OverlayBootstrap = {
       widgetId: resolved.widgetId,
       name: resolved.name,
@@ -78,10 +89,28 @@ export class OverlayGateway implements OnGatewayConnection, OnModuleInit, OnModu
       state: await this.widgetState.computeById(resolved.widgetId),
       ...resolved.widget,
     };
-    client.emit(SOCKET_EVENTS.configUpdated, bootstrap);
+    client.emit(SOCKET_EVENTS.bootstrap, bootstrap);
 
     await this.widgets.touchOverlayToken(resolved.tokenId);
     this.logger.debug({ widgetId: resolved.widgetId }, 'Оверлей подключился');
+  }
+
+  /**
+   * Переселить оверлеи виджета в комнату нового канала.
+   *
+   * Комната назначается при подключении, а настройки меняются потом. Без
+   * переселения оверлей продолжал бы слушать прежний канал: на экране новое имя
+   * канала, а сообщения из старого.
+   */
+  private async rejoinChatRoom(widgetId: string, channel: string | null): Promise<void> {
+    const sockets = await this.server.local.in(widgetRoom(widgetId)).fetchSockets();
+
+    for (const socket of sockets) {
+      for (const room of socket.rooms) {
+        if (room.startsWith('chat:')) socket.leave(room);
+      }
+      if (channel) socket.join(chatRoom('twitch', channel));
+    }
   }
 
   /**
@@ -108,12 +137,33 @@ export class OverlayGateway implements OnGatewayConnection, OnModuleInit, OnModu
         }
 
         case 'widget-config': {
-          this.server.local.to(widgetRoom(message.widgetId)).emit(SOCKET_EVENTS.configUpdated, {
+          // Ни имени, ни состояния: это сообщение отвечает только за настройки.
+          // Состояние приезжает своим сообщением следом — сервис виджетов
+          // публикует его сразу после конфига.
+          const payload: ConfigUpdatedMessage = {
             widgetId: message.widgetId,
             isEnabled: message.isEnabled,
             type: message.type,
             config: message.config,
-          });
+          } as ConfigUpdatedMessage;
+          this.server.local
+            .to(widgetRoom(message.widgetId))
+            .emit(SOCKET_EVENTS.configUpdated, payload);
+
+          // Поменялся канал — оверлей надо переселить в другую комнату. Иначе
+          // смена канала в настройках потребовала бы перезагрузки сцены в OBS,
+          // а конфиг при этом приехал бы новый: виджет показывал бы чужой чат
+          // под именем нового канала.
+          if (message.type === 'chat') {
+            await this.rejoinChatRoom(message.widgetId, chatChannelOf(message));
+          }
+          break;
+        }
+
+        case 'chat': {
+          this.server.local
+            .to(chatRoom(message.message.platform, message.message.channel))
+            .emit(SOCKET_EVENTS.chatMessage, message.message);
           break;
         }
 
