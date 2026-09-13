@@ -104,6 +104,7 @@ export class RoomsService {
       createdAt: row.createdAt.toISOString(),
       lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
       revokedAt: null,
+      micBlocked: row.micBlockedAt !== null,
     }));
   }
 
@@ -219,8 +220,13 @@ export class RoomsService {
       role: 'guest',
       identity: guestIdentity(invite.id, this.crypto.generateToken(9)),
       name: input.displayName,
+      microphone: invite.micBlockedAt === null,
     });
-    return { ...access, roomName: invite.room.name };
+    return {
+      ...access,
+      roomName: invite.room.name,
+      microphoneAllowed: invite.micBlockedAt === null,
+    };
   }
 
   /**
@@ -293,16 +299,59 @@ export class RoomsService {
     });
   }
 
-  async muteGuest(userId: string, roomId: string, identity: string): Promise<void> {
-    await this.requireOwned(userId, roomId);
-    this.requireGuestIdentity(identity);
+  /**
+   * Выключить гостю микрофон — так, чтобы он не включил его обратно сам.
+   *
+   * Раньше здесь было только `mutePublishedTrack`: флаг «заглушено» на дорожке,
+   * который гость снимает той же кнопкой микрофона. Теперь у гостя отнимается
+   * ПРАВО публиковать микрофон. Запрет пишется на приглашение: новый токен после
+   * перезагрузки вкладки выдаётся уже без микрофона, а права сразу меняются у
+   * всех вкладок, открытых по этой ссылке.
+   */
+  async blockMicrophone(userId: string, roomId: string, identity: string): Promise<void> {
+    await this.setMicrophoneBlocked(userId, roomId, identity, true);
+  }
 
-    const participant = (await this.media.listParticipants(roomId)).find(
-      (candidate) => candidate.identity === identity,
+  /** Вернуть право на микрофон. Включает его гость сам — насильно звук не открываем. */
+  async allowMicrophone(userId: string, roomId: string, identity: string): Promise<void> {
+    await this.setMicrophoneBlocked(userId, roomId, identity, false);
+  }
+
+  private async setMicrophoneBlocked(
+    userId: string,
+    roomId: string,
+    identity: string,
+    blocked: boolean,
+  ): Promise<void> {
+    await this.requireOwned(userId, roomId);
+    const inviteId = this.requireGuestIdentity(identity);
+
+    const updated = await this.prisma.roomInvite.updateMany({
+      where: { id: inviteId, roomId },
+      data: { micBlockedAt: blocked ? new Date() : null },
+    });
+    if (updated.count === 0) throw new NotFoundException('Гость не найден');
+
+    const tabs = (await this.media.listParticipants(roomId)).filter(
+      (participant) =>
+        participant.role === 'guest' &&
+        parseParticipantIdentity(participant.identity)?.id === inviteId,
     );
-    const audio = participant?.tracks.filter((track) => track.kind === 'audio' && !track.muted);
-    for (const track of audio ?? []) {
-      await this.media.muteTrack(roomId, identity, track.sid);
+    for (const tab of tabs) {
+      if (blocked) {
+        // Сначала тишина, потом права: смена прав доходит до клиента не мгновенно,
+        // а звук в эфире должен пропасть сразу после нажатия.
+        for (const track of tab.tracks.filter(
+          (candidate) => candidate.kind === 'audio' && !candidate.muted,
+        )) {
+          await this.media.muteTrack(roomId, tab.identity, track.sid);
+        }
+      }
+      await this.media.setPublishSources(
+        roomId,
+        tab.identity,
+        blocked ? ['camera'] : ['camera', 'microphone'],
+      );
     }
   }
 

@@ -160,14 +160,25 @@ export class RoomsController {
     );
   }
 
+  /** Отнять у гостя право на микрофон. Держится на ссылке и переживает перезагрузку вкладки. */
   @Post(':id/participants/:identity/mute')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async muteGuest(
+  async blockMicrophone(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Param('identity') identity: string,
   ): Promise<void> {
-    await this.rooms.muteGuest(user.id, id, identity);
+    await this.rooms.blockMicrophone(user.id, id, identity);
+  }
+
+  @Post(':id/participants/:identity/unmute')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async allowMicrophone(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('identity') identity: string,
+  ): Promise<void> {
+    await this.rooms.allowMicrophone(user.id, id, identity);
   }
 }
 

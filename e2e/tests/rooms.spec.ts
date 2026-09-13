@@ -17,7 +17,13 @@ import { expect, test, type Page } from '@playwright/test';
  */
 const videoWidth = (element: unknown): number => (element as { videoWidth: number }).videoWidth;
 
-async function registerStreamer(page: Page): Promise<void> {
+const API_URL = 'http://localhost:3000';
+
+/** Регистрирует стримера и возвращает его access-токен — для проверок через API. */
+async function registerStreamer(page: Page): Promise<string> {
+  const registered = page.waitForResponse((response) =>
+    response.url().includes('/api/auth/register'),
+  );
   await page.goto('/register');
   await page.getByLabel('Отображаемое имя').fill('E2E Комнаты');
   await page.getByLabel('Электронная почта').fill(`e2e-rooms-${Date.now()}@example.com`);
@@ -31,6 +37,33 @@ async function registerStreamer(page: Page): Promise<void> {
   const banner = page.getByRole('button', { name: 'Только необходимые' });
   await banner.waitFor({ state: 'visible', timeout: 5_000 }).catch(() => undefined);
   if (await banner.isVisible()) await banner.click();
+  return ((await (await registered).json()) as { accessToken: string }).accessToken;
+}
+
+/** Комната с одним приглашением. Стример остаётся на странице комнаты. */
+async function roomWithInvite(page: Page): Promise<{ roomId: string; inviteUrl: string }> {
+  await page.getByRole('link', { name: 'Комнаты' }).click();
+  await page.getByPlaceholder('Название комнаты').fill('Вечерний эфир');
+  await page.getByRole('button', { name: 'Новая комната' }).click();
+  await page.getByRole('link', { name: 'Открыть' }).click();
+  const roomId = new URL(page.url()).pathname.split('/').pop()!;
+
+  await page.getByPlaceholder('Кому ссылка').fill('Гость подкаста');
+  await page.getByRole('button', { name: 'Создать ссылку' }).click();
+  const inviteField = page.getByRole('textbox', { name: 'Приглашения' });
+  await expect(inviteField).toHaveValue(/\/join#/, { timeout: 10_000 });
+  return { roomId, inviteUrl: await inviteField.inputValue() };
+}
+
+async function joinAsGuest(guest: Page, inviteUrl: string): Promise<void> {
+  // Адрес, отличающийся только фрагментом, `goto` не перезагружает: это
+  // навигация внутри документа. Повторный вход — через настоящую перезагрузку.
+  if (guest.url() === inviteUrl) await guest.reload();
+  else await guest.goto(inviteUrl);
+  await guest.getByLabel('Ваше имя').fill('Вася');
+  await guest.getByLabel(/Я принимаю/).check();
+  await guest.getByRole('button', { name: 'Войти' }).click();
+  await expect(guest.getByText('Вы в комнате «Вечерний эфир»')).toBeVisible({ timeout: 15_000 });
 }
 
 test('гость входит по ссылке, оверлей показывает его видео, отзыв выкидывает', async ({
@@ -61,7 +94,12 @@ test('гость входит по ссылке, оверлей показыва
   await page.getByLabel('Тип виджета').selectOption('guests');
   await page.getByRole('button', { name: 'Новый виджет' }).click();
   await page.getByRole('link', { name: 'Настроить' }).first().click();
+  // Виджет без комнаты подключался и молча оставался пустым — так выглядела
+  // первая ручная проверка. Теперь пустое поле подсвечено прямо в редакторе.
+  const roomMissing = page.getByRole('alert').filter({ hasText: 'Комната не выбрана' });
+  await expect(roomMissing).toBeVisible();
   await page.getByLabel('Комната').selectOption({ label: 'Вечерний эфир' });
+  await expect(roomMissing).toHaveCount(0);
   const saved = page.waitForResponse(
     (response) =>
       response.url().includes('/api/widgets/') && response.request().method() === 'PATCH',
@@ -126,4 +164,140 @@ test('превью камеры гостя показывает кадр, а н�
       timeout: 10_000,
     })
     .toBeGreaterThan(2);
+});
+
+test('выключенный стримером микрофон гость не включит сам — ни кнопкой, ни перезагрузкой', async ({
+  page,
+  browser,
+  request,
+}) => {
+  // Раньше «заглушить» ставило дорожке флаг, а гость снимал его той же кнопкой
+  // микрофона. Теперь сервер отнимает право: дорожка снимается с публикации,
+  // а запрет живёт на ссылке и переживает перезагрузку вкладки.
+  test.setTimeout(120_000);
+  const accessToken = await registerStreamer(page);
+  const { roomId, inviteUrl } = await roomWithInvite(page);
+  await page.getByRole('button', { name: 'Войти в комнату' }).click();
+
+  const guestContext = await browser.newContext({ permissions: ['camera', 'microphone'] });
+  const guest = await guestContext.newPage();
+  await joinAsGuest(guest, inviteUrl);
+  await expect(guest.getByRole('button', { name: /Микрофон: вкл/ })).toBeVisible({
+    timeout: 15_000,
+  });
+
+  const guestAudioTracks = async (): Promise<number> => {
+    const response = await request.get(`${API_URL}/api/rooms/${roomId}/participants`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const participants = (await response.json()) as Array<{
+      role: string;
+      tracks: Array<{ kind: string }>;
+    }>;
+    return participants
+      .filter((participant) => participant.role === 'guest')
+      .flatMap((participant) => participant.tracks)
+      .filter((track) => track.kind === 'audio').length;
+  };
+  await expect.poll(guestAudioTracks, { timeout: 15_000 }).toBe(1);
+
+  const guestTile = page.getByTestId('room-tile').filter({ hasText: 'Вася' });
+  await guestTile.getByRole('button', { name: 'Выключить микрофон' }).click();
+
+  await expect(guest.getByRole('button', { name: 'Микрофон выключен стримером' })).toBeDisabled({
+    timeout: 10_000,
+  });
+  // Проверка на сервере, а не в интерфейсе гостя: дорожки нет вовсе, включать нечего.
+  await expect.poll(guestAudioTracks, { timeout: 10_000 }).toBe(0);
+  await expect(guestTile.getByRole('button', { name: 'Разрешить микрофон' })).toBeVisible();
+
+  // Перезагрузка вкладки запрет не снимает.
+  await joinAsGuest(guest, inviteUrl);
+  await expect(guest.getByRole('button', { name: 'Микрофон выключен стримером' })).toBeDisabled({
+    timeout: 15_000,
+  });
+  expect(await guestAudioTracks()).toBe(0);
+
+  // Разрешение возвращает право, но микрофон гость включает сам.
+  await page
+    .getByTestId('room-tile')
+    .filter({ hasText: 'Вася' })
+    .getByRole('button', { name: 'Разрешить микрофон' })
+    .click();
+  const micButton = guest.getByRole('button', { name: /Микрофон: выкл/ });
+  await expect(micButton).toBeEnabled({ timeout: 10_000 });
+  await micButton.click();
+  await expect.poll(guestAudioTracks, { timeout: 10_000 }).toBe(1);
+
+  await guestContext.close();
+});
+
+test('камера после выключения включается без повторного открытия устройства', async ({
+  page,
+  browser,
+}) => {
+  // Стандартное выключение в livekit-client закрывает устройство, и включение
+  // открывало его заново — у настоящей вебкамеры это секунды чёрного кадра. На
+  // фальшивой камере задержки не видно, поэтому проверяется причина, а не
+  // время: сколько раз страница открывала камеру.
+  test.setTimeout(120_000);
+  await registerStreamer(page);
+  const { inviteUrl } = await roomWithInvite(page);
+  await page.getByRole('button', { name: 'Войти в комнату' }).click();
+
+  const guestContext = await browser.newContext({ permissions: ['camera', 'microphone'] });
+  await guestContext.addInitScript(() => {
+    // Пакет тестов собирается без DOM-типов: скрипт исполняется в браузере.
+    type Constraints = { video?: unknown };
+    const scope = globalThis as unknown as {
+      cameraOpened: number;
+      navigator: { mediaDevices: { getUserMedia: (c?: Constraints) => Promise<unknown> } };
+    };
+    const devices = scope.navigator.mediaDevices;
+    const original = devices.getUserMedia.bind(devices);
+    scope.cameraOpened = 0;
+    devices.getUserMedia = (constraints?: Constraints) => {
+      if (constraints?.video) scope.cameraOpened += 1;
+      return original(constraints);
+    };
+  });
+  const guest = await guestContext.newPage();
+  await joinAsGuest(guest, inviteUrl);
+
+  const hostVideo = page.getByTestId('room-tile').filter({ hasText: 'Вася' }).locator('video');
+  await expect
+    .poll(() => hostVideo.evaluate(videoWidth).catch(() => 0), { timeout: 30_000 })
+    .toBeGreaterThan(0);
+  const openedAfterJoin = await guest.evaluate(
+    () => (globalThis as unknown as { cameraOpened: number }).cameraOpened,
+  );
+
+  await guest.getByRole('button', { name: /Камера: вкл/ }).click();
+  await expect(hostVideo).toHaveCount(0, { timeout: 10_000 });
+  await guest.getByRole('button', { name: /Камера: выкл/ }).click();
+  await expect
+    .poll(() => hostVideo.evaluate(videoWidth).catch(() => 0), { timeout: 15_000 })
+    .toBeGreaterThan(0);
+
+  expect(
+    await guest.evaluate(() => (globalThis as unknown as { cameraOpened: number }).cameraOpened),
+  ).toBe(openedAfterJoin);
+
+  await guestContext.close();
+});
+
+test('виджет, созданный со страницы комнаты, сразу к ней привязан', async ({ page }) => {
+  // Путь через раздел «Виджеты» требовал выбрать комнату в редакторе, и этот шаг
+  // легко пропустить: виджет без комнаты молча ничего не показывает.
+  await registerStreamer(page);
+  await roomWithInvite(page);
+
+  await page.getByRole('button', { name: 'Создать виджет для этой комнаты' }).click();
+  await expect(page).toHaveURL(/\/widgets\/[0-9a-f-]{36}$/);
+  await expect(page.getByLabel('Комната')).toHaveValue(/[0-9a-f-]{36}/);
+  await expect(page.getByRole('alert').filter({ hasText: 'Комната не выбрана' })).toHaveCount(0);
+
+  await page.getByRole('link', { name: 'Комнаты' }).click();
+  await page.getByRole('link', { name: 'Открыть' }).click();
+  await expect(page.getByRole('listitem').filter({ hasText: 'Вечерний эфир' })).toBeVisible();
 });

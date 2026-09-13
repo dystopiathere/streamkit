@@ -92,10 +92,20 @@ export function useRemoveGuest(roomId: string) {
   });
 }
 
-export function useMuteGuest(roomId: string) {
+/**
+ * Выключить гостю микрофон или разрешить обратно.
+ *
+ * Не «заглушить дорожку», которую гость включил бы той же кнопкой, а отнять
+ * право на микрофон. Разрешение возвращает право, но микрофон гость включает сам.
+ */
+export function useGuestMicrophone(roomId: string) {
+  const client = useQueryClient();
   return useMutation({
-    mutationFn: (identity: string) =>
-      api.post<void>(`/rooms/${roomId}/participants/${encodeURIComponent(identity)}/mute`),
+    mutationFn: ({ identity, blocked }: { identity: string; blocked: boolean }) =>
+      api.post<void>(
+        `/rooms/${roomId}/participants/${encodeURIComponent(identity)}/${blocked ? 'mute' : 'unmute'}`,
+      ),
+    onSuccess: () => client.invalidateQueries({ queryKey: roomKeys.invites(roomId) }),
   });
 }
 

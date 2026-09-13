@@ -1,5 +1,5 @@
 import { LiveKitRoom } from '@livekit/components-react';
-import type { RoomAccess } from '@streamkit/contracts';
+import { parseParticipantIdentity, type RoomAccess } from '@streamkit/contracts';
 import type { Participant } from 'livekit-client';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,8 +8,15 @@ import { toast } from 'sonner';
 import { Button, Card } from '@/components/ui';
 import { RoomInvites } from '@/features/rooms/RoomInvites';
 import { RoomStage } from '@/features/rooms/RoomStage';
+import { RoomWidgets } from '@/features/rooms/RoomWidgets';
 import { ROOM_OPTIONS } from '@/features/rooms/room-options';
-import { useHostAccess, useMuteGuest, useRemoveGuest, useRoom } from '@/features/rooms/queries';
+import {
+  useGuestMicrophone,
+  useHostAccess,
+  useInvites,
+  useRemoveGuest,
+  useRoom,
+} from '@/features/rooms/queries';
 import { ApiError } from '@/lib/api';
 
 /**
@@ -25,7 +32,10 @@ export function RoomPage(): React.JSX.Element {
   const room = useRoom(id);
   const hostAccess = useHostAccess(id);
   const removeGuest = useRemoveGuest(id);
-  const muteGuest = useMuteGuest(id);
+  const microphone = useGuestMicrophone(id);
+  // Запрет микрофона хранится на приглашении: по нему кнопка под плиткой
+  // знает, выключать микрофон или разрешать обратно.
+  const invites = useInvites(id);
   const [access, setAccess] = useState<RoomAccess | null>(null);
   const [withCamera, setWithCamera] = useState(false);
 
@@ -69,37 +79,49 @@ export function RoomPage(): React.JSX.Element {
             connect
             options={ROOM_OPTIONS}
             audio
-            video={withCamera}
+            // Камеру публикует `useCamera` внутри сцены, а не LiveKitRoom: так она
+            // выключается и включается без повторного открытия устройства.
+            video={false}
             onDisconnected={handleDisconnected}
             onError={handleRoomError}
           >
             <RoomStage
               onLeave={() => setAccess(null)}
-              actions={(participant) => (
-                <div className="flex flex-wrap gap-1">
-                  <Button
-                    variant="ghost"
-                    className="px-2 py-1 text-xs"
-                    onClick={() => void muteGuest.mutateAsync(participant.identity)}
-                  >
-                    {t('rooms.stage.mute')}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="px-2 py-1 text-xs"
-                    onClick={() => void handleRemove(participant, false)}
-                  >
-                    {t('rooms.stage.remove')}
-                  </Button>
-                  <Button
-                    variant="danger"
-                    className="px-2 py-1 text-xs"
-                    onClick={() => void handleRemove(participant, true)}
-                  >
-                    {t('rooms.stage.removeAndRevoke')}
-                  </Button>
-                </div>
-              )}
+              cameraOnJoin={withCamera}
+              actions={(participant) => {
+                const inviteId = parseParticipantIdentity(participant.identity)?.id;
+                const blocked = invites.data?.find((invite) => invite.id === inviteId)?.micBlocked;
+                return (
+                  <div className="flex flex-wrap gap-1">
+                    <Button
+                      variant="ghost"
+                      className="px-2 py-1 text-xs"
+                      onClick={() =>
+                        void microphone.mutateAsync({
+                          identity: participant.identity,
+                          blocked: !blocked,
+                        })
+                      }
+                    >
+                      {blocked ? t('rooms.stage.allowMic') : t('rooms.stage.mute')}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="px-2 py-1 text-xs"
+                      onClick={() => void handleRemove(participant, false)}
+                    >
+                      {t('rooms.stage.remove')}
+                    </Button>
+                    <Button
+                      variant="danger"
+                      className="px-2 py-1 text-xs"
+                      onClick={() => void handleRemove(participant, true)}
+                    >
+                      {t('rooms.stage.removeAndRevoke')}
+                    </Button>
+                  </div>
+                );
+              }}
             />
           </LiveKitRoom>
         ) : (
@@ -123,6 +145,8 @@ export function RoomPage(): React.JSX.Element {
       </Card>
 
       <RoomInvites roomId={id} />
+
+      {room.data ? <RoomWidgets roomId={id} roomName={room.data.name} /> : null}
     </div>
   );
 }

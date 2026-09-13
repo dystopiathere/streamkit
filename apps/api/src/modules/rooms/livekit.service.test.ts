@@ -35,6 +35,7 @@ describe('токены LiveKit', () => {
       role: 'guest',
       identity: 'guest:x:y',
       name: 'Вася',
+      microphone: true,
     });
     const grant = (await claims(access.token)).video;
 
@@ -43,6 +44,17 @@ describe('токены LiveKit', () => {
     expect(grant?.canPublishData).toBe(false);
     expect(grant?.canUpdateOwnMetadata).toBe(false);
     expect(grant?.roomAdmin).toBeUndefined();
+  });
+
+  it('гостю с выключенным стримером микрофоном токен выдаётся без микрофона', async () => {
+    // Запрет живёт на ссылке: иначе гость снимал бы его перезагрузкой вкладки.
+    const access = await new LiveKitTokens(configured).issue(ROOM, {
+      role: 'guest',
+      identity: 'guest:x:y',
+      name: 'Вася',
+      microphone: false,
+    });
+    expect((await claims(access.token)).video?.canPublishSources).toEqual(['camera']);
   });
 
   it('оверлей невидим и ничего не публикует', async () => {
@@ -61,6 +73,7 @@ describe('токены LiveKit', () => {
       role: 'guest',
       identity: 'guest:x:y',
       name: 'Вася',
+      microphone: true,
     });
     const token = await claims(access.token);
     expect((token.exp ?? 0) - (token.nbf ?? 0)).toBe(300);

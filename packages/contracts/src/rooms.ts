@@ -53,6 +53,11 @@ export const roomInviteViewSchema = z.object({
   /** Когда по ссылке последний раз входили. null — ни разу. */
   lastUsedAt: isoDateSchema.nullable(),
   revokedAt: isoDateSchema.nullable(),
+  /**
+   * Стример выключил гостю микрофон. Держится на приглашении, а не на
+   * участнике: иначе гость снимал бы запрет перезагрузкой вкладки.
+   */
+  micBlocked: z.boolean(),
 });
 export type RoomInviteView = z.infer<typeof roomInviteViewSchema>;
 
@@ -99,6 +104,12 @@ export type GuestJoinInput = z.infer<typeof guestJoinSchema>;
 /** Ответ гостю: доступ и название комнаты, в которую он входит. */
 export const guestJoinResultSchema = roomAccessSchema.extend({
   roomName: roomNameSchema,
+  /**
+   * Можно ли гостю включать микрофон. Страница не пытается опубликовать его при
+   * входе, если нельзя: сервер отказал бы, и гость увидел бы ошибку вместо
+   * объяснения.
+   */
+  microphoneAllowed: z.boolean(),
 });
 export type GuestJoinResult = z.infer<typeof guestJoinResultSchema>;
 

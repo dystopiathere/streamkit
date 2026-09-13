@@ -31,14 +31,26 @@ export interface RoomMediaServer {
   listParticipants(roomId: string): Promise<RoomParticipant[]>;
   removeParticipant(roomId: string, identity: string): Promise<void>;
   muteTrack(roomId: string, identity: string, trackSid: string): Promise<void>;
+  /**
+   * Что участнику можно публиковать. Меняет права уже подключённого участника,
+   * а не только следующий токен.
+   */
+  setPublishSources(roomId: string, identity: string, sources: PublishSource[]): Promise<void>;
 }
+
+export type PublishSource = 'camera' | 'microphone';
+
+const TRACK_SOURCES: Record<PublishSource, TrackSource> = {
+  camera: TrackSource.CAMERA,
+  microphone: TrackSource.MICROPHONE,
+};
 
 export const ROOM_MEDIA_SERVER = Symbol('ROOM_MEDIA_SERVER');
 
 /** Кто входит: от этого зависят права в токене. */
 export type AccessRole =
   | { role: 'host'; identity: string; name: string }
-  | { role: 'guest'; identity: string; name: string }
+  | { role: 'guest'; identity: string; name: string; microphone: boolean }
   | { role: 'overlay'; identity: string };
 
 @Injectable()
@@ -90,6 +102,28 @@ export class LiveKitRoomMediaServer implements RoomMediaServer {
     await this.service().mutePublishedTrack(livekitRoomName(roomId), identity, trackSid, true);
   }
 
+  /**
+   * Права меняются целиком, а не полем: LiveKit заменяет разрешения атомарно, и
+   * всё, что не передано, сбрасывается. Поэтому здесь повторён полный набор прав
+   * гостя из `LiveKitTokens`, а не только список источников.
+   */
+  async setPublishSources(
+    roomId: string,
+    identity: string,
+    sources: PublishSource[],
+  ): Promise<void> {
+    await this.service().updateParticipant(livekitRoomName(roomId), identity, {
+      permission: {
+        canSubscribe: true,
+        canPublish: sources.length > 0,
+        canPublishSources: sources.map((source) => TRACK_SOURCES[source]),
+        canPublishData: false,
+        canUpdateMetadata: false,
+        hidden: false,
+      },
+    });
+  }
+
   private service(): RoomServiceClient {
     const livekit = this.config.livekit;
     if (!livekit) throw notConfigured();
@@ -130,7 +164,12 @@ export class LiveKitTokens {
           canSubscribe: true,
           // Только камера и микрофон. Показ экрана гостем — это отдельное
           // решение стримера, а не право по умолчанию: картинку в эфир выводит он.
-          canPublishSources: [TrackSource.CAMERA, TrackSource.MICROPHONE],
+          // Микрофон — если стример его гостю не выключил: запрет переживает
+          // перезагрузку вкладки, потому что новый токен выдаётся уже без него.
+          canPublishSources:
+            access.role === 'guest' && !access.microphone
+              ? [TrackSource.CAMERA]
+              : [TrackSource.CAMERA, TrackSource.MICROPHONE],
           // Сообщения данных комнате не нужны, а открытый канал между
           // незнакомыми людьми — лишняя поверхность.
           canPublishData: false,

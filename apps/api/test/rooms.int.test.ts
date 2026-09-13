@@ -7,7 +7,11 @@ import {
 import { TokenVerifier } from 'livekit-server-sdk';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { ROOM_MEDIA_SERVER, type RoomMediaServer } from '../src/modules/rooms/livekit.service';
+import {
+  type PublishSource,
+  ROOM_MEDIA_SERVER,
+  type RoomMediaServer,
+} from '../src/modules/rooms/livekit.service';
 import { createHarness, registrationPayload, type TestHarness } from './harness';
 
 /**
@@ -20,6 +24,7 @@ import { createHarness, registrationPayload, type TestHarness } from './harness'
 class FakeMediaServer implements RoomMediaServer {
   readonly rooms = new Map<string, RoomParticipant[]>();
   readonly muted: string[] = [];
+  readonly sources = new Map<string, PublishSource[]>();
 
   join(roomId: string, participant: Partial<RoomParticipant> & { identity: string }): void {
     const list = this.rooms.get(roomId) ?? [];
@@ -48,6 +53,14 @@ class FakeMediaServer implements RoomMediaServer {
   async muteTrack(_roomId: string, identity: string, trackSid: string): Promise<void> {
     this.muted.push(`${identity}/${trackSid}`);
   }
+
+  async setPublishSources(
+    _roomId: string,
+    identity: string,
+    sources: PublishSource[],
+  ): Promise<void> {
+    this.sources.set(identity, sources);
+  }
 }
 
 const verifier = () =>
@@ -71,6 +84,7 @@ describe('Приватные комнаты (feature)', () => {
     await harness.reset();
     media.rooms.clear();
     media.muted.length = 0;
+    media.sources.clear();
   });
 
   const server = () => harness.app.getHttpServer();
@@ -299,33 +313,71 @@ describe('Приватные комнаты (feature)', () => {
         .post(`/api/rooms/${roomId}/participants/${encodeURIComponent(identity)}/remove`)
         .set(auth(owner.token))
         .expect(400);
-      await request(server())
-        .post(`/api/rooms/${roomId}/participants/${encodeURIComponent(identity)}/mute`)
-        .set(auth(owner.token))
-        .expect(400);
+      for (const action of ['mute', 'unmute']) {
+        await request(server())
+          .post(`/api/rooms/${roomId}/participants/${encodeURIComponent(identity)}/${action}`)
+          .set(auth(owner.token))
+          .expect(400);
+      }
     }
   });
 
-  it('заглушает только включённые микрофоны гостя', async () => {
+  it('выключенный микрофон гость не включит сам — ни кнопкой, ни перезагрузкой', async () => {
+    // Раньше «заглушить» ставило дорожке флаг, который гость снимал той же
+    // кнопкой микрофона. Теперь у всех вкладок гостя отнимается ПРАВО на
+    // микрофон, а запрет пишется на ссылку — новый токен выдаётся уже без него.
     const owner = await streamer();
     const roomId = await createRoom(owner.token);
     const invite = await createInvite(owner.token, roomId);
-    const identity = guestIdentity(invite.id, 'tab1');
+    const tab1 = guestIdentity(invite.id, 'tab1');
+    const tab2 = guestIdentity(invite.id, 'tab2');
+    const other = await createInvite(owner.token, roomId, 'Петя');
+    const petya = guestIdentity(other.id, 'tab1');
     media.join(roomId, {
-      identity,
+      identity: tab1,
       tracks: [
         { sid: 'TR_mic', kind: 'audio', muted: false },
         { sid: 'TR_cam', kind: 'video', muted: false },
         { sid: 'TR_old', kind: 'audio', muted: true },
       ],
     });
+    media.join(roomId, { identity: tab2 });
+    media.join(roomId, { identity: petya });
 
     await request(server())
-      .post(`/api/rooms/${roomId}/participants/${encodeURIComponent(identity)}/mute`)
+      .post(`/api/rooms/${roomId}/participants/${encodeURIComponent(tab1)}/mute`)
       .set(auth(owner.token))
       .expect(204);
 
-    expect(media.muted).toEqual([`${identity}/TR_mic`]);
+    // Звук гаснет сразу, права меняются у обеих вкладок и только у них.
+    expect(media.muted).toEqual([`${tab1}/TR_mic`]);
+    expect(media.sources.get(tab1)).toEqual(['camera']);
+    expect(media.sources.get(tab2)).toEqual(['camera']);
+    expect(media.sources.has(petya)).toBe(false);
+
+    const invites = await request(server())
+      .get(`/api/rooms/${roomId}/invites`)
+      .set(auth(owner.token))
+      .expect(200);
+    expect(invites.body.find((row: { id: string }) => row.id === invite.id).micBlocked).toBe(true);
+
+    // Перезагрузка вкладки: новый токен уже без микрофона.
+    const rejoin = await join(invite.raw).expect(200);
+    expect(rejoin.body.microphoneAllowed).toBe(false);
+    const claims = await verifier().verify(rejoin.body.token as string);
+    expect(claims.video?.canPublishSources).toEqual(['camera']);
+
+    // Разрешение возвращает право, но включает микрофон гость сам.
+    await request(server())
+      .post(`/api/rooms/${roomId}/participants/${encodeURIComponent(tab1)}/unmute`)
+      .set(auth(owner.token))
+      .expect(204);
+    expect(media.sources.get(tab2)).toEqual(['camera', 'microphone']);
+    const allowed = await join(invite.raw).expect(200);
+    expect(allowed.body.microphoneAllowed).toBe(true);
+    expect(
+      (await verifier().verify(allowed.body.token as string)).video?.canPublishSources,
+    ).toEqual(['camera', 'microphone']);
   });
 
   it('список участников не показывает оверлеи', async () => {

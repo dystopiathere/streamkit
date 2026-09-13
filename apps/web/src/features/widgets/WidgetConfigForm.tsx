@@ -347,6 +347,7 @@ function GuestsFields({ form }: { form: UseFormReturn<FieldValues> }): React.JSX
   const { t } = useTranslation();
   const textLabels = useTextLabels();
   const rooms = useRooms();
+  const roomId = String(form.watch('roomId') ?? '');
 
   return (
     <>
@@ -372,6 +373,18 @@ function GuestsFields({ form }: { form: UseFormReturn<FieldValues> }): React.JSX
             <p className="mt-1 text-xs text-muted">
               {rooms.data.length === 0 ? t('widgets.hint.noRooms') : t('widgets.hint.room')}
             </p>
+            {/* Без комнаты оверлей подключается, отмечает активность и молча
+                остаётся пустым, а предпросмотр рядом показывает примеры гостей.
+                Снаружи это неотличимо от поломки — так и было в первой ручной
+                проверке, — поэтому пустое поле подсвечено прямо здесь. */}
+            {!roomId ? (
+              <p
+                role="alert"
+                className="mt-2 rounded-lg border border-danger/40 bg-danger/10 p-2 text-sm"
+              >
+                {t('widgets.hint.roomMissing')}
+              </p>
+            ) : null}
           </div>
         ) : (
           <p className="text-sm text-muted">{t('common.loading')}</p>

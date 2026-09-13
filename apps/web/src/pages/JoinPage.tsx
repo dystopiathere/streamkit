@@ -38,10 +38,6 @@ export function JoinPage(): React.JSX.Element {
     () => (devices.audio ? { deviceId: devices.audio } : true),
     [devices.audio],
   );
-  const video = useMemo(
-    () => (devices.video ? { deviceId: devices.video } : true),
-    [devices.video],
-  );
   const handleDisconnected = useCallback((reason?: DisconnectReason) => {
     setSession(null);
     setEnded(
@@ -70,11 +66,20 @@ export function JoinPage(): React.JSX.Element {
             token={session.token}
             connect
             options={ROOM_OPTIONS}
-            audio={audio}
-            video={video}
+            // Микрофон публикует сам LiveKitRoom, камеру — `useCamera` внутри
+            // сцены: так она выключается и включается без повторного открытия
+            // устройства. Если стример выключил гостю микрофон, публиковать его
+            // при входе не пытаемся: сервер откажет, и гость увидит ошибку
+            // вместо объяснения.
+            audio={session.microphoneAllowed ? audio : false}
+            video={false}
             onDisconnected={handleDisconnected}
           >
-            <RoomStage onLeave={() => setSession(null)} />
+            <RoomStage
+              onLeave={() => setSession(null)}
+              cameraOnJoin
+              cameraDeviceId={devices.video}
+            />
           </LiveKitRoom>
         </Card>
       ) : (
