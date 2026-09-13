@@ -2,6 +2,7 @@ import {
   ALERT_EVENT_TYPES,
   ALERT_TEMPLATE_VARS,
   CURRENCIES,
+  GUEST_LAYOUTS,
   TOP_DONORS_PERIODS,
   type WidgetType,
 } from '@streamkit/contracts';
@@ -49,6 +50,8 @@ export function WidgetConfigForm({
       return <TopDonorsFields form={form} />;
     case 'chat':
       return <ChatFields form={form} />;
+    case 'guests':
+      return <GuestsFields form={form} />;
   }
 }
 
@@ -332,6 +335,48 @@ function ChatFields({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.E
       <Card className="space-y-4">
         <h2 className="font-medium">{t('widgets.section.appearance')}</h2>
         <TextStyleFields form={form} labels={textLabels} withHighlight />
+      </Card>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+function GuestsFields({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.Element {
+  const { t } = useTranslation();
+  const textLabels = useTextLabels();
+
+  return (
+    <>
+      <Card className="space-y-4">
+        <h2 className="font-medium">{t('widgets.section.guests')}</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <SelectField
+            form={form}
+            name="layout"
+            label={t('widgets.field.guestsLayout')}
+            options={GUEST_LAYOUTS.map((value) => ({
+              value,
+              label: t(`widgets.guestsLayout.${value}`),
+            }))}
+          />
+          <NumberField form={form} name="maxTiles" label={t('widgets.field.maxTiles')} />
+          <NumberField form={form} name="gap" label={t('widgets.field.tileGap')} />
+          <NumberField form={form} name="cornerRadius" label={t('widgets.field.cornerRadius')} />
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <CheckboxField form={form} name="showNames" label={t('widgets.field.showNames')} />
+          <CheckboxField
+            form={form}
+            name="showWithoutVideo"
+            label={t('widgets.field.showWithoutVideo')}
+          />
+        </div>
+      </Card>
+
+      <Card className="space-y-4">
+        <h2 className="font-medium">{t('widgets.section.appearance')}</h2>
+        <TextStyleFields form={form} labels={textLabels} />
       </Card>
     </>
   );

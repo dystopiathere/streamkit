@@ -154,6 +154,11 @@ export function OverlayApp(): React.JSX.Element | null {
         <TopDonorsList config={widget.config} state={state?.kind === 'top-donors' ? state : null} />
       );
 
+    // Медиа гостей подключается отдельным шагом: пока виджет только создаётся и
+    // настраивается, в кадре ничего нет.
+    case 'guests':
+      return null;
+
     // Сообщения приезжают отдельным потоком, а не состоянием: у чата нечего
     // пересчитывать, есть только лента, и накапливает её сам оверлей.
     //

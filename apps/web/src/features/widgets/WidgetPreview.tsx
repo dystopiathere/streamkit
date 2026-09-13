@@ -3,6 +3,7 @@ import type {
   ChatMessage,
   ChatWidgetConfig,
   GoalWidgetConfig,
+  GuestsWidgetConfig,
   TimerWidgetConfig,
   TopDonorsWidgetConfig,
   WidgetState,
@@ -14,6 +15,7 @@ import {
   AlertCard,
   ChatBox,
   GoalBar,
+  ParticipantLayout,
   TimerDisplay,
   TopDonorsList,
 } from '@streamkit/ui';
@@ -173,8 +175,39 @@ function Surface({
         />
       );
     }
+
+    case 'guests': {
+      // Плитки-заглушки: гости появятся только в эфире, а настраивать раскладку
+      // нужно заранее. Рендерер тот же, что в оверлее, — видео подменено фоном.
+      const guests = config as unknown as GuestsWidgetConfig;
+      return (
+        <div className="h-full w-full p-4">
+          <ParticipantLayout config={guests} tiles={SAMPLE_GUESTS} />
+        </div>
+      );
+    }
   }
 }
+
+const SAMPLE_GUESTS = [
+  { name: 'Гость подкаста', hue: 262 },
+  { name: 'Соведущий', hue: 190 },
+  { name: 'Эксперт', hue: 32 },
+].map(({ name, hue }, index) => ({
+  id: `sample-${index}`,
+  name,
+  // Третий «гость» — с выключенной камерой: так видно, как выглядит плитка без видео.
+  hasVideo: index < 2,
+  media: (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        background: `linear-gradient(135deg, hsl(${hue} 45% 32%), hsl(${hue + 40} 50% 18%))`,
+      }}
+    />
+  ),
+}));
 
 const SAMPLE_DONORS = [
   { username: 'Аня', amountMinor: 250_000, count: 4 },

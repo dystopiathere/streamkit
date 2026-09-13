@@ -51,6 +51,7 @@ model User {
   donationSources DonationSource[]
   credentials     IntegrationCredential[]
   channels        Channel[]
+  rooms           Room[]
   auditLogs       AuditLog[]
 
   @@index([status])
@@ -138,6 +139,7 @@ enum WidgetType {
   TIMER
   TOP_DONORS
   CHAT
+  GUESTS
 }
 
 model Widget {
@@ -192,6 +194,57 @@ model OverlayToken {
   widget Widget @relation(fields: [widgetId], references: [id], onDelete: Cascade)
 
   @@index([widgetId])
+}
+
+/// Приватная комната стримера. Медиа живёт в LiveKit, здесь — только владение и
+/// приглашения. Комната LiveKit называется по id и создаётся при первом входе.
+model Room {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  name      String   @db.VarChar(80)
+  createdAt DateTime @default(now())
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invites RoomInvite[]
+
+  @@index([userId])
+}
+
+/// Ссылка-приглашение на одного гостя. Форма та же, что у OverlayToken: в БД
+/// только хэш, сам токен виден один раз при выпуске.
+model RoomInvite {
+  id         String    @id @default(uuid()) @db.Uuid
+  roomId     String    @db.Uuid
+  tokenHash  String    @unique
+  label      String    @db.VarChar(80)
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+
+  room     Room           @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  consents GuestConsent[]
+
+  @@index([roomId])
+}
+
+/// Согласие гостя на передачу имени, изображения и голоса.
+///
+/// Отдельно от Consent, потому что у гостя нет учётной записи, а Consent к ней
+/// привязан. Имени гостя здесь НЕТ: оно живёт только в токене LiveKit, и
+/// хранить его ради доказательства согласия не нужно — хватает ссылки,
+/// редакции документа, времени и отпечатка запроса.
+model GuestConsent {
+  id              String   @id @default(uuid()) @db.Uuid
+  inviteId        String   @db.Uuid
+  documentVersion String
+  grantedAt       DateTime @default(now())
+  ipHash          String?
+  userAgent       String?  @db.VarChar(512)
+
+  invite RoomInvite @relation(fields: [inviteId], references: [id], onDelete: Cascade)
+
+  @@index([inviteId])
+  @@index([grantedAt])
 }
 
 /* ------------------------------------------------------------------ */

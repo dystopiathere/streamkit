@@ -8,10 +8,11 @@ import {
   uuidSchema,
 } from './common.js';
 import { chatChannelSchema, twitchLoginSchema } from './chat.js';
+import { GUEST_LAYOUTS, MAX_GUESTS_PER_ROOM } from './rooms.js';
 import { type AlertEvent, alertEventTypeSchema } from './events.js';
 
 /** Типы виджетов. Новый тип = новая ветка в widgetConfigSchema + рендерер в packages/ui. */
-export const WIDGET_TYPES = ['alerts', 'goal', 'timer', 'top-donors', 'chat'] as const;
+export const WIDGET_TYPES = ['alerts', 'goal', 'timer', 'top-donors', 'chat', 'guests'] as const;
 export const widgetTypeSchema = z.enum(WIDGET_TYPES);
 export type WidgetType = z.infer<typeof widgetTypeSchema>;
 
@@ -210,6 +211,38 @@ export const chatWidgetConfigSchema = z.object({
 export type ChatWidgetConfig = z.infer<typeof chatWidgetConfigSchema>;
 
 /* ------------------------------------------------------------------ */
+/* Гости приватной комнаты                                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Конфиг виджета гостей: какую комнату выводить и как разложить плитки.
+ *
+ * Комната указана идентификатором, и сервер при сохранении проверяет, что она
+ * принадлежит владельцу виджета. Схема этого проверить не может, а без проверки
+ * чужой идентификатор в своём виджете открывал бы видео чужой приватной комнаты
+ * по собственной ссылке OBS.
+ *
+ * Пустая строка — виджет создан, но комнату ещё не выбрали, как пустой канал у
+ * чата: создаётся он кнопкой «Новый виджет» с пустым конфигом.
+ */
+export const guestsWidgetConfigSchema = z.object({
+  roomId: z.union([uuidSchema, z.literal('')]).default(''),
+  layout: z.enum(GUEST_LAYOUTS).default('grid'),
+  /** Сколько плиток максимум. Остальные гости в кадр не попадут, но слышны будут. */
+  maxTiles: z.number().int().min(1).max(MAX_GUESTS_PER_ROOM).default(4),
+  showNames: z.boolean().default(true),
+  /**
+   * Плитка с именем, когда камера гостя выключена. Иначе гость пропадает из
+   * кадра, продолжая говорить, и зрители слышат голос ниоткуда.
+   */
+  showWithoutVideo: z.boolean().default(true),
+  gap: z.number().int().min(0).max(48).default(8),
+  cornerRadius: z.number().int().min(0).max(48).default(12),
+  text: textStyleSchema.prefault({ fontSize: 20 }),
+});
+export type GuestsWidgetConfig = z.infer<typeof guestsWidgetConfigSchema>;
+
+/* ------------------------------------------------------------------ */
 /* Объединение по типу                                                 */
 /* ------------------------------------------------------------------ */
 
@@ -220,6 +253,7 @@ export const widgetConfigSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('timer'), config: timerWidgetConfigSchema }),
   z.object({ type: z.literal('top-donors'), config: topDonorsWidgetConfigSchema }),
   z.object({ type: z.literal('chat'), config: chatWidgetConfigSchema }),
+  z.object({ type: z.literal('guests'), config: guestsWidgetConfigSchema }),
 ]);
 export type WidgetConfig = z.infer<typeof widgetConfigSchema>;
 
@@ -237,6 +271,7 @@ export const WIDGET_CONFIG_SCHEMAS = {
   timer: timerWidgetConfigSchema,
   'top-donors': topDonorsWidgetConfigSchema,
   chat: chatWidgetConfigSchema,
+  guests: guestsWidgetConfigSchema,
 } as const satisfies Record<
   WidgetType,
   z.ZodType<Record<string, unknown>, Record<string, unknown>>

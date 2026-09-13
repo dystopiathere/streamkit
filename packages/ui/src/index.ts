@@ -14,6 +14,11 @@ export {
 } from './alert-animations';
 export { ChatBox, type ChatBoxProps } from './ChatBox';
 export { GoalBar, type GoalBarProps } from './GoalBar';
+export {
+  ParticipantLayout,
+  type ParticipantLayoutProps,
+  type ParticipantTile,
+} from './ParticipantLayout';
 export { textStyleToCss } from './text-style';
 export { TimerDisplay, type TimerDisplayProps } from './TimerDisplay';
 export { TopDonorsList, type TopDonorsListProps } from './TopDonorsList';
