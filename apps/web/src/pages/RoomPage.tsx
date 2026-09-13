@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { Button, Card } from '@/components/ui';
 import { RoomInvites } from '@/features/rooms/RoomInvites';
 import { RoomStage } from '@/features/rooms/RoomStage';
+import { ROOM_OPTIONS } from '@/features/rooms/room-options';
 import { useHostAccess, useMuteGuest, useRemoveGuest, useRoom } from '@/features/rooms/queries';
 import { ApiError } from '@/lib/api';
 
@@ -66,6 +67,7 @@ export function RoomPage(): React.JSX.Element {
             serverUrl={access.url}
             token={access.token}
             connect
+            options={ROOM_OPTIONS}
             audio
             video={withCamera}
             onDisconnected={handleDisconnected}

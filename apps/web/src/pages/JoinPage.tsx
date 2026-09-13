@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Button, Card, Input, Label } from '@/components/ui';
 import { RoomStage } from '@/features/rooms/RoomStage';
+import { ROOM_OPTIONS } from '@/features/rooms/room-options';
 import { useGuestJoin } from '@/features/rooms/queries';
 import { ApiError } from '@/lib/api';
 
@@ -68,6 +69,7 @@ export function JoinPage(): React.JSX.Element {
             serverUrl={session.url}
             token={session.token}
             connect
+            options={ROOM_OPTIONS}
             audio={audio}
             video={video}
             onDisconnected={handleDisconnected}
