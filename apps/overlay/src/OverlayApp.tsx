@@ -156,7 +156,19 @@ export function OverlayApp(): React.JSX.Element | null {
 
     // Сообщения приезжают отдельным потоком, а не состоянием: у чата нечего
     // пересчитывать, есть только лента, и накапливает её сам оверлей.
-    case 'chat':
-      return <ChatBox config={widget.config} messages={messages} />;
+    //
+    // Буфер фильтруется по текущему каналу. Смена канала в настройках переселяет
+    // сокет в новую комнату, но строки старого канала остаются в буфере — и без
+    // фильтра висели бы под новым, а на тихом канале при негаснущих сообщениях
+    // часами.
+    case 'chat': {
+      const channel = widget.config.channel;
+      return (
+        <ChatBox
+          config={widget.config}
+          messages={messages.filter((message) => message.channel === channel)}
+        />
+      );
+    }
   }
 }

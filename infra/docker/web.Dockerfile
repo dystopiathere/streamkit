@@ -52,6 +52,7 @@ RUN cp -r apps/${APP}/dist /dist
 FROM nginx:1.27-alpine AS runtime
 COPY --from=build /dist /usr/share/nginx/html
 COPY infra/docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY infra/docker/security-headers.conf /etc/nginx/snippets/security-headers.conf
 
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \

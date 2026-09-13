@@ -1,10 +1,11 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AppLayout } from './components/AppLayout';
 import { api } from './lib/api';
 import { useAuthStore } from './lib/auth-store';
+import { queryClient } from './lib/query-client';
 import { EventsPage } from './pages/EventsPage';
 import { LegalPage } from './pages/LegalPage';
 import { LoginPage } from './pages/LoginPage';
@@ -24,18 +25,6 @@ import { WidgetsPage } from './pages/WidgetsPage';
 const AnalyticsPage = lazy(async () => ({
   default: (await import('./pages/AnalyticsPage')).AnalyticsPage,
 }));
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      // Данные дашборда меняются не каждую секунду, а рефетч при каждом
-      // переключении вкладки во время стрима — лишняя нагрузка и мигание.
-      staleTime: 30_000,
-      refetchOnWindowFocus: false,
-      retry: 1,
-    },
-  },
-});
 
 /**
  * Восстановление сессии.

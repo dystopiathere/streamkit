@@ -149,7 +149,11 @@ function Surface({
       const chat = config as unknown as ChatWidgetConfig;
       // Пример показываем всегда: настраивают чат до эфира, а пустая рамка
       // ничего не говорит ни про размер шрифта, ни про читаемость обводки.
-      return <ChatBox config={chat} messages={SAMPLE_CHAT} />;
+      //
+      // Гашение строк в примере выключено. У примера метки времени застывшие,
+      // и через заданное число секунд все три строки гасли — предпросмотр
+      // пустел навсегда, будто настройка сломала виджет.
+      return <ChatBox config={{ ...chat, messageLifetimeSeconds: 0 }} messages={SAMPLE_CHAT} />;
     }
 
     case 'top-donors': {
