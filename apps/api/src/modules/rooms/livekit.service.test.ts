@@ -88,3 +88,18 @@ describe('токены LiveKit', () => {
     );
   });
 });
+
+describe('вебхук LiveKit и лимиты запросов', () => {
+  it('не ограничен ни одним лимитером', async () => {
+    // Все события идут с одного адреса медиасервера. `@SkipThrottle()` без
+    // аргументов снимал только `default`, и жёсткий лимит `auth` отвечал 429 уже
+    // на одиннадцатом вебхуке — проверка входа молча переставала работать.
+    // В интеграционных тестах лимиты подняты, поэтому ловится только здесь.
+    const { LiveKitWebhookController } = await import('./rooms.controller');
+    for (const throttler of ['default', 'auth']) {
+      expect(Reflect.getMetadata(`THROTTLER:SKIP${throttler}`, LiveKitWebhookController)).toBe(
+        true,
+      );
+    }
+  });
+});

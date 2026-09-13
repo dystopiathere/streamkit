@@ -5,7 +5,14 @@ import {
   type RoomAccess,
   type RoomParticipant,
 } from '@streamkit/contracts';
-import { AccessToken, RoomServiceClient, TrackSource, TrackType } from 'livekit-server-sdk';
+import {
+  AccessToken,
+  RoomServiceClient,
+  TrackSource,
+  TrackType,
+  type WebhookEvent,
+  WebhookReceiver,
+} from 'livekit-server-sdk';
 import { AppConfig } from '../../config/app-config.service';
 
 /**
@@ -17,6 +24,12 @@ import { AppConfig } from '../../config/app-config.service';
  */
 export function livekitRoomName(roomId: string): string {
   return `room-${roomId}`;
+}
+
+/** Обратное преобразование для вебхуков. null — комната не наша. */
+export function roomIdFromLivekitName(name: string): string | null {
+  const match = /^room-([0-9a-f-]{36})$/.exec(name);
+  return match ? match[1]! : null;
 }
 
 /**
@@ -192,6 +205,32 @@ export class LiveKitTokens {
     }
 
     return { url: livekit.publicUrl, token: await token.toJwt() };
+  }
+}
+
+/**
+ * Вебхуки LiveKit: проверка подписи.
+ *
+ * LiveKit подписывает тело тем же ключом, что и токены: в заголовке
+ * Authorization — JWT с хэшем тела. Проверяется СЫРОЕ тело, а не результат
+ * JSON.parse: пересобранный JSON не совпадёт с подписанными байтами.
+ */
+@Injectable()
+export class LiveKitWebhooks {
+  constructor(private readonly config: AppConfig) {}
+
+  /** @returns событие или null — подпись не сошлась либо LiveKit не настроен. */
+  async receive(rawBody: string, authorization: string | undefined): Promise<WebhookEvent | null> {
+    const livekit = this.config.livekit;
+    if (!livekit || !authorization) return null;
+    try {
+      return await new WebhookReceiver(livekit.apiKey, livekit.apiSecret).receive(
+        rawBody,
+        authorization,
+      );
+    } catch {
+      return null;
+    }
   }
 }
 

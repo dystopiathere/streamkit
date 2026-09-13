@@ -301,3 +301,61 @@ test('виджет, созданный со страницы комнаты, с�
   await page.getByRole('link', { name: 'Открыть' }).click();
   await expect(page.getByRole('listitem').filter({ hasText: 'Вечерний эфир' })).toBeVisible();
 });
+
+test('гость, удалённый с отзывом ссылки, не входит обратно сохранённым токеном', async ({
+  page,
+  browser,
+  request,
+}) => {
+  // Выданный токен LiveKit не отзывается: revokeTokenTs в LiveKit 1.13 не
+  // действует, и удалённый гость входил обратно тем же токеном, пока тот не
+  // истёк. Теперь о каждом входе LiveKit сообщает API вебхуком, а API выгоняет
+  // того, чья ссылка отозвана. Здесь гость «вытащил» токен из вкладки: при
+  // повторном входе ему подсовывается прежний ответ сервера целиком.
+  test.setTimeout(120_000);
+  page.on('dialog', (dialog) => void dialog.accept());
+  const accessToken = await registerStreamer(page);
+  const { roomId, inviteUrl } = await roomWithInvite(page);
+  await page.getByRole('button', { name: 'Войти в комнату' }).click();
+
+  const guestsInRoom = async (): Promise<number> => {
+    const response = await request.get(`${API_URL}/api/rooms/${roomId}/participants`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const participants = (await response.json()) as Array<{ role: string }>;
+    return participants.filter((participant) => participant.role === 'guest').length;
+  };
+
+  const guestContext = await browser.newContext({ permissions: ['camera', 'microphone'] });
+  const guest = await guestContext.newPage();
+  const joined = guest.waitForResponse((response) => response.url().includes('/api/rooms/join'));
+  await joinAsGuest(guest, inviteUrl);
+  const savedAccess = await (await joined).text();
+  await expect.poll(guestsInRoom, { timeout: 15_000 }).toBe(1);
+
+  await page
+    .getByTestId('room-tile')
+    .filter({ hasText: 'Вася' })
+    .getByRole('button', { name: 'Удалить и отозвать ссылку' })
+    .click();
+  await expect.poll(guestsInRoom, { timeout: 15_000 }).toBe(0);
+
+  // Перезагрузка сбрасывает надпись о первом удалении: дальше она может
+  // появиться только от нового — то есть если гость действительно вошёл
+  // старым токеном и был выгнан.
+  await guest.reload();
+  await guest.getByLabel('Ваше имя').fill('Вася');
+  await expect(guest.getByText('Стример удалил вас из комнаты.')).toHaveCount(0);
+  await guest.route('**/api/rooms/join', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: savedAccess }),
+  );
+  await guest.getByLabel(/Я принимаю/).check();
+  await guest.getByRole('button', { name: 'Войти' }).click();
+
+  // Старый токен LiveKit пускает — и через мгновение вебхук выгоняет. Проверяем
+  // не «ни разу не вошёл», а «в комнате не остался».
+  await expect(guest.getByText('Стример удалил вас из комнаты.')).toBeVisible({ timeout: 15_000 });
+  await expect.poll(guestsInRoom, { timeout: 15_000 }).toBe(0);
+
+  await guestContext.close();
+});

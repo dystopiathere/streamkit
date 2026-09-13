@@ -9,7 +9,10 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  type RawBodyRequest,
   Req,
+  UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import {
@@ -32,6 +35,7 @@ import type { Request } from 'express';
 import { AuditService } from '../../common/audit/audit.service';
 import { type AuthenticatedUser, CurrentUser, Public } from '../../common/auth/auth.decorators';
 import { zodBody } from '../../common/pipes/zod-validation.pipe';
+import { LiveKitWebhooks } from './livekit.service';
 import { RoomsService } from './rooms.service';
 
 // Жёсткий лимитер auth предназначен для входа и регистрации; на ручки дашборда
@@ -203,5 +207,63 @@ export class OverlayRoomController {
     @Body(zodBody(overlayRoomAccessSchema)) body: OverlayRoomAccessInput,
   ): Promise<RoomAccess> {
     return this.rooms.overlayAccess(body.token);
+  }
+}
+
+/**
+ * Вебхуки LiveKit — единственный способ узнать, кто вошёл в комнату.
+ *
+ * Без лимита запросов: события идут с одного адреса медиасервера, по несколько
+ * на каждый вход и каждую дорожку, и оживлённая комната упёрлась бы в лимит на
+ * IP. Защита здесь — подпись, а не частота.
+ *
+ * Лимитеры перечислены ОБА. `@SkipThrottle()` без аргументов снимает только
+ * `default`, а жёсткий `auth` (десять запросов в минуту) оставался: одиннадцатый
+ * вебхук получал 429, LiveKit сдавался после пяти попыток, и отозванный гость
+ * оставался в комнате. Интеграционные тесты этого не видят — лимиты там подняты.
+ */
+@SkipThrottle({ default: true, auth: true })
+@Controller('livekit')
+export class LiveKitWebhookController {
+  private readonly logger = new Logger(LiveKitWebhookController.name);
+
+  constructor(
+    private readonly webhooks: LiveKitWebhooks,
+    private readonly rooms: RoomsService,
+    private readonly audit: AuditService,
+  ) {}
+
+  @Public()
+  @Post('webhook')
+  @HttpCode(HttpStatus.OK)
+  async receive(@Req() request: RawBodyRequest<Request>): Promise<{ status: string }> {
+    const event = await this.webhooks.receive(
+      request.rawBody?.toString('utf8') ?? '',
+      request.headers.authorization,
+    );
+    if (!event) {
+      await this.audit.record('webhook.signature.invalid', null, {
+        ...this.audit.contextFromRequest(request),
+        metadata: { source: 'livekit' },
+      });
+      throw new UnauthorizedException();
+    }
+
+    if (event.event !== 'participant_joined' || !event.room || !event.participant) {
+      return { status: 'ignored' };
+    }
+
+    // Подпись уже проверена, дальше — наши сбои, а не чужие. Отвечаем 200 в любом
+    // случае: повтор того же вебхука ничего не исправит, а ошибка видна в логе.
+    try {
+      const status = await this.rooms.enforceJoin(event.room.name, event.participant.identity);
+      if (status !== 'allowed') {
+        this.logger.log({ room: event.room.name, status }, 'Вошедший участник ограничен');
+      }
+      return { status };
+    } catch (error) {
+      this.logger.error({ err: error, room: event.room.name }, 'Не удалось проверить участника');
+      return { status: 'error' };
+    }
   }
 }

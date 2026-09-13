@@ -1,8 +1,10 @@
 import type { INestApplication, ModuleMetadata } from '@nestjs/common';
 import { Test, type TestingModuleBuilder } from '@nestjs/testing';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import type { Redis } from 'ioredis';
 import { AppModule } from '../src/app.module';
+import { registerBodyParsers } from '../src/common/http/body-parsers';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { REDIS_CLIENT } from '../src/common/redis/redis.module';
 
@@ -38,7 +40,8 @@ export async function createHarness(
     Test.createTestingModule({ imports: [AppModule, ...extraImports] }),
   ).compile();
 
-  const app = moduleRef.createNestApplication({ rawBody: true });
+  const app = moduleRef.createNestApplication<NestExpressApplication>({ rawBody: true });
+  registerBodyParsers(app);
   app.setGlobalPrefix('api');
   app.use(cookieParser());
   // Глобальный ValidationPipe из Nest здесь не нужен и вреден: он тянет

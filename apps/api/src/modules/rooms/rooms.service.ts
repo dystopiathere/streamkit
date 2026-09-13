@@ -26,7 +26,12 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { AppConfig } from '../../config/app-config.service';
 import { ROOM_GUEST_TERMS } from '../privacy/legal-documents';
 import { WidgetsService } from '../widgets/widgets.service';
-import { LiveKitTokens, ROOM_MEDIA_SERVER, type RoomMediaServer } from './livekit.service';
+import {
+  LiveKitTokens,
+  ROOM_MEDIA_SERVER,
+  roomIdFromLivekitName,
+  type RoomMediaServer,
+} from './livekit.service';
 
 /**
  * Приватные комнаты: владение, приглашения и выдача доступа.
@@ -70,8 +75,8 @@ export class RoomsService {
    * Удаление комнаты выкидывает всех, кто в ней сейчас.
    *
    * Запись в БД удаляется первой: пока идёт обход участников, новые токены по
-   * приглашениям этой комнаты уже не выдаются. Выданные раньше доживут максимум
-   * до срока токена — это окно входа, а не длина сессии.
+   * приглашениям этой комнаты уже не выдаются, а вошедшего по старому токену
+   * выгонит проверка по вебхуку — комнаты для него уже нет.
    */
   async remove(userId: string, roomId: string, context: AuditContext = {}): Promise<void> {
     await this.requireOwned(userId, roomId);
@@ -352,6 +357,76 @@ export class RoomsService {
         tab.identity,
         blocked ? ['camera'] : ['camera', 'microphone'],
       );
+    }
+  }
+
+  /**
+   * Проверка каждого вошедшего — по вебхуку LiveKit `participant_joined`.
+   *
+   * Токен LiveKit подписан секретом сервера, и отозвать выданный токен нельзя.
+   * Опция `revokeTokenTs` у удаления участника в LiveKit 1.13 не действует —
+   * это проверено на сигнальном соединении: удалённый участник входил обратно
+   * тем же токеном и в секундах, и в миллисекундах, и со значением по умолчанию.
+   * Поэтому о каждом входе LiveKit сообщает нам, а мы сверяем вошедшего с тем,
+   * что в базе СЕЙЧАС, и выгоняем того, чей доступ уже отозван.
+   *
+   * Отсюда же закрыт второй обход: гость, которому стример выключил микрофон,
+   * вошёл бы старым токеном с правом на микрофон. Права ему урезаются здесь же.
+   *
+   * @returns что сделано — для журнала и тестов.
+   */
+  async enforceJoin(
+    roomName: string,
+    identity: string,
+  ): Promise<'allowed' | 'removed' | 'restricted' | 'ignored'> {
+    const roomId = roomIdFromLivekitName(roomName);
+    if (!roomId) return 'ignored';
+
+    const remove = async (): Promise<'removed'> => {
+      await this.media.removeParticipant(roomId, identity);
+      return 'removed';
+    };
+
+    const parsed = parseParticipantIdentity(identity);
+    const room = await this.prisma.room.findUnique({
+      where: { id: roomId },
+      select: { userId: true },
+    });
+    // Токен с неизвестной идентичностью мы не выпускали, а комнаты уже нет.
+    if (!parsed || !room) return remove();
+
+    switch (parsed.role) {
+      case 'host':
+        return parsed.id === room.userId ? 'allowed' : remove();
+
+      case 'guest': {
+        const invite = await this.prisma.roomInvite.findFirst({
+          where: { id: parsed.id, roomId },
+          select: { revokedAt: true, micBlockedAt: true },
+        });
+        if (!invite || invite.revokedAt) return remove();
+        if (invite.micBlockedAt) {
+          await this.media.setPublishSources(roomId, identity, ['camera']);
+          return 'restricted';
+        }
+        return 'allowed';
+      }
+
+      case 'overlay': {
+        const token = await this.prisma.overlayToken.findUnique({
+          where: { id: parsed.id },
+          include: { widget: true },
+        });
+        const widget = token?.widget;
+        const valid =
+          token &&
+          !token.revokedAt &&
+          widget?.type === 'GUESTS' &&
+          widget.isEnabled &&
+          widget.userId === room.userId &&
+          (widget.config as { roomId?: string }).roomId === roomId;
+        return valid ? 'allowed' : remove();
+      }
     }
   }
 

@@ -4,7 +4,8 @@ import {
   overlayIdentity,
   type RoomParticipant,
 } from '@streamkit/contracts';
-import { TokenVerifier } from 'livekit-server-sdk';
+import { createHash } from 'node:crypto';
+import { AccessToken, TokenVerifier } from 'livekit-server-sdk';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -24,6 +25,8 @@ import { createHarness, registrationPayload, type TestHarness } from './harness'
 class FakeMediaServer implements RoomMediaServer {
   readonly rooms = new Map<string, RoomParticipant[]>();
   readonly muted: string[] = [];
+  /** Кого выгнали — в порядке удаления. */
+  readonly removed: string[] = [];
   readonly sources = new Map<string, PublishSource[]>();
 
   join(roomId: string, participant: Partial<RoomParticipant> & { identity: string }): void {
@@ -44,6 +47,7 @@ class FakeMediaServer implements RoomMediaServer {
   }
 
   async removeParticipant(roomId: string, identity: string): Promise<void> {
+    this.removed.push(identity);
     this.rooms.set(
       roomId,
       (this.rooms.get(roomId) ?? []).filter((participant) => participant.identity !== identity),
@@ -84,6 +88,7 @@ describe('Приватные комнаты (feature)', () => {
     await harness.reset();
     media.rooms.clear();
     media.muted.length = 0;
+    media.removed.length = 0;
     media.sources.clear();
   });
 
@@ -520,5 +525,126 @@ describe('Приватные комнаты (feature)', () => {
     expect(response.body.rooms).toHaveLength(1);
     expect(response.body.rooms[0].invites[0].label).toBe('Вася');
     expect(JSON.stringify(response.body.rooms)).not.toContain('tokenHash');
+  });
+
+  /* ---------------------------------------------------------------- */
+  /* Вебхук LiveKit: проверка вошедших                                  */
+  /* ---------------------------------------------------------------- */
+
+  /** Вебхук, подписанный так же, как его подписывает LiveKit. */
+  async function webhook(roomId: string, identity: string, event = 'participant_joined') {
+    const body = JSON.stringify({
+      event,
+      room: { name: `room-${roomId}` },
+      participant: { identity },
+    });
+    const token = new AccessToken(process.env.LIVEKIT_API_KEY!, process.env.LIVEKIT_API_SECRET!);
+    token.sha256 = createHash('sha256').update(body).digest('base64');
+    // Supertest-запрос — thenable, и из async-функции вернулся бы уже ответ, без
+    // .expect. Поэтому статус проверяется здесь.
+    const response = await request(server())
+      .post('/api/livekit/webhook')
+      .set('Content-Type', 'application/webhook+json')
+      .set('Authorization', await token.toJwt())
+      .send(body);
+    expect(response.status).toBe(200);
+    return response;
+  }
+
+  it('выгоняет гостя, вошедшего старым токеном по отозванной ссылке', async () => {
+    // Отозвать выданный токен LiveKit нельзя: revokeTokenTs в LiveKit 1.13 не
+    // действует. Удалённый гость, сохранивший токен, входил обратно — теперь его
+    // выгоняет проверка по вебхуку.
+    const owner = await streamer();
+    const roomId = await createRoom(owner.token);
+    const invite = await createInvite(owner.token, roomId);
+    await request(server())
+      .delete(`/api/rooms/${roomId}/invites/${invite.id}`)
+      .set(auth(owner.token))
+      .expect(204);
+
+    const identity = guestIdentity(invite.id, 'stale');
+    media.join(roomId, { identity });
+    const response = await webhook(roomId, identity);
+
+    expect(response.body.status).toBe('removed');
+    expect(await media.listParticipants(roomId)).toEqual([]);
+  });
+
+  it('гостю с выключенным микрофоном урезает права и при входе старым токеном', async () => {
+    const owner = await streamer();
+    const roomId = await createRoom(owner.token);
+    const invite = await createInvite(owner.token, roomId);
+    const first = guestIdentity(invite.id, 'tab1');
+    media.join(roomId, { identity: first });
+    await request(server())
+      .post(`/api/rooms/${roomId}/participants/${encodeURIComponent(first)}/mute`)
+      .set(auth(owner.token))
+      .expect(204);
+
+    const stale = guestIdentity(invite.id, 'stale');
+    media.join(roomId, { identity: stale });
+    const response = await webhook(roomId, stale);
+
+    expect(response.body.status).toBe('restricted');
+    expect(media.sources.get(stale)).toEqual(['camera']);
+  });
+
+  it('пропускает законных участников и не трогает чужие события', async () => {
+    const owner = await streamer();
+    const roomId = await createRoom(owner.token);
+    const invite = await createInvite(owner.token, roomId);
+    const widgetId = await guestsWidget(owner.token, roomId);
+    const obs = await overlayToken(owner.token, widgetId);
+
+    expect((await webhook(roomId, guestIdentity(invite.id, 'tab1'))).body.status).toBe('allowed');
+    expect((await webhook(roomId, `host:${owner.userId}`)).body.status).toBe('allowed');
+    expect((await webhook(roomId, overlayIdentity(obs.id))).body.status).toBe('allowed');
+    expect(
+      (await webhook(roomId, guestIdentity(invite.id, 'tab1'), 'track_published')).body.status,
+    ).toBe('ignored');
+    expect(media.removed).toEqual([]);
+  });
+
+  it('выгоняет чужого стримера, отозванный оверлей и неизвестную идентичность', async () => {
+    const owner = await streamer();
+    const stranger = await streamer();
+    const roomId = await createRoom(owner.token);
+    const widgetId = await guestsWidget(owner.token, roomId);
+    const obs = await overlayToken(owner.token, widgetId);
+    await request(server())
+      .delete(`/api/widgets/${widgetId}/tokens/${obs.id}`)
+      .set(auth(owner.token))
+      .expect(204);
+
+    for (const identity of [`host:${stranger.userId}`, overlayIdentity(obs.id), 'кто-то']) {
+      expect((await webhook(roomId, identity)).body.status).toBe('removed');
+    }
+  });
+
+  it('отвергает вебхук без подписи или с подписью другого тела', async () => {
+    const owner = await streamer();
+    const roomId = await createRoom(owner.token);
+    const body = JSON.stringify({
+      event: 'participant_joined',
+      room: { name: `room-${roomId}` },
+      participant: { identity: 'кто-то' },
+    });
+
+    await request(server())
+      .post('/api/livekit/webhook')
+      .set('Content-Type', 'application/webhook+json')
+      .send(body)
+      .expect(401);
+
+    const token = new AccessToken(process.env.LIVEKIT_API_KEY!, process.env.LIVEKIT_API_SECRET!);
+    token.sha256 = createHash('sha256').update('другое тело').digest('base64');
+    await request(server())
+      .post('/api/livekit/webhook')
+      .set('Content-Type', 'application/webhook+json')
+      .set('Authorization', await token.toJwt())
+      .send(body)
+      .expect(401);
+    expect(media.removed).toEqual([]);
   });
 });

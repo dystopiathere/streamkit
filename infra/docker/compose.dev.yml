@@ -54,6 +54,19 @@ services:
     image: livekit/livekit-server:v1.13.6
     restart: unless-stopped
     command: ['--dev', '--bind', '0.0.0.0', '--node-ip', '127.0.0.1']
+    # Вебхуки о каждом входе — на API, который `pnpm dev` запускает на хосте.
+    # Без них отозванный гость входит обратно старым токеном: отозвать выданный
+    # токен LiveKit не умеет, выгоняет его наш API по событию participant_joined.
+    # host.docker.internal — адрес хоста из контейнера в Docker Desktop.
+    environment:
+      LIVEKIT_CONFIG: |
+        webhook:
+          api_key: devkey
+          urls:
+            - http://host.docker.internal:3000/api/livekit/webhook
+    extra_hosts:
+      # На Linux без Docker Desktop этого имени нет — задаём явно.
+      - 'host.docker.internal:host-gateway'
     ports:
       - '7880:7880' # сигнализация и серверный API
       - '7881:7881' # медиа по TCP — запасной путь, когда UDP закрыт

@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { AppModule } from './app.module';
+import { registerBodyParsers } from './common/http/body-parsers';
 import { AppConfig } from './config/app-config.service';
 import { RedisIoAdapter } from './modules/realtime/redis-io.adapter';
 
@@ -17,6 +18,7 @@ async function bootstrap(): Promise<void> {
     rawBody: true,
   });
 
+  registerBodyParsers(app);
   const config = app.get(AppConfig);
 
   app.useLogger(app.get(PinoLogger));

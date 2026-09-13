@@ -111,17 +111,44 @@ services:
   # быть не короче 32 символов — иначе LiveKit не стартует («secret is too
   # short»), а dev-ключ «secret» из .env.example здесь не подходит.
   #
+  # Конфигурация целиком в LIVEKIT_CONFIG, а не в файле: вебхуку нужен ключ по
+  # имени, а имя ключа приходит из окружения. Файл LiveKit не шаблонизирует, а
+  # файл и LIVEKIT_CONFIG одновременно не читает — берёт что-то одно.
+  #
   # --node-ip — адрес, который LiveKit сообщает браузерам для медиа. Локально
-  # это 127.0.0.1, в проде — публичный IP сервера. TLS для wss:// и TURN
-  # на домене — задача выкатки, см. infra/livekit/README.md.
+  # это 127.0.0.1, в проде — публичный IP сервера. Ошибка в нём не ломает вход:
+  # участник подключается, но остаётся без видео и звука, и ошибок нет. TLS для
+  # wss:// и TURN на домене — задача выкатки, см. infra/livekit/README.md.
   livekit:
     image: livekit/livekit-server:v1.13.6
     restart: unless-stopped
-    command: ['--config', '/etc/livekit.yaml', '--node-ip', '${LIVEKIT_NODE_IP:-127.0.0.1}']
+    command: ['--node-ip', '${LIVEKIT_NODE_IP:-127.0.0.1}']
     environment:
-      LIVEKIT_KEYS: '${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}'
-    volumes:
-      - ../livekit/livekit.yaml:/etc/livekit.yaml:ro
+      LIVEKIT_CONFIG: |
+        port: 7880
+        keys:
+          ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
+        rtc:
+          # TCP — запасной путь для гостей за строгим NAT, где UDP закрыт.
+          tcp_port: 7881
+          # Один UDP-порт на всё медиа: в группе безопасности облака одна строка,
+          # а не десять тысяч портов.
+          udp_port: 7882
+          use_external_ip: false
+        room:
+          # С запасом над MAX_GUESTS_PER_ROOM (8): стример, его вкладки и
+          # невидимые оверлеи из нескольких сцен OBS тоже участники.
+          max_participants: 20
+          # Гость, перезагрузивший вкладку, не пересоздаёт комнату с нуля.
+          empty_timeout: 300
+        # О каждом входе LiveKit сообщает API: выданный токен отозвать нельзя, и
+        # того, чья ссылка уже отозвана, выгоняет API по participant_joined.
+        webhook:
+          api_key: ${LIVEKIT_API_KEY}
+          urls:
+            - http://api:3000/api/livekit/webhook
+        logging:
+          level: info
     ports:
       - '7880:7880'
       - '7881:7881'

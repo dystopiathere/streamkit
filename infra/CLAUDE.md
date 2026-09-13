@@ -14,7 +14,7 @@
 | `docker/nginx.conf` | Отдача статики |
 | `docker/security-headers.conf` | Заголовки безопасности и CSP — подключаются в КАЖДЫЙ `location` со своим `add_header` |
 | `docker/permissions-*.conf` | Permissions-Policy по приложению: дашборду камера и микрофон, оверлею — нет |
-| `livekit/livekit.yaml` | Медиасервер комнат для `compose.yml`; что сделать перед выкаткой — `livekit/README.md` |
+| `livekit/README.md` | Медиасервер комнат: конфигурация в `LIVEKIT_CONFIG` внутри compose, что сделать перед выкаткой |
 
 ## Почему приложения не в dev-compose
 
