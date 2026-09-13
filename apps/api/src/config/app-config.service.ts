@@ -93,9 +93,14 @@ export class AppConfig {
     return this.value('YOUTUBE_DAILY_QUOTA');
   }
 
-  /** Адрес IRC-шлюза Twitch. undefined — берём стандартный. */
+  /**
+   * Адрес IRC-шлюза Twitch. undefined — берём стандартный.
+   *
+   * Через `get`, а не `value`: последний бросает на незаданном ключе, а эта
+   * переменная необязательна и в боевом окружении пуста всегда.
+   */
   get twitchIrcUrl(): string | undefined {
-    return this.value('TWITCH_IRC_URL');
+    return this.config.get<string>('TWITCH_IRC_URL');
   }
 
   /**
