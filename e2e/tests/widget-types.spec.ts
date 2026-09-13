@@ -24,8 +24,10 @@ async function registerStreamer(page: Page, prefix: string): Promise<void> {
 
   // Баннер согласия висит внизу поверх страницы и перехватывает клики по
   // кнопкам в нижней части формы. Выбираем «только необходимые» — тот же
-  // выбор, который сделал бы осторожный пользователь.
+  // выбор, который сделал бы осторожный пользователь. Появляется он после
+  // загрузки журнала согласий, а не сразу, поэтому его приходится ждать.
   const banner = page.getByRole('button', { name: 'Только необходимые' });
+  await banner.waitFor({ state: 'visible', timeout: 5_000 }).catch(() => undefined);
   if (await banner.isVisible()) await banner.click();
 }
 

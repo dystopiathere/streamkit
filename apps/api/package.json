@@ -12,7 +12,7 @@
     "test:int": "vitest run --config vitest.integration.config.ts",
     "db:seed": "tsx prisma/seed.ts",
     "prisma:generate": "prisma generate",
-    "dev:worker": "nest start --watch --entryFile worker",
+    "dev:worker": "nest start --watch --entryFile worker --path tsconfig.worker.json",
     "start:worker": "node dist/worker.js"
   },
   "dependencies": {
