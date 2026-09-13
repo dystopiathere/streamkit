@@ -115,6 +115,21 @@ export const envSchema = z.object({
    */
   TWITCH_IRC_URL: optionalValue(),
 
+  /**
+   * LiveKit — медиасервер приватных комнат. Все четыре необязательны: без них
+   * приложение стартует, а комнаты отвечают «не настроены».
+   *
+   * Адресов ДВА, и это разные значения. `LIVEKIT_URL` — откуда API ходит в
+   * серверный API LiveKit (внутри сети: `http://livekit:7880`). `LIVEKIT_PUBLIC_URL`
+   * — куда подключаются браузеры (`wss://rtc.example.ru`). Перепутать их легко, и
+   * проявится это только в собранном окружении: локально оба указывают на один
+   * localhost.
+   */
+  LIVEKIT_URL: optionalValue(),
+  LIVEKIT_PUBLIC_URL: optionalValue(),
+  LIVEKIT_API_KEY: optionalValue(),
+  LIVEKIT_API_SECRET: optionalValue(),
+
   THROTTLE_LIMIT: z.coerce.number().int().min(1).default(120),
   /** Лимит попыток логина в минуту на IP. Жёстче общего. */
   THROTTLE_AUTH_LIMIT: z.coerce.number().int().min(1).default(10),

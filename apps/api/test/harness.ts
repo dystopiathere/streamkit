@@ -1,5 +1,5 @@
 import type { INestApplication, ModuleMetadata } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
+import { Test, type TestingModuleBuilder } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import type { Redis } from 'ioredis';
 import { AppModule } from '../src/app.module';
@@ -26,13 +26,17 @@ export interface TestHarness {
  */
 export async function createHarness(
   extraImports: NonNullable<ModuleMetadata['imports']> = [],
+  configure: (builder: TestingModuleBuilder) => TestingModuleBuilder = (builder) => builder,
 ): Promise<TestHarness> {
   // Дополнительные модули нужны воркерным тестам: ChatModule в AppModule не
   // входит намеренно — в API он поднимал бы соединение с чатом на каждом
   // инстансе и рвал бы его при каждом деплое.
-  const moduleRef = await Test.createTestingModule({
-    imports: [AppModule, ...extraImports],
-  }).compile();
+  //
+  // `configure` подменяет внешние системы, которых в прогоне нет, — например,
+  // медиасервер комнат. Хранилища не подменяются никогда, см. выше.
+  const moduleRef = await configure(
+    Test.createTestingModule({ imports: [AppModule, ...extraImports] }),
+  ).compile();
 
   const app = moduleRef.createNestApplication({ rawBody: true });
   app.setGlobalPrefix('api');

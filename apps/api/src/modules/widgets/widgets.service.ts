@@ -11,6 +11,7 @@ import {
   type WidgetConfig,
   type WidgetState,
   type WidgetStateCommand,
+  type WidgetType,
 } from '@streamkit/contracts';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
 import { type BusMessage, RealtimeBus } from '../../common/bus/realtime-bus.service';
@@ -60,14 +61,17 @@ export class WidgetsService {
   }
 
   async create(userId: string, input: CreateWidgetInput): Promise<Widget> {
+    // Прогоняем через схему ещё раз: дефолты должны попасть в БД целиком,
+    // иначе старые записи будут отличаться от новых набором полей.
+    const config = configSchemaFor(input.type).parse(input.config);
+    await this.requireRoomReference(userId, input.type, config);
+
     const row = await this.prisma.widget.create({
       data: {
         userId,
         type: toPrismaWidgetType(input.type),
         name: input.name,
-        // Прогоняем через схему ещё раз: дефолты должны попасть в БД целиком,
-        // иначе старые записи будут отличаться от новых набором полей.
-        config: configSchemaFor(input.type).parse(input.config) as never,
+        config: config as never,
       },
     });
     return toContractWidget(row);
@@ -97,6 +101,7 @@ export class WidgetsService {
       // стал пятисоткой, хотя это обычная ошибка в поле формы.
       if (!merged.success) throw validationError(merged.error);
       config = merged.data;
+      await this.requireRoomReference(userId, toContractWidgetType(existing.type), merged.data);
     }
 
     const row = await this.prisma.widget.update({
@@ -299,6 +304,30 @@ export class WidgetsService {
   buildOverlayUrl(rawToken: string): string {
     const base = this.config.overlayBaseUrl.replace(/\/+$/, '');
     return `${base}/?token=${encodeURIComponent(rawToken)}`;
+  }
+
+  /**
+   * Виджет гостей может ссылаться только на СВОЮ комнату.
+   *
+   * Это главный рубеж приватности комнат. Схема видит лишь, что идентификатор
+   * похож на uuid, а ссылка OBS открывает видео той комнаты, что записана в
+   * виджете: без этой проверки достаточно было бы вписать чужой идентификатор в
+   * собственный виджет. Ответ — 404, как на любой чужой объект.
+   */
+  private async requireRoomReference(
+    userId: string,
+    type: WidgetType,
+    config: Record<string, unknown>,
+  ): Promise<void> {
+    if (type !== 'guests') return;
+    const roomId = config.roomId;
+    if (typeof roomId !== 'string' || roomId.length === 0) return;
+
+    const room = await this.prisma.room.findFirst({
+      where: { id: roomId, userId },
+      select: { id: true },
+    });
+    if (!room) throw new NotFoundException('Комната не найдена');
   }
 
   /**

@@ -47,6 +47,7 @@ export class MaintenanceScheduler {
         await this.maintenance.purgeExpiredTokens();
         await this.maintenance.purgeOldAuditLogs(AUDIT_RETENTION_DAYS);
         await this.maintenance.purgeOldSnapshots(SNAPSHOT_RETENTION_DAYS);
+        await this.maintenance.purgeOldGuestConsents(AUDIT_RETENTION_DAYS);
       });
     } catch (error) {
       // Упавшая уборка не должна ронять воркер: живые коннекторы важнее.

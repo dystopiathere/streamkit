@@ -65,4 +65,23 @@ export class MaintenanceService {
     }
     return result.count;
   }
+
+  /**
+   * Согласия гостей приватных комнат старше срока хранения аудита.
+   *
+   * Это доказательство согласия, и живёт оно столько же, сколько журнал
+   * безопасности: срок заявлен в политике обработки ПДн, и хранить отпечатки
+   * запросов посторонних людей дольше обещанного нельзя.
+   */
+  async purgeOldGuestConsents(retentionDays: number): Promise<number> {
+    const threshold = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+    const result = await this.prisma.guestConsent.deleteMany({
+      where: { grantedAt: { lt: threshold } },
+    });
+
+    if (result.count > 0) {
+      this.logger.log({ count: result.count, retentionDays }, 'Удалены старые согласия гостей');
+    }
+    return result.count;
+  }
 }

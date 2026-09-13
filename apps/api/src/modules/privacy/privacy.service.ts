@@ -107,40 +107,55 @@ export class PrivacyService {
    * пользователя, а учётные данные доступа.
    */
   async exportData(userId: string, context: AuditContext = {}): Promise<Record<string, unknown>> {
-    const [user, consents, widgets, events, sources, channels, snapshots] = await Promise.all([
-      this.prisma.user.findUniqueOrThrow({
-        where: { id: userId },
-        select: {
-          id: true,
-          email: true,
-          displayName: true,
-          status: true,
-          isTotpEnabled: true,
-          createdAt: true,
-        },
-      }),
-      this.prisma.consent.findMany({ where: { userId } }),
-      this.prisma.widget.findMany({ where: { userId } }),
-      this.prisma.alertEvent.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
-      this.prisma.donationSource.findMany({
-        where: { userId },
-        select: {
-          provider: true,
-          isEnabled: true,
-          disabledReason: true,
-          externalAccountId: true,
-          lastEventAt: true,
-        },
-      }),
-      this.prisma.channel.findMany({ where: { userId } }),
-      // Снимки метрик — тоже данные субъекта: это поминутная история его
-      // эфиров. Отдаём их вместе с каналами, иначе выгрузка формально неполная,
-      // а по сути стример не может забрать собственную аналитику при уходе.
-      this.prisma.analyticsSnapshot.findMany({
-        where: { channel: { userId } },
-        orderBy: { capturedAt: 'desc' },
-      }),
-    ]);
+    const [user, consents, widgets, events, sources, channels, snapshots, rooms] =
+      await Promise.all([
+        this.prisma.user.findUniqueOrThrow({
+          where: { id: userId },
+          select: {
+            id: true,
+            email: true,
+            displayName: true,
+            status: true,
+            isTotpEnabled: true,
+            createdAt: true,
+          },
+        }),
+        this.prisma.consent.findMany({ where: { userId } }),
+        this.prisma.widget.findMany({ where: { userId } }),
+        this.prisma.alertEvent.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
+        this.prisma.donationSource.findMany({
+          where: { userId },
+          select: {
+            provider: true,
+            isEnabled: true,
+            disabledReason: true,
+            externalAccountId: true,
+            lastEventAt: true,
+          },
+        }),
+        this.prisma.channel.findMany({ where: { userId } }),
+        // Снимки метрик — тоже данные субъекта: это поминутная история его
+        // эфиров. Отдаём их вместе с каналами, иначе выгрузка формально неполная,
+        // а по сути стример не может забрать собственную аналитику при уходе.
+        this.prisma.analyticsSnapshot.findMany({
+          where: { channel: { userId } },
+          orderBy: { capturedAt: 'desc' },
+        }),
+        // Комнаты и приглашения — без хэшей токенов: это учётные данные доступа, а
+        // не данные субъекта. Согласия гостей сюда тоже не входят — это данные
+        // третьих лиц, а не стримера, как и отпечатки их запросов.
+        this.prisma.room.findMany({
+          where: { userId },
+          select: {
+            id: true,
+            name: true,
+            createdAt: true,
+            invites: {
+              select: { id: true, label: true, createdAt: true, lastUsedAt: true, revokedAt: true },
+            },
+          },
+        }),
+      ]);
 
     await this.audit.record('privacy.data.exported', userId, context);
 
@@ -153,6 +168,7 @@ export class PrivacyService {
       events,
       donationSources: sources,
       channels,
+      rooms,
       // BigInt не сериализуется в JSON — приводим к строке, а не к number:
       // просмотры крупного канала в number ещё влезают, но правило «не терять
       // точность молча» дешевле соблюдать везде, чем помнить, где можно.
@@ -217,6 +233,11 @@ export class PrivacyService {
       // Каналы площадок: без учётных данных они бесполезны, а строка мешала бы
       // подключить тот же канал заново.
       await tx.channel.deleteMany({ where: { userId } });
+
+      // Комнаты удаляются вместе с приглашениями и согласиями гостей: ссылки
+      // обязаны перестать открывать комнату немедленно, а хранить согласия на
+      // участие в эфире, которого больше не будет, не на каком основании.
+      await tx.room.deleteMany({ where: { userId } });
 
       // Имена и сообщения донатеров — это ПДн третьих лиц, привязанные к аккаунту.
       await tx.alertEvent.updateMany({
