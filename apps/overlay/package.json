@@ -10,8 +10,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@livekit/components-react": "2.9.24",
     "@streamkit/contracts": "workspace:*",
     "@streamkit/ui": "workspace:*",
+    "livekit-client": "2.22.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "socket.io-client": "^4.8.3"

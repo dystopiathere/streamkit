@@ -10,6 +10,7 @@ import type { FieldValues, UseFormReturn } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui';
 import { useChannels } from '@/features/analytics/queries';
+import { useRooms } from '@/features/rooms/queries';
 import {
   CheckboxField,
   CheckboxGroupField,
@@ -345,11 +346,36 @@ function ChatFields({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.E
 function GuestsFields({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.Element {
   const { t } = useTranslation();
   const textLabels = useTextLabels();
+  const rooms = useRooms();
 
   return (
     <>
       <Card className="space-y-4">
         <h2 className="font-medium">{t('widgets.section.guests')}</h2>
+        {/* Предупреждение прямо у поля, а не в документации: ссылка OBS этого
+            виджета открывает видео приватной комнаты, и хранить её надо как пароль. */}
+        {/* Поле монтируется только со списком комнат. Выпадающий список,
+            зарегистрированный раньше своих вариантов, получает значение, которого
+            среди них нет, браузер сбрасывает его в пустое — и «Сохранить»
+            молча отвязывала бы виджет от комнаты. */}
+        {rooms.data ? (
+          <div>
+            <SelectField
+              form={form}
+              name="roomId"
+              label={t('widgets.field.room')}
+              options={[
+                { value: '', label: t('widgets.roomNotSelected') },
+                ...rooms.data.map((room) => ({ value: room.id, label: room.name })),
+              ]}
+            />
+            <p className="mt-1 text-xs text-muted">
+              {rooms.data.length === 0 ? t('widgets.hint.noRooms') : t('widgets.hint.room')}
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-muted">{t('common.loading')}</p>
+        )}
         <div className="grid gap-4 sm:grid-cols-2">
           <SelectField
             form={form}

@@ -19,10 +19,18 @@ import {
   exitAnimationName,
   useAlertQueue,
 } from '@streamkit/ui';
-import { useCallback, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
 import { readTokenFromLocation, useOverlayConnection } from './useOverlayConnection';
 
 const token = readTokenFromLocation();
+
+/**
+ * Гости комнаты — отдельным чанком: клиент WebRTC тяжелее всего остального
+ * оверлея, и сцене с оповещениями платить за него загрузкой незачем.
+ */
+const GuestsOverlay = lazy(async () => ({
+  default: (await import('./GuestsOverlay')).GuestsOverlay,
+}));
 
 /**
  * Сколько сообщений чата держим в памяти.
@@ -154,10 +162,14 @@ export function OverlayApp(): React.JSX.Element | null {
         <TopDonorsList config={widget.config} state={state?.kind === 'top-donors' ? state : null} />
       );
 
-    // Медиа гостей подключается отдельным шагом: пока виджет только создаётся и
-    // настраивается, в кадре ничего нет.
+    // Гости выводятся из комнаты LiveKit, а не из сокета оверлея: сокет
+    // сообщает только, какая комната выбрана, медиа идёт напрямую с медиасервера.
     case 'guests':
-      return null;
+      return token ? (
+        <Suspense fallback={null}>
+          <GuestsOverlay overlayToken={token} config={widget.config} />
+        </Suspense>
+      ) : null;
 
     // Сообщения приезжают отдельным потоком, а не состоянием: у чата нечего
     // пересчитывать, есть только лента, и накапливает её сам оверлей.
