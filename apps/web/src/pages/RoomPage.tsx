@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button, Card } from '@/components/ui';
+import { RoomsPaywall, useRoomsAccess } from '@/features/billing/RoomsPaywall';
 import { MicrophoneSettings } from '@/features/rooms/MicrophoneSettings';
 import { RoomInvites } from '@/features/rooms/RoomInvites';
 import { RoomStage } from '@/features/rooms/RoomStage';
@@ -39,6 +40,7 @@ export function RoomPage(): React.JSX.Element {
   const invites = useInvites(id);
   const [access, setAccess] = useState<RoomAccess | null>(null);
   const [withCamera, setWithCamera] = useState(false);
+  const roomsAccess = useRoomsAccess();
 
   // Обработчики стабильны не ради порядка: у `LiveKitRoom` они в зависимостях
   // эффекта подключения, и новая стрелка на каждый рендер повторяла бы вход.
@@ -52,7 +54,9 @@ export function RoomPage(): React.JSX.Element {
       toast.error(
         error instanceof ApiError && error.status === 503
           ? t('rooms.notConfigured')
-          : t('common.error'),
+          : error instanceof ApiError && error.status === 402
+            ? t('billing.paywall.title')
+            : t('common.error'),
       );
     }
   };
@@ -71,6 +75,8 @@ export function RoomPage(): React.JSX.Element {
         </Link>
         <h1 className="text-2xl font-semibold">{room.data?.name ?? t('common.loading')}</h1>
       </div>
+
+      <RoomsPaywall />
 
       <Card className="space-y-4">
         {access ? (
@@ -145,7 +151,7 @@ export function RoomPage(): React.JSX.Element {
                 <MicrophoneSettings />
               </div>
             </details>
-            <Button onClick={handleJoin} isLoading={hostAccess.isPending}>
+            <Button onClick={handleJoin} isLoading={hostAccess.isPending} disabled={!roomsAccess}>
               {t('rooms.lobby.join')}
             </Button>
           </div>

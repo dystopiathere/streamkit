@@ -17,7 +17,7 @@ import { expect, test, type Page } from '@playwright/test';
  */
 const videoWidth = (element: unknown): number => (element as { videoWidth: number }).videoWidth;
 
-const API_URL = 'http://localhost:3000';
+const API_URL = process.env.E2E_API_URL ?? 'http://localhost:3000';
 
 /** Регистрирует стримера и возвращает его access-токен — для проверок через API. */
 async function registerStreamer(page: Page): Promise<string> {
@@ -37,7 +37,35 @@ async function registerStreamer(page: Page): Promise<string> {
   const banner = page.getByRole('button', { name: 'Только необходимые' });
   await banner.waitFor({ state: 'visible', timeout: 5_000 }).catch(() => undefined);
   if (await banner.isVisible()) await banner.click();
-  return ((await (await registered).json()) as { accessToken: string }).accessToken;
+  const accessToken = ((await (await registered).json()) as { accessToken: string }).accessToken;
+  await subscribe(page, accessToken);
+  return accessToken;
+}
+
+/**
+ * Тариф «Про» стримеру — если оплата на сервере настроена: без него комнаты
+ * закрыты. Через API и страницу подтверждения фальшивой ЮKassa, а не через
+ * интерфейс: сам путь оплаты проверяет billing.spec.ts.
+ */
+async function subscribe(page: Page, accessToken: string): Promise<void> {
+  const headers = { Authorization: `Bearer ${accessToken}` };
+  const subscription = await page.request.get(`${API_URL}/api/billing/subscription`, { headers });
+  const view = (await subscription.json()) as { roomsAccess: boolean };
+  if (view.roomsAccess) return;
+
+  const checkout = await page.request.post(`${API_URL}/api/billing/checkout`, {
+    headers,
+    data: { period: 'month', acceptOffer: true },
+  });
+  expect(checkout.status()).toBe(201);
+  const { confirmationUrl } = (await checkout.json()) as { confirmationUrl: string };
+  await page.request.get(confirmationUrl, { maxRedirects: 0 });
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(`${API_URL}/api/billing/subscription`, { headers });
+      return ((await response.json()) as { roomsAccess: boolean }).roomsAccess;
+    })
+    .toBe(true);
 }
 
 /** Комната с одним приглашением. Стример остаётся на странице комнаты. */

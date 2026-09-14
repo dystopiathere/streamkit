@@ -57,6 +57,11 @@ export function useRevokeConsent() {
       // Отзыв в разделе «Приватность» — это ответ «только необходимые», а не
       // «спросите меня снова»: баннер после него появляться не должен.
       if (document === ANALYTICS_CONSENT) writeCookieChoice('necessary');
+      // Отзыв оферты выключает автопродление — подписка на экране «Тариф» тоже
+      // изменилась.
+      if (document === 'SUBSCRIPTION_OFFER') {
+        await client.invalidateQueries({ queryKey: ['billing'] });
+      }
       await client.invalidateQueries({ queryKey: consentKeys.all });
     },
   });

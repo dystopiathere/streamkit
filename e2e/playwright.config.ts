@@ -1,8 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const WEB_URL = 'http://localhost:5173';
-const OVERLAY_URL = 'http://localhost:5174';
-const API_URL = 'http://localhost:3000';
+// Адреса переопределяются окружением только для локального прогона рядом с
+// запущенным `pnpm dev`: тот уже занял стандартные порты, а сборка для прогона
+// должна знать свой адрес API. В CI — всегда значения по умолчанию.
+const WEB_URL = process.env.E2E_WEB_URL ?? 'http://localhost:5173';
+const OVERLAY_URL = process.env.E2E_OVERLAY_URL ?? 'http://localhost:5174';
+const API_URL = process.env.E2E_API_URL ?? 'http://localhost:3000';
+const FAKE_YOOKASSA_PORT = process.env.FAKE_YOOKASSA_PORT ?? '3099';
 
 /**
  * Сквозные тесты гоняются по СОБРАННЫМ приложениям, а не по dev-серверам.
@@ -60,6 +64,22 @@ export default defineConfig({
         LIVEKIT_PUBLIC_URL: process.env.LIVEKIT_PUBLIC_URL ?? 'ws://127.0.0.1:7880',
         LIVEKIT_API_KEY: process.env.LIVEKIT_API_KEY ?? 'devkey',
         LIVEKIT_API_SECRET: process.env.LIVEKIT_API_SECRET ?? 'secret',
+        // Оплата — через фальшивую ЮKassa ниже: настоящая требует доступа к
+        // api.yookassa.ru и уведомлений на публичный адрес.
+        WEB_BASE_URL: WEB_URL,
+        YOOKASSA_SHOP_ID: 'e2e-shop',
+        YOOKASSA_SECRET_KEY: 'e2e-secret',
+        YOOKASSA_API_URL: `http://127.0.0.1:${FAKE_YOOKASSA_PORT}/v3`,
+      },
+    },
+    {
+      command: 'node fake-yookassa.mjs',
+      url: `http://127.0.0.1:${FAKE_YOOKASSA_PORT}/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 10_000,
+      env: {
+        FAKE_YOOKASSA_PORT,
+        FAKE_YOOKASSA_WEBHOOK_URL: `${API_URL}/api/billing/yookassa/webhook`,
       },
     },
     {

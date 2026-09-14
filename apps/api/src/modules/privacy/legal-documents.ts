@@ -29,7 +29,8 @@ export interface LegalDocument {
 export const LEGAL_DOCUMENTS: Record<ConsentDocument, LegalDocument> = {
   TERMS: {
     document: 'TERMS',
-    version: '2026-09-11',
+    // Заполнен раздел об оплате: появился платный тариф.
+    version: '2026-09-14',
     title: 'Пользовательское соглашение',
     path: '/legal/terms',
     requiredOnRegister: true,

@@ -138,6 +138,9 @@ function JoinForm({
     if (!(join.error instanceof ApiError)) return join.error ? t('common.error') : null;
     if (join.error.status === 404) return t('join.invalid');
     if (join.error.status === 409) return t('join.full');
+    // Тариф стримера кончился. Гостю причина ни к чему — ему важно, что войти
+    // сейчас нельзя и дело не в ссылке.
+    if (join.error.status === 402) return t('join.ownerUnavailable');
     if (join.error.status === 503) return t('join.unavailable');
     return t('common.error');
   })();

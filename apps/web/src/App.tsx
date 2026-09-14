@@ -9,6 +9,7 @@ import { queryClient } from './lib/query-client';
 import { EventsPage } from './pages/EventsPage';
 import { LegalPage } from './pages/LegalPage';
 import { LoginPage } from './pages/LoginPage';
+import { BillingPage } from './pages/BillingPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { RoomsPage } from './pages/RoomsPage';
@@ -109,6 +110,7 @@ export function App(): React.JSX.Element {
                 }
               />
               <Route path="/sources" element={<SourcesPage />} />
+              <Route path="/billing" element={<BillingPage />} />
               <Route path="/privacy" element={<PrivacyPage />} />
             </Route>
           </Route>
