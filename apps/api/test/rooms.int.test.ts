@@ -28,6 +28,12 @@ class FakeMediaServer implements RoomMediaServer {
   /** Кого выгнали — в порядке удаления. */
   readonly removed: string[] = [];
   readonly sources = new Map<string, PublishSource[]>();
+  /** Участники, на которых медиасервер отвечает сбоем. */
+  readonly failing = new Set<string>();
+
+  private fail(identity: string): void {
+    if (this.failing.has(identity)) throw new Error(`медиасервер недоступен для ${identity}`);
+  }
 
   join(roomId: string, participant: Partial<RoomParticipant> & { identity: string }): void {
     const list = this.rooms.get(roomId) ?? [];
@@ -47,6 +53,7 @@ class FakeMediaServer implements RoomMediaServer {
   }
 
   async removeParticipant(roomId: string, identity: string): Promise<void> {
+    this.fail(identity);
     this.removed.push(identity);
     this.rooms.set(
       roomId,
@@ -55,6 +62,7 @@ class FakeMediaServer implements RoomMediaServer {
   }
 
   async muteTrack(_roomId: string, identity: string, trackSid: string): Promise<void> {
+    this.fail(identity);
     this.muted.push(`${identity}/${trackSid}`);
   }
 
@@ -63,6 +71,7 @@ class FakeMediaServer implements RoomMediaServer {
     identity: string,
     sources: PublishSource[],
   ): Promise<void> {
+    this.fail(identity);
     this.sources.set(identity, sources);
   }
 }
@@ -90,6 +99,7 @@ describe('Приватные комнаты (feature)', () => {
     media.muted.length = 0;
     media.removed.length = 0;
     media.sources.clear();
+    media.failing.clear();
   });
 
   const server = () => harness.app.getHttpServer();
@@ -248,9 +258,17 @@ describe('Приватные комнаты (feature)', () => {
     const owner = await streamer();
     const roomId = await createRoom(owner.token);
     const invite = await createInvite(owner.token, roomId);
-    for (let index = 0; index < MAX_GUESTS_PER_ROOM; index += 1) {
-      media.join(roomId, { identity: guestIdentity(invite.id, `g${index}`) });
+    const others: string[] = [];
+    for (let index = 0; index < MAX_GUESTS_PER_ROOM - 1; index += 1) {
+      const other = await createInvite(owner.token, roomId, `Гость ${index}`);
+      others.push(other.id);
+      media.join(roomId, { identity: guestIdentity(other.id, `g${index}`) });
     }
+    // Вторая вкладка того же гостя — всё ещё одно место: мест занято семь.
+    media.join(roomId, { identity: guestIdentity(others[0]!, 'second-tab') });
+    const eighth = await createInvite(owner.token, roomId, 'Восьмой');
+    await join(eighth.raw).expect(200);
+    media.join(roomId, { identity: guestIdentity(eighth.id, 'tab') });
     // Оверлей и стример мест гостей не занимают.
     media.join(roomId, { identity: `host:${owner.userId}` });
 
@@ -646,5 +664,129 @@ describe('Приватные комнаты (feature)', () => {
       .send(body)
       .expect(401);
     expect(media.removed).toEqual([]);
+  });
+  /* ---------------------------------------------------------------- */
+  /* Правки по обзору этапа                                             */
+  /* ---------------------------------------------------------------- */
+
+  it('отзыв ссылки OBS выгоняет уже подключённый оверлей из комнаты', async () => {
+    // Сокет оверлея гасился шиной, а подключение к LiveKit оставалось: держатель
+    // утёкшей ссылки, забравший токен LiveKit, смотрел гостей и после отзыва.
+    const owner = await streamer();
+    const roomId = await createRoom(owner.token);
+    const widgetId = await guestsWidget(owner.token, roomId);
+    const obs = await overlayToken(owner.token, widgetId);
+    media.join(roomId, { identity: overlayIdentity(obs.id) });
+
+    await request(server())
+      .delete(`/api/widgets/${widgetId}/tokens/${obs.id}`)
+      .set(auth(owner.token))
+      .expect(204);
+
+    expect(media.removed).toEqual([overlayIdentity(obs.id)]);
+  });
+
+  it('выключение, смена комнаты и удаление виджета выгоняют его оверлеи', async () => {
+    const owner = await streamer();
+    const first = await createRoom(owner.token, 'Первая');
+    const second = await createRoom(owner.token, 'Вторая');
+
+    const disabled = await guestsWidget(owner.token, first);
+    const disabledObs = await overlayToken(owner.token, disabled);
+    await request(server())
+      .patch(`/api/widgets/${disabled}`)
+      .set(auth(owner.token))
+      .send({ isEnabled: false })
+      .expect(200);
+    expect(media.removed).toEqual([overlayIdentity(disabledObs.id)]);
+
+    const moved = await guestsWidget(owner.token, first);
+    const movedObs = await overlayToken(owner.token, moved);
+    // Правка без смены комнаты никого не трогает.
+    await request(server())
+      .patch(`/api/widgets/${moved}`)
+      .set(auth(owner.token))
+      .send({ config: { gap: 16 } })
+      .expect(200);
+    expect(media.removed).toHaveLength(1);
+    await request(server())
+      .patch(`/api/widgets/${moved}`)
+      .set(auth(owner.token))
+      .send({ config: { roomId: second } })
+      .expect(200);
+    expect(media.removed.at(-1)).toBe(overlayIdentity(movedObs.id));
+
+    const deleted = await guestsWidget(owner.token, first);
+    const deletedObs = await overlayToken(owner.token, deleted);
+    await request(server()).delete(`/api/widgets/${deleted}`).set(auth(owner.token)).expect(204);
+    expect(media.removed.at(-1)).toBe(overlayIdentity(deletedObs.id));
+  });
+
+  it('сбой проверки входа — ошибка, чтобы LiveKit повторил вебхук', async () => {
+    // Раньше отвечали 200 в любом случае, и отозванный гость, вошедший в секунду
+    // сбоя, оставался в комнате: LiveKit повторяет только неудачные вебхуки.
+    const owner = await streamer();
+    const roomId = await createRoom(owner.token);
+    const invite = await createInvite(owner.token, roomId);
+    await request(server())
+      .delete(`/api/rooms/${roomId}/invites/${invite.id}`)
+      .set(auth(owner.token))
+      .expect(204);
+    const identity = guestIdentity(invite.id, 'stale');
+    media.join(roomId, { identity });
+    media.failing.add(identity);
+
+    const body = JSON.stringify({
+      event: 'participant_joined',
+      room: { name: `room-${roomId}` },
+      participant: { identity },
+    });
+    const token = new AccessToken(process.env.LIVEKIT_API_KEY!, process.env.LIVEKIT_API_SECRET!);
+    token.sha256 = createHash('sha256').update(body).digest('base64');
+    await request(server())
+      .post('/api/livekit/webhook')
+      .set('Content-Type', 'application/webhook+json')
+      .set('Authorization', await token.toJwt())
+      .send(body)
+      .expect(503);
+
+    // Повтор после восстановления выгоняет.
+    media.failing.clear();
+    expect((await webhook(roomId, identity)).body.status).toBe('removed');
+  });
+
+  it('запрет микрофона доходит до всех вкладок, даже если одна из них сбоит', async () => {
+    const owner = await streamer();
+    const roomId = await createRoom(owner.token);
+    const invite = await createInvite(owner.token, roomId);
+    const gone = guestIdentity(invite.id, 'gone');
+    const live = guestIdentity(invite.id, 'live');
+    media.join(roomId, { identity: gone });
+    media.join(roomId, { identity: live });
+    media.failing.add(gone);
+
+    await request(server())
+      .post(`/api/rooms/${roomId}/participants/${encodeURIComponent(live)}/mute`)
+      .set(auth(owner.token))
+      .expect(500);
+
+    expect(media.sources.get(live)).toEqual(['camera']);
+  });
+
+  it('гость, перезагрузивший вкладку в полной комнате, возвращается на своё место', async () => {
+    const owner = await streamer();
+    const roomId = await createRoom(owner.token);
+    const invite = await createInvite(owner.token, roomId);
+    // Прежняя вкладка этого гостя ещё числится в комнате.
+    media.join(roomId, { identity: guestIdentity(invite.id, 'old-tab') });
+    for (let index = 1; index < MAX_GUESTS_PER_ROOM; index += 1) {
+      const other = await createInvite(owner.token, roomId, `Гость ${index}`);
+      media.join(roomId, { identity: guestIdentity(other.id, 'tab') });
+    }
+
+    await join(invite.raw).expect(200);
+    // А новому человеку места нет.
+    const stranger = await createInvite(owner.token, roomId, 'Новенький');
+    await join(stranger.raw).expect(409);
   });
 });

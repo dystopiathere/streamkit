@@ -348,6 +348,10 @@ function GuestsFields({ form }: { form: UseFormReturn<FieldValues> }): React.JSX
   const textLabels = useTextLabels();
   const rooms = useRooms();
   const roomId = String(form.watch('roomId') ?? '');
+  // Удаление комнаты не трогает виджеты, которые на неё ссылаются: в конфиге
+  // остаётся идентификатор, которого среди комнат уже нет. Такой виджет так же
+  // молча пуст в OBS, как виджет без комнаты, — и предупреждать надо так же.
+  const roomDeleted = Boolean(roomId) && !rooms.data?.some((room) => room.id === roomId);
 
   return (
     <>
@@ -377,12 +381,12 @@ function GuestsFields({ form }: { form: UseFormReturn<FieldValues> }): React.JSX
                 остаётся пустым, а предпросмотр рядом показывает примеры гостей.
                 Снаружи это неотличимо от поломки — так и было в первой ручной
                 проверке, — поэтому пустое поле подсвечено прямо здесь. */}
-            {!roomId ? (
+            {!roomId || roomDeleted ? (
               <p
                 role="alert"
                 className="mt-2 rounded-lg border border-danger/40 bg-danger/10 p-2 text-sm"
               >
-                {t('widgets.hint.roomMissing')}
+                {t(roomDeleted ? 'widgets.hint.roomDeleted' : 'widgets.hint.roomMissing')}
               </p>
             ) : null}
           </div>

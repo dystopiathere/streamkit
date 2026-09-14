@@ -300,6 +300,22 @@ test('виджет, созданный со страницы комнаты, с�
   await page.getByRole('link', { name: 'Комнаты' }).click();
   await page.getByRole('link', { name: 'Открыть' }).click();
   await expect(page.getByRole('listitem').filter({ hasText: 'Вечерний эфир' })).toBeVisible();
+
+  // Удалённая комната виджет не отвязывает: в конфиге остаётся её идентификатор.
+  // Редактор обязан сказать об этом так же, как о невыбранной комнате.
+  const widgetLink = page
+    .getByRole('listitem')
+    .filter({ hasText: 'Вечерний эфир' })
+    .getByRole('link');
+  const widgetPath = await widgetLink.getAttribute('href');
+  page.on('dialog', (dialog) => void dialog.accept());
+  await page.getByRole('link', { name: 'Комнаты' }).click();
+  await page.getByRole('button', { name: 'Удалить' }).click();
+  await expect(page.getByRole('link', { name: 'Открыть' })).toHaveCount(0);
+  await page.goto(widgetPath!);
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Комната этого виджета удалена' }),
+  ).toBeVisible();
 });
 
 test('гость, удалённый с отзывом ссылки, не входит обратно сохранённым токеном', async ({

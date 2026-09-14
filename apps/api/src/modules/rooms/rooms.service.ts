@@ -197,8 +197,18 @@ export class RoomsService {
     if (!invite || invite.revokedAt) throw new NotFoundException('Приглашение недействительно');
 
     const participants = await this.media.listParticipants(invite.roomId);
-    const guests = participants.filter((participant) => participant.role === 'guest');
-    if (guests.length >= MAX_GUESTS_PER_ROOM) {
+    // Место занимает ссылка, а не вкладка, и своя ссылка входящему места не
+    // отнимает. Гость, перезагрузивший вкладку, ещё числится в комнате прежней
+    // идентичностью, пока LiveKit не заметит уход, — и в полной комнате получал
+    // «нет мест» на собственное место. Вкладок одной ссылки больше одной не
+    // бывает надолго, а общий потолок участников держит сам LiveKit.
+    const seats = new Set(
+      participants
+        .filter((participant) => participant.role === 'guest')
+        .map((participant) => parseParticipantIdentity(participant.identity)?.id)
+        .filter((inviteId) => inviteId !== invite.id),
+    );
+    if (seats.size >= MAX_GUESTS_PER_ROOM) {
       throw new ConflictException('В комнате нет свободных мест');
     }
 
@@ -342,22 +352,29 @@ export class RoomsService {
         participant.role === 'guest' &&
         parseParticipantIdentity(participant.identity)?.id === inviteId,
     );
-    for (const tab of tabs) {
-      if (blocked) {
-        // Сначала тишина, потом права: смена прав доходит до клиента не мгновенно,
-        // а звук в эфире должен пропасть сразу после нажатия.
-        for (const track of tab.tracks.filter(
-          (candidate) => candidate.kind === 'audio' && !candidate.muted,
-        )) {
-          await this.media.muteTrack(roomId, tab.identity, track.sid);
+    // Вкладки обрабатываются независимо: сбой на одной не должен оставить
+    // микрофон остальным. Раньше цикл обрывался на первой же ошибке — чаще всего
+    // на вкладке, которую гость только что перезагрузил.
+    const results = await Promise.allSettled(
+      tabs.map(async (tab) => {
+        if (blocked) {
+          // Сначала тишина, потом права: смена прав доходит до клиента не
+          // мгновенно, а звук в эфире должен пропасть сразу после нажатия.
+          for (const track of tab.tracks.filter(
+            (candidate) => candidate.kind === 'audio' && !candidate.muted,
+          )) {
+            await this.media.muteTrack(roomId, tab.identity, track.sid);
+          }
         }
-      }
-      await this.media.setPublishSources(
-        roomId,
-        tab.identity,
-        blocked ? ['camera'] : ['camera', 'microphone'],
-      );
-    }
+        await this.media.setPublishSources(
+          roomId,
+          tab.identity,
+          blocked ? ['camera'] : ['camera', 'microphone'],
+        );
+      }),
+    );
+    const failed = results.find((result) => result.status === 'rejected');
+    if (failed) throw failed.reason;
   }
 
   /**

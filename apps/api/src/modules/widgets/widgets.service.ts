@@ -1,10 +1,11 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Widget as PrismaWidget } from '@prisma/client';
 import {
   type AlertWidgetConfig,
   configSchemaFor,
   type CreatedOverlayToken,
   type CreateWidgetInput,
+  overlayIdentity,
   type OverlayTokenView,
   type UpdateWidgetInput,
   type Widget,
@@ -19,6 +20,7 @@ import { CryptoService } from '../../common/crypto/crypto.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { validationError } from '../../common/pipes/zod-validation.pipe';
 import { AppConfig } from '../../config/app-config.service';
+import { ROOM_MEDIA_SERVER, type RoomMediaServer } from '../rooms/livekit.service';
 import { WidgetStateService } from './widget-state.service';
 import {
   parseWidgetConfig,
@@ -39,6 +41,8 @@ export interface ResolvedOverlayToken {
 
 @Injectable()
 export class WidgetsService {
+  private readonly logger = new Logger(WidgetsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
@@ -46,6 +50,7 @@ export class WidgetsService {
     private readonly bus: RealtimeBus,
     private readonly config: AppConfig,
     private readonly state: WidgetStateService,
+    @Inject(ROOM_MEDIA_SERVER) private readonly media: RoomMediaServer,
   ) {}
 
   async list(userId: string): Promise<Widget[]> {
@@ -113,6 +118,14 @@ export class WidgetsService {
       },
     });
 
+    // Выключенный виджет гостей или виджет, переведённый на другую комнату, не
+    // должен оставлять свои оверлеи в прежней комнате: сокет оверлея шина
+    // переключит, а подключение к LiveKit живёт само по себе.
+    const before = guestsRoomOf(existing);
+    if (before && (!row.isEnabled || guestsRoomOf(row) !== before)) {
+      await this.evictOverlays(before, await this.activeTokenIds(widgetId));
+    }
+
     const result = toContractWidget(row);
     // Открытый в OBS оверлей подхватит новые настройки без перезагрузки сцены.
     await this.bus.publish({
@@ -133,22 +146,17 @@ export class WidgetsService {
   }
 
   async remove(userId: string, widgetId: string): Promise<void> {
-    await this.requireOwned(userId, widgetId);
-    const tokens = await this.prisma.overlayToken.findMany({
-      where: { widgetId, revokedAt: null },
-      select: { id: true },
-    });
+    const widget = await this.requireOwned(userId, widgetId);
+    const tokens = await this.activeTokenIds(widgetId);
 
     // Токены оверлеев удалятся каскадом — открытые вкладки OBS потеряют доступ.
     await this.prisma.widget.delete({ where: { id: widgetId } });
 
-    for (const token of tokens) {
-      await this.bus.publish({
-        kind: 'overlay-revoked',
-        tokenId: token.id,
-        reason: 'widget-deleted',
-      });
+    for (const tokenId of tokens) {
+      await this.bus.publish({ kind: 'overlay-revoked', tokenId, reason: 'widget-deleted' });
     }
+    const room = guestsRoomOf(widget);
+    if (room) await this.evictOverlays(room, tokens);
   }
 
   /* ---------------------------------------------------------------- */
@@ -237,7 +245,7 @@ export class WidgetsService {
     tokenId: string,
     context: AuditContext = {},
   ): Promise<void> {
-    await this.requireOwned(userId, widgetId);
+    const widget = await this.requireOwned(userId, widgetId);
     const updated = await this.prisma.overlayToken.updateMany({
       where: { id: tokenId, widgetId, revokedAt: null },
       data: { revokedAt: new Date() },
@@ -253,6 +261,13 @@ export class WidgetsService {
     // Живое соединение по отозванному токену должно оборваться сразу, а не
     // дожить до следующего переподключения OBS.
     await this.bus.publish({ kind: 'overlay-revoked', tokenId, reason: 'token-revoked' });
+
+    // Сокет — не единственное соединение оверлея гостей. Держатель утёкшей
+    // ссылки мог забрать токен LiveKit и подключиться к комнате сам, в обход
+    // страницы оверлея, и LiveKit продлевал бы ему токен сколько угодно: вебхук
+    // проверяет только вход. Отзыв обязан выгнать и такого подписчика.
+    const room = guestsRoomOf(widget);
+    if (room) await this.evictOverlays(room, [tokenId]);
   }
 
   /** Проверка токена при подключении overlay-сокета. */
@@ -334,6 +349,29 @@ export class WidgetsService {
    * Владение проверяется в каждом методе отдельно. Чужой виджет отдаёт 404,
    * а не 403: иначе по коду ответа можно перебирать существующие id.
    */
+  private async activeTokenIds(widgetId: string): Promise<string[]> {
+    const tokens = await this.prisma.overlayToken.findMany({
+      where: { widgetId, revokedAt: null },
+      select: { id: true },
+    });
+    return tokens.map((token) => token.id);
+  }
+
+  /**
+   * Выгнать оверлеи из комнаты. Сбой медиасервера не отменяет отзыв: запись в
+   * БД уже сделана, и повторный вход не пройдёт проверку по вебхуку. Но молча
+   * его не глотаем — это подписчик, который продолжает смотреть гостей.
+   */
+  private async evictOverlays(roomId: string, tokenIds: string[]): Promise<void> {
+    await Promise.all(
+      tokenIds.map((tokenId) =>
+        this.media.removeParticipant(roomId, overlayIdentity(tokenId)).catch((error: unknown) => {
+          this.logger.error({ err: error, roomId, tokenId }, 'Оверлей не выгнан из комнаты');
+        }),
+      ),
+    );
+  }
+
   private async requireOwned(userId: string, widgetId: string): Promise<PrismaWidget> {
     const widget = await this.prisma.widget.findFirst({ where: { id: widgetId, userId } });
     if (!widget) {
@@ -363,4 +401,11 @@ function mergeConfig(current: object, patch: Record<string, unknown>): object {
     }
   }
   return merged;
+}
+
+/** Комната виджета гостей, либо null — у виджета другого типа или без комнаты. */
+function guestsRoomOf(widget: PrismaWidget): string | null {
+  if (widget.type !== 'GUESTS') return null;
+  const roomId = (widget.config as { roomId?: unknown }).roomId;
+  return typeof roomId === 'string' && roomId.length > 0 ? roomId : null;
 }
