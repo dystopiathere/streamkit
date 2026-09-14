@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button, Card } from '@/components/ui';
+import { MicrophoneSettings } from '@/features/rooms/MicrophoneSettings';
 import { RoomInvites } from '@/features/rooms/RoomInvites';
 import { RoomStage } from '@/features/rooms/RoomStage';
 import { RoomWidgets } from '@/features/rooms/RoomWidgets';
@@ -78,9 +79,10 @@ export function RoomPage(): React.JSX.Element {
             token={access.token}
             connect
             options={ROOM_OPTIONS}
-            audio
-            // Камеру публикует `useCamera` внутри сцены, а не LiveKitRoom: так она
-            // выключается и включается без повторного открытия устройства.
+            // Микрофон и камеру публикует сцена, а не LiveKitRoom: камера так
+            // включается без повторного открытия устройства, а микрофон — с
+            // выбранной обработкой голоса и качеством передачи.
+            audio={false}
             video={false}
             onDisconnected={handleDisconnected}
             onError={handleRoomError}
@@ -137,6 +139,12 @@ export function RoomPage(): React.JSX.Element {
               />
               {t('rooms.lobby.withCamera')}
             </label>
+            <details className="max-w-2xl rounded-lg border border-border p-3">
+              <summary className="cursor-pointer text-sm">{t('rooms.microphone.title')}</summary>
+              <div className="mt-3">
+                <MicrophoneSettings />
+              </div>
+            </details>
             <Button onClick={handleJoin} isLoading={hostAccess.isPending}>
               {t('rooms.lobby.join')}
             </Button>

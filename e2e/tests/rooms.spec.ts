@@ -359,3 +359,124 @@ test('гость, удалённый с отзывом ссылки, не вхо
 
   await guestContext.close();
 });
+
+test('обработка голоса доходит до захвата микрофона и не открывает выключенный микрофон', async ({
+  page,
+  browser,
+  request,
+}) => {
+  // Браузер по умолчанию давит шум, эхо и выравнивает громкость — хорошему
+  // микрофону это вредит. Проверяется не интерфейс, а то, с какими параметрами
+  // страница реально открыла микрофон, и что увидел сервер.
+  test.setTimeout(120_000);
+  const accessToken = await registerStreamer(page);
+  const { roomId, inviteUrl } = await roomWithInvite(page);
+  await page.getByRole('button', { name: 'Войти в комнату' }).click();
+
+  type Capture = {
+    echoCancellation?: boolean;
+    noiseSuppression?: boolean;
+    autoGainControl?: boolean;
+  };
+  const guestContext = await browser.newContext({ permissions: ['camera', 'microphone'] });
+  await guestContext.addInitScript(() => {
+    type Track = { kind: string; getSettings: () => Record<string, unknown> };
+    const scope = globalThis as unknown as {
+      audioCaptures: Array<Record<string, unknown>>;
+      navigator: {
+        mediaDevices: {
+          getUserMedia: (c?: { audio?: unknown }) => Promise<{ getTracks: () => Track[] }>;
+        };
+      };
+    };
+    const devices = scope.navigator.mediaDevices;
+    const original = devices.getUserMedia.bind(devices);
+    scope.audioCaptures = [];
+    devices.getUserMedia = async (constraints) => {
+      const stream = await original(constraints);
+      for (const track of stream.getTracks()) {
+        if (track.kind === 'audio') scope.audioCaptures.push(track.getSettings());
+      }
+      return stream;
+    };
+  });
+  const guest = await guestContext.newPage();
+  const captures = (): Promise<Capture[]> =>
+    guest.evaluate(() => (globalThis as unknown as { audioCaptures: Capture[] }).audioCaptures);
+  const lastCapture = async (): Promise<Capture | undefined> => (await captures()).at(-1);
+
+  const guestAudio = async (): Promise<Array<{ sid: string; muted: boolean }>> => {
+    const response = await request.get(`${API_URL}/api/rooms/${roomId}/participants`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const participants = (await response.json()) as Array<{
+      role: string;
+      tracks: Array<{ sid: string; kind: string; muted: boolean }>;
+    }>;
+    return participants
+      .filter((participant) => participant.role === 'guest')
+      .flatMap((participant) => participant.tracks)
+      .filter((track) => track.kind === 'audio');
+  };
+
+  // Уровень выбирается до входа и действует на первую же публикацию.
+  await guest.goto(inviteUrl);
+  await guest.locator('summary', { hasText: 'Обработка голоса' }).click();
+  await guest.getByRole('radio', { name: /^Без обработки/ }).check();
+  await guest.getByLabel('Ваше имя').fill('Вася');
+  await guest.getByLabel(/Я принимаю/).check();
+  await guest.getByRole('button', { name: 'Войти' }).click();
+  await expect(guest.getByRole('button', { name: /Микрофон: вкл/ })).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect.poll(async () => (await guestAudio()).length, { timeout: 15_000 }).toBe(1);
+  expect(await lastCapture()).toMatchObject({
+    echoCancellation: false,
+    noiseSuppression: false,
+    autoGainControl: false,
+  });
+
+  // Смена качества передачи — новая публикация, звук идёт дальше.
+  await guest.getByRole('button', { name: 'Обработка голоса' }).click();
+  const firstSid = (await guestAudio())[0]!.sid;
+  await guest.getByRole('radio', { name: /^Полная/ }).check();
+  await expect
+    .poll(async () => (await guestAudio())[0]?.sid, { timeout: 15_000 })
+    .not.toBe(firstSid);
+  expect((await guestAudio())[0]!.muted).toBe(false);
+  expect(await lastCapture()).toMatchObject({
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+  });
+
+  // Смена только обработки — перезахват в той же публикации: у собеседников
+  // звук не пропадает.
+  const publishedSid = (await guestAudio())[0]!.sid;
+  const capturedBefore = (await captures()).length;
+  await guest.getByRole('checkbox', { name: /^Автоусиление/ }).uncheck();
+  await expect
+    .poll(async () => (await captures()).length, { timeout: 10_000 })
+    .toBe(capturedBefore + 1);
+  expect(await lastCapture()).toMatchObject({ autoGainControl: false, echoCancellation: true });
+  expect((await guestAudio()).map((track) => track.sid)).toEqual([publishedSid]);
+  await expect(guest.getByText('Своя настройка', { exact: false })).toBeVisible();
+
+  // Выключенный микрофон смена качества не открывает: дорожка снимается и ждёт
+  // кнопки, а не публикуется заново на миг.
+  await guest.getByRole('button', { name: /Микрофон: вкл/ }).click();
+  await expect.poll(async () => (await guestAudio())[0]?.muted, { timeout: 10_000 }).toBe(true);
+  await guest.getByRole('radio', { name: /^Без обработки/ }).check();
+  await expect.poll(async () => (await guestAudio()).length, { timeout: 10_000 }).toBe(0);
+  await expect(guest.getByRole('button', { name: /Микрофон: выкл/ })).toBeVisible();
+
+  await guest.getByRole('button', { name: /Микрофон: выкл/ }).click();
+  await expect
+    .poll(async () => (await guestAudio()).filter((track) => !track.muted).length, {
+      timeout: 10_000,
+    })
+    .toBe(1);
+  expect(await lastCapture()).toMatchObject({ echoCancellation: false, noiseSuppression: false });
+
+  await guestContext.close();
+});

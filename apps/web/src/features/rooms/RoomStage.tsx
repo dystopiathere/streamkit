@@ -1,17 +1,18 @@
 import {
   isTrackReference,
   RoomAudioRenderer,
-  useLocalParticipant,
   useLocalParticipantPermissions,
   useTracks,
   VideoTrack,
 } from '@livekit/components-react';
 import { parseParticipantIdentity } from '@streamkit/contracts';
 import { type Participant, Track } from 'livekit-client';
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui';
+import { MicrophoneSettings } from './MicrophoneSettings';
 import { useCamera } from './useCamera';
+import { useMicrophone } from './useMicrophone';
 
 /**
  * Участники комнаты плитками и свои кнопки микрофона и камеры.
@@ -29,10 +30,12 @@ export function RoomStage({
   onLeave,
   cameraOnJoin,
   cameraDeviceId,
+  microphoneDeviceId,
 }: {
   /** Включить камеру сразу после входа. */
   cameraOnJoin: boolean;
   cameraDeviceId?: string;
+  microphoneDeviceId?: string;
   /** Кнопки под плиткой участника, например «Удалить» у стримера. */
   actions?: (participant: Participant) => ReactNode;
   onLeave: () => void;
@@ -43,8 +46,8 @@ export function RoomStage({
   const cameras = useTracks([{ source: Track.Source.Camera, withPlaceholder: true }], {
     onlySubscribed: false,
   });
-  const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
   const camera = useCamera({ onJoin: cameraOnJoin, deviceId: cameraDeviceId });
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Право на микрофон приходит с сервера и меняется на лету, когда стример
   // выключает гостю микрофон. Кнопку при этом не просто красим: без права
@@ -53,6 +56,15 @@ export function RoomStage({
   const microphoneAllowed =
     !permissions?.canPublishSources.length ||
     permissions.canPublishSources.map(Track.sourceFromProto).includes(Track.Source.Microphone);
+
+  // Микрофон публикуется при входе всегда, когда есть право: и у стримера, и у
+  // гостя. Без права — нет: сервер откажет, и гость увидел бы ошибку вместо
+  // объяснения на кнопке.
+  const microphone = useMicrophone({
+    onJoin: true,
+    allowed: microphoneAllowed,
+    deviceId: microphoneDeviceId,
+  });
 
   const others = cameras.filter((ref) => !ref.participant.isLocal);
 
@@ -106,12 +118,12 @@ export function RoomStage({
       <div className="flex flex-wrap gap-2">
         {microphoneAllowed ? (
           <Button
-            variant={isMicrophoneEnabled ? 'secondary' : 'ghost'}
-            aria-pressed={isMicrophoneEnabled}
-            onClick={() => void localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)}
+            variant={microphone.enabled ? 'secondary' : 'ghost'}
+            aria-pressed={microphone.enabled}
+            onClick={microphone.toggle}
           >
             {t('rooms.stage.mic')}:{' '}
-            {isMicrophoneEnabled ? t('rooms.stage.on') : t('rooms.stage.off')}
+            {microphone.enabled ? t('rooms.stage.on') : t('rooms.stage.off')}
           </Button>
         ) : (
           <Button variant="ghost" disabled>
@@ -126,11 +138,27 @@ export function RoomStage({
         >
           {t('rooms.stage.camera')}: {camera.enabled ? t('rooms.stage.on') : t('rooms.stage.off')}
         </Button>
+        <Button
+          variant="ghost"
+          aria-expanded={settingsOpen}
+          onClick={() => setSettingsOpen((open) => !open)}
+        >
+          {t('rooms.microphone.title')}
+        </Button>
         <Button variant="ghost" onClick={onLeave}>
           {t('rooms.stage.leave')}
         </Button>
       </div>
 
+      {settingsOpen ? (
+        <div className="rounded-lg border border-border p-3">
+          <MicrophoneSettings />
+        </div>
+      ) : null}
+
+      {microphone.failed ? (
+        <p className="text-sm text-danger">{t('rooms.stage.microphoneFailed')}</p>
+      ) : null}
       {camera.failed ? (
         <p className="text-sm text-danger">{t('rooms.stage.cameraFailed')}</p>
       ) : null}

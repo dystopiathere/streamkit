@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Button, Card, Input, Label } from '@/components/ui';
+import { MicrophoneSettings } from '@/features/rooms/MicrophoneSettings';
 import { RoomStage } from '@/features/rooms/RoomStage';
 import { ROOM_OPTIONS } from '@/features/rooms/room-options';
 import { useGuestJoin } from '@/features/rooms/queries';
@@ -32,12 +33,7 @@ export function JoinPage(): React.JSX.Element {
   // запись в журнал.
   const [name, setName] = useState('');
 
-  // Стабильные опции и обработчик: `LiveKitRoom` держит их в зависимостях
-  // эффектов, и новый объект на каждый рендер заново включал бы камеру.
-  const audio = useMemo(
-    () => (devices.audio ? { deviceId: devices.audio } : true),
-    [devices.audio],
-  );
+  // Стабильный обработчик: `LiveKitRoom` держит его в зависимостях эффектов.
   const handleDisconnected = useCallback((reason?: DisconnectReason) => {
     setSession(null);
     setEnded(
@@ -66,12 +62,10 @@ export function JoinPage(): React.JSX.Element {
             token={session.token}
             connect
             options={ROOM_OPTIONS}
-            // Микрофон публикует сам LiveKitRoom, камеру — `useCamera` внутри
-            // сцены: так она выключается и включается без повторного открытия
-            // устройства. Если стример выключил гостю микрофон, публиковать его
-            // при входе не пытаемся: сервер откажет, и гость увидит ошибку
-            // вместо объяснения.
-            audio={session.microphoneAllowed ? audio : false}
+            // Микрофон и камеру публикует сцена, а не LiveKitRoom: камера так
+            // включается без повторного открытия устройства, а микрофон — с
+            // выбранной гостем обработкой голоса и качеством передачи.
+            audio={false}
             video={false}
             onDisconnected={handleDisconnected}
           >
@@ -79,6 +73,7 @@ export function JoinPage(): React.JSX.Element {
               onLeave={() => setSession(null)}
               cameraOnJoin
               cameraDeviceId={devices.video}
+              microphoneDeviceId={devices.audio}
             />
           </LiveKitRoom>
         </Card>
@@ -205,6 +200,13 @@ function JoinForm({
             empty={t('join.noDevice')}
             select={microphones}
           />
+
+          <details className="rounded-lg border border-border p-3">
+            <summary className="cursor-pointer text-sm">{t('rooms.microphone.title')}</summary>
+            <div className="mt-3">
+              <MicrophoneSettings />
+            </div>
+          </details>
 
           <label className="flex items-start gap-2 text-sm" htmlFor="guest-terms">
             <input
