@@ -119,6 +119,31 @@ export class AppConfig {
   }
 
   /**
+   * Приём оплаты в ЮKassa, либо null — оплата не настроена.
+   *
+   * Через `get`, как у LiveKit: без магазина приложение обязано стартовать, а
+   * приватные комнаты в таком случае бесплатны.
+   */
+  get billing(): {
+    shopId: string;
+    secretKey: string;
+    apiUrl: string;
+    vatCode: number;
+    taxSystemCode: number | undefined;
+  } | null {
+    const shopId = this.config.get<string>('YOOKASSA_SHOP_ID');
+    const secretKey = this.config.get<string>('YOOKASSA_SECRET_KEY');
+    if (!shopId || !secretKey) return null;
+    return {
+      shopId,
+      secretKey,
+      apiUrl: this.config.get<string>('YOOKASSA_API_URL') ?? 'https://api.yookassa.ru/v3',
+      vatCode: this.config.get<number>('YOOKASSA_VAT_CODE') ?? 1,
+      taxSystemCode: this.config.get<number>('YOOKASSA_TAX_SYSTEM_CODE'),
+    };
+  }
+
+  /**
    * Учётные данные приложения площадки, либо null, если оно не настроено.
    *
    * Через `config.get`, а не `value`: `value` использует getOrThrow и уронил бы

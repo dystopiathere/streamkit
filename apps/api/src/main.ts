@@ -54,7 +54,14 @@ async function bootstrap(): Promise<void> {
 
   await app.listen(config.port, '0.0.0.0');
 
-  new Logger('Bootstrap').log(`API запущен на порту ${config.port} (${config.nodeEnv})`);
+  const bootstrapLogger = new Logger('Bootstrap');
+  bootstrapLogger.log(`API запущен на порту ${config.port} (${config.nodeEnv})`);
+  // Без магазина ЮKassa приватные комнаты бесплатны. В разработке так и надо, а
+  // в боевом окружении это забытая переменная, которую иначе заметят только по
+  // выручке.
+  if (config.nodeEnv === 'production' && !config.billing) {
+    bootstrapLogger.warn('Оплата подписки не настроена: приватные комнаты доступны бесплатно');
+  }
 }
 
 void bootstrap();

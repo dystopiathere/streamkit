@@ -37,6 +37,10 @@ for (const key of [
   'TWITCH_CLIENT_SECRET',
   'YOUTUBE_CLIENT_ID',
   'YOUTUBE_CLIENT_SECRET',
+  // ЮKassa — по той же причине: с ключами оплата настроена и комнаты платные,
+  // без них бесплатны. Тест оплаты выставляет ключи сам.
+  'YOOKASSA_SHOP_ID',
+  'YOOKASSA_SECRET_KEY',
 ]) {
   delete process.env[key];
 }

@@ -71,6 +71,10 @@ services:
       LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:-ws://localhost:7880}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?нужно задать LIVEKIT_API_KEY}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?нужно задать LIVEKIT_API_SECRET}
+      # Оплата подписки. Пустые — оплата не настроена, комнаты бесплатны.
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
+      YOOKASSA_VAT_CODE: ${YOOKASSA_VAT_CODE:-1}
     ports:
       - '3000:3000'
     depends_on:
