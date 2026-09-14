@@ -7,6 +7,7 @@ export interface ConsentView {
   title: string;
   path: string;
   required: boolean;
+  acceptedAtCheckout: boolean;
   currentVersion: string;
   acceptedVersion: string | null;
   acceptedAt: string | null;

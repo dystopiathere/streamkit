@@ -86,7 +86,7 @@ export function PrivacyPage(): React.JSX.Element {
                     {t('privacy.revoke')}
                   </Button>
                 )
-              ) : (
+              ) : consent.acceptedAtCheckout ? null : (
                 <Button variant="secondary" onClick={() => grant.mutate(consent.document)}>
                   {consent.needsRenewal ? t('privacy.renew') : t('privacy.grant')}
                 </Button>
