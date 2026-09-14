@@ -7,6 +7,7 @@ const DOCUMENT_FILES: Record<string, string> = {
   privacy: 'privacy.md',
   'personal-data': 'personal-data.md',
   cookies: 'cookies.md',
+  'room-guest': 'room-guest.md',
 };
 
 /**

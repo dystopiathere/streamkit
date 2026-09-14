@@ -19,9 +19,15 @@ datasource db {
   provider = "postgresql"
 }
 
-/* ------------------------------------------------------------------ */
-/* Пользователи и аутентификация                                        */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Пользователи и аутентификация
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 enum UserStatus {
   ACTIVE
@@ -51,6 +57,7 @@ model User {
   donationSources DonationSource[]
   credentials     IntegrationCredential[]
   channels        Channel[]
+  rooms           Room[]
   auditLogs       AuditLog[]
 
   @@index([status])
@@ -82,9 +89,15 @@ model RefreshToken {
   @@index([expiresAt])
 }
 
-/* ------------------------------------------------------------------ */
-/* Согласия и аудит (152-ФЗ)                                            */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Согласия и аудит (152-ФЗ)
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 enum ConsentDocument {
   TERMS
@@ -128,9 +141,15 @@ model AuditLog {
   @@index([action, createdAt])
 }
 
-/* ------------------------------------------------------------------ */
-/* Виджеты и overlay                                                    */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Виджеты и overlay
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 enum WidgetType {
   ALERTS
@@ -138,20 +157,21 @@ enum WidgetType {
   TIMER
   TOP_DONORS
   CHAT
+  GUESTS
 }
 
 model Widget {
-  id       String     @id @default(uuid()) @db.Uuid
-  userId   String     @db.Uuid
-  type     WidgetType
-  name     String
-  isEnabled Boolean   @default(true)
+  id            String     @id @default(uuid()) @db.Uuid
+  userId        String     @db.Uuid
+  type          WidgetType
+  name          String
+  isEnabled     Boolean    @default(true)
   /// Конфиг, провалидированный схемой из @streamkit/contracts.
-  config   Json
+  config        Json
   /// Версия формы конфига. Ломающее изменение схемы = инкремент + миграция данных.
-  configVersion Int   @default(1)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  configVersion Int        @default(1)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 
   user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   tokens OverlayToken[]
@@ -181,22 +201,82 @@ model WidgetState {
 /// Публичная ссылка на виджет для браузер-сорса OBS. В БД только хэш токена,
 /// поэтому утечка дампа не даёт доступа к чужим оверлеям.
 model OverlayToken {
-  id        String    @id @default(uuid()) @db.Uuid
-  widgetId  String    @db.Uuid
-  tokenHash String    @unique
-  label     String?
-  createdAt DateTime  @default(now())
+  id         String    @id @default(uuid()) @db.Uuid
+  widgetId   String    @db.Uuid
+  tokenHash  String    @unique
+  label      String?
+  createdAt  DateTime  @default(now())
   lastSeenAt DateTime?
-  revokedAt DateTime?
+  revokedAt  DateTime?
 
   widget Widget @relation(fields: [widgetId], references: [id], onDelete: Cascade)
 
   @@index([widgetId])
 }
 
-/* ------------------------------------------------------------------ */
-/* События и источники                                                  */
-/* ------------------------------------------------------------------ */
+/// Приватная комната стримера. Медиа живёт в LiveKit, здесь — только владение и
+/// приглашения. Комната LiveKit называется по id и создаётся при первом входе.
+model Room {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  name      String   @db.VarChar(80)
+  createdAt DateTime @default(now())
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invites RoomInvite[]
+
+  @@index([userId])
+}
+
+/// Ссылка-приглашение на одного гостя. Форма та же, что у OverlayToken: в БД
+/// только хэш, сам токен виден один раз при выпуске.
+model RoomInvite {
+  id           String    @id @default(uuid()) @db.Uuid
+  roomId       String    @db.Uuid
+  tokenHash    String    @unique
+  label        String    @db.VarChar(80)
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+  revokedAt    DateTime?
+  /// Стример выключил гостю микрофон. На приглашении, а не на участнике: иначе
+  /// гость снимал бы запрет перезагрузкой вкладки.
+  micBlockedAt DateTime?
+
+  room     Room           @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  consents GuestConsent[]
+
+  @@index([roomId])
+}
+
+/// Согласие гостя на передачу имени, изображения и голоса.
+///
+/// Отдельно от Consent, потому что у гостя нет учётной записи, а Consent к ней
+/// привязан. Имени гостя здесь НЕТ: оно живёт только в токене LiveKit, и
+/// хранить его ради доказательства согласия не нужно — хватает ссылки,
+/// редакции документа, времени и отпечатка запроса.
+model GuestConsent {
+  id              String   @id @default(uuid()) @db.Uuid
+  inviteId        String   @db.Uuid
+  documentVersion String
+  grantedAt       DateTime @default(now())
+  ipHash          String?
+  userAgent       String?  @db.VarChar(512)
+
+  invite RoomInvite @relation(fields: [inviteId], references: [id], onDelete: Cascade)
+
+  @@index([inviteId])
+  @@index([grantedAt])
+}
+
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * События и источники
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 enum EventProvider {
   DONATIONALERTS
@@ -242,30 +322,36 @@ model AlertEvent {
 
 /// Подключённый источник донат-событий.
 model DonationSource {
-  id                String        @id @default(uuid()) @db.Uuid
-  userId            String        @db.Uuid
-  provider          EventProvider
-  isEnabled         Boolean       @default(true)
+  id                     String        @id @default(uuid()) @db.Uuid
+  userId                 String        @db.Uuid
+  provider               EventProvider
+  isEnabled              Boolean       @default(true)
   /// Идентификатор аккаунта на стороне провайдера (для диагностики и отображения).
-  externalAccountId String?
+  externalAccountId      String?
   /// Секрет для проверки HMAC собственного вебхука. Шифротекст.
   webhookSecretEncrypted String?
   /// Почему источник выключен, если выключен не пользователем. NULL — либо
   /// работает, либо выключен вручную. Без этого поля истёкший доступ выглядел
   /// в данных ровно как осознанное решение стримера.
-  disabledReason    String?
-  lastEventAt       DateTime?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  disabledReason         String?
+  lastEventAt            DateTime?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, provider])
 }
 
-/* ------------------------------------------------------------------ */
-/* Интеграции с площадками                                              */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Интеграции с площадками
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 enum Platform {
   TWITCH
@@ -286,29 +372,29 @@ enum ChannelSyncState {
 }
 
 model Channel {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @db.Uuid
-  platform    Platform
-  externalId  String
-  login       String
-  displayName String
-  avatarUrl   String?
-  isEnabled   Boolean  @default(true)
+  id            String           @id @default(uuid()) @db.Uuid
+  userId        String           @db.Uuid
+  platform      Platform
+  externalId    String
+  login         String
+  displayName   String
+  avatarUrl     String?
+  isEnabled     Boolean          @default(true)
   /// Когда метрики собирались в последний раз. NULL — ещё ни разу.
-  lastSyncedAt DateTime?
-  syncState   ChannelSyncState @default(OK)
+  lastSyncedAt  DateTime?
+  syncState     ChannelSyncState @default(OK)
   /// Текст последней ошибки — только для диагностики, наружу не отдаётся.
-  syncError   String?
+  syncError     String?
   /// Сколько неудач подряд. Обнуляется первым же удачным сбором.
-  syncAttempts Int     @default(0)
+  syncAttempts  Int              @default(0)
   /// Не опрашивать раньше этого момента. Отдельно от lastSyncedAt: «когда
   /// удалось собрать» и «когда пробовать снова» расходятся ровно тогда, когда
   /// собирать перестало получаться. Раньше каденция считалась по lastSyncedAt,
   /// и сбойный канал повторялся каждую минуту вместо положенных пятнадцати,
   /// занимая место в выборке и вытесняя из неё исправные.
   nextAttemptAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 
   user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   snapshots AnalyticsSnapshot[]

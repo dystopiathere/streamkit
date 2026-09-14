@@ -64,3 +64,18 @@ export const LEGAL_DOCUMENTS: Record<ConsentDocument, LegalDocument> = {
 export const REQUIRED_ON_REGISTER: ConsentDocument[] = Object.values(LEGAL_DOCUMENTS)
   .filter((document) => document.requiredOnRegister)
   .map((document) => document.document);
+
+/**
+ * Редакция условий для гостя приватной комнаты.
+ *
+ * Отдельно от `LEGAL_DOCUMENTS`: тот реестр — про согласия ПОЛЬЗОВАТЕЛЯ, и его
+ * ключ — перечисление `ConsentDocument` в журнале пользователя. У гостя учётной
+ * записи нет, его согласие пишется в `GuestConsent`, и смешивать два журнала
+ * значило бы показать в разделе «Приватность» стримера документ, которого он не
+ * принимал. Текст — `/legal/room-guest`; меняется он — меняется и эта дата.
+ */
+export const ROOM_GUEST_TERMS = {
+  version: '2026-09-13',
+  title: 'Условия участия в комнате',
+  path: '/legal/room-guest',
+} as const;

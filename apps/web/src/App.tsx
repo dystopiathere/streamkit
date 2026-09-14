@@ -1,15 +1,17 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AppLayout } from './components/AppLayout';
 import { api } from './lib/api';
 import { useAuthStore } from './lib/auth-store';
+import { queryClient } from './lib/query-client';
 import { EventsPage } from './pages/EventsPage';
 import { LegalPage } from './pages/LegalPage';
 import { LoginPage } from './pages/LoginPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { RegisterPage } from './pages/RegisterPage';
+import { RoomsPage } from './pages/RoomsPage';
 import { SourcesPage } from './pages/SourcesPage';
 import { WidgetEditorPage } from './pages/WidgetEditorPage';
 import { WidgetsPage } from './pages/WidgetsPage';
@@ -25,17 +27,22 @@ const AnalyticsPage = lazy(async () => ({
   default: (await import('./pages/AnalyticsPage')).AnalyticsPage,
 }));
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      // Данные дашборда меняются не каждую секунду, а рефетч при каждом
-      // переключении вкладки во время стрима — лишняя нагрузка и мигание.
-      staleTime: 30_000,
-      refetchOnWindowFocus: false,
-      retry: 1,
-    },
-  },
-});
+/**
+ * Комната стримера и страница гостя — тоже отдельными чанками, по той же
+ * причине: клиент WebRTC весит больше, чем весь остальной дашборд, а нужен он
+ * только тем, кто сейчас созванивается. Гость, открывший ссылку, при этом не
+ * качает код дашборда сверх общего каркаса.
+ */
+const RoomPage = lazy(async () => ({
+  default: (await import('./pages/RoomPage')).RoomPage,
+}));
+const JoinPage = lazy(async () => ({
+  default: (await import('./pages/JoinPage')).JoinPage,
+}));
+
+function Lazy({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return <Suspense fallback={<div className="p-8 text-muted">Загрузка…</div>}>{children}</Suspense>;
+}
 
 /**
  * Восстановление сессии.
@@ -69,6 +76,15 @@ export function App(): React.JSX.Element {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/legal/:slug" element={<LegalPage />} />
+          {/* Вне RequireAuth: гость не зарегистрирован, у него есть только ссылка. */}
+          <Route
+            path="/join"
+            element={
+              <Lazy>
+                <JoinPage />
+              </Lazy>
+            }
+          />
 
           <Route element={<RequireAuth />}>
             <Route element={<AppLayout />}>
@@ -81,6 +97,15 @@ export function App(): React.JSX.Element {
                   <Suspense fallback={<div className="p-8 text-muted">Загрузка…</div>}>
                     <AnalyticsPage />
                   </Suspense>
+                }
+              />
+              <Route path="/rooms" element={<RoomsPage />} />
+              <Route
+                path="/rooms/:id"
+                element={
+                  <Lazy>
+                    <RoomPage />
+                  </Lazy>
                 }
               />
               <Route path="/sources" element={<SourcesPage />} />

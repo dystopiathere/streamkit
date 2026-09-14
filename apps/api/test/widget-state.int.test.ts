@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { type BusMessage, RealtimeBus } from '../src/common/bus/realtime-bus.service';
 import { createHarness, registrationPayload, type TestHarness } from './harness';
 
 /**
@@ -226,6 +227,49 @@ describe('Состояние виджетов (feature)', () => {
       .set(auth())
       .expect(200);
     expect(reread.body.pausedSeconds).toBe(600);
+  });
+
+  it('параллельные прибавки не теряются и публикуются в порядке записи', async () => {
+    // Десять донатов в одну секунду под настоящей блокировкой Redis: ни одна
+    // прибавка не потеряна, и оверлей в итоге видит записанное. Сама гонка
+    // публикаций здесь почти не воспроизводится — окно в миллисекунды; её
+    // детерминированно ловит юнит-тест «команды таймера под блокировкой».
+    const widgetId = await createWidget('timer', { initialSeconds: 600, maxSeconds: 86_400 });
+    const published: number[] = [];
+    const unsubscribe = await harness.app.get(RealtimeBus).subscribe((message: BusMessage) => {
+      if (message.kind === 'widget-state' && message.widgetId === widgetId) {
+        if (message.state.kind === 'timer' && message.state.pausedSeconds !== null) {
+          published.push(message.state.pausedSeconds);
+        }
+      }
+    });
+
+    await Promise.all(
+      Array.from({ length: 10 }, () =>
+        request(server())
+          .patch(`/api/widgets/${widgetId}/state`)
+          .set(auth())
+          .send({ kind: 'timer', action: 'add', seconds: 60 })
+          .expect(200),
+      ),
+    );
+
+    const stored = await request(server())
+      .get(`/api/widgets/${widgetId}/state`)
+      .set(auth())
+      .expect(200);
+    expect(stored.body.pausedSeconds).toBe(600 + 10 * 60);
+
+    // Шина доставляет асинхронно: ждём, пока дойдут все десять.
+    const deadline = Date.now() + 5_000;
+    while (published.length < 10 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    await unsubscribe();
+
+    expect(published).toHaveLength(10);
+    expect(published).toEqual([...published].sort((a, b) => a - b));
+    expect(published.at(-1)).toBe(stored.body.pausedSeconds);
   });
 
   it('отвергает команду, не подходящую типу виджета', async () => {

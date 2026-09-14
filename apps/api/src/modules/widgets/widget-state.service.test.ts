@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { applyTimerAction, type TimerSnapshot } from './widget-state.service';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  applyTimerAction,
+  type StoredTimer,
+  type TimerSnapshot,
+  WidgetStateService,
+} from './widget-state.service';
 
 const NOW = new Date('2026-09-12T12:00:00.000Z').getTime();
 
@@ -74,5 +79,59 @@ describe('переходы таймера', () => {
   it('досчитавший до нуля таймер не уходит в минус', () => {
     const expired: TimerSnapshot = { endsAt: '2026-09-12T11:00:00.000Z', pausedSeconds: null };
     expect(applyTimerAction(expired, 'pause', BOUNDS).pausedSeconds).toBe(0);
+  });
+});
+
+/**
+ * Порядок публикаций при параллельных донатах.
+ *
+ * Через HTTP эта гонка почти не воспроизводится — окно в миллисекунды. Здесь
+ * оно раздвинуто искусственно: подсчёт снимка первого доната медленный. Если
+ * публикация живёт вне блокировки, второй донат успевает записать и
+ * опубликовать «плюс две минуты», а запоздавшая публикация первого приходит
+ * последней и возвращает на экран «плюс минуту».
+ */
+describe('команды таймера под блокировкой', () => {
+  it('последняя публикация совпадает с последней записью', async () => {
+    let stored: StoredTimer = { endsAt: null, pausedSeconds: 600 };
+    const published: number[] = [];
+
+    // Блокировка в памяти: строгая очередь, как у Redis-версии при ожидании.
+    let tail: Promise<unknown> = Promise.resolve();
+    const lock = {
+      withLockWaiting: <T>(_key: string, _ttl: number, fn: () => Promise<T>): Promise<T> => {
+        const run = tail.then(fn);
+        tail = run.catch(() => undefined);
+        return run;
+      },
+    };
+    const bus = {
+      publish: async (message: { state: { pausedSeconds: number } }) => {
+        published.push(message.state.pausedSeconds);
+      },
+    };
+
+    const service = new WidgetStateService({} as never, bus as never, lock as never);
+    vi.spyOn(service, 'readTimer').mockImplementation(async () => stored);
+    vi.spyOn(service, 'write').mockImplementation(async (_id, state) => {
+      stored = state as StoredTimer;
+    });
+
+    let calls = 0;
+    vi.spyOn(service, 'compute').mockImplementation(async () => {
+      calls += 1;
+      const snapshot = stored.pausedSeconds;
+      if (calls === 1) await new Promise((resolve) => setTimeout(resolve, 30));
+      return { kind: 'timer', pausedSeconds: snapshot } as never;
+    });
+
+    const widget = { id: 'w1', type: 'TIMER', config: { maxSeconds: 86_400 } } as never;
+    await Promise.all([
+      service.applyTimerAction(widget, 'add', 60),
+      service.applyTimerAction(widget, 'add', 60),
+    ]);
+
+    expect(stored.pausedSeconds).toBe(720);
+    expect(published).toEqual([660, 720]);
   });
 });

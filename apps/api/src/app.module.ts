@@ -17,6 +17,7 @@ import { HealthController } from './modules/health/health.controller';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { PrivacyModule } from './modules/privacy/privacy.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
+import { RoomsModule } from './modules/rooms/rooms.module';
 import { WidgetsModule } from './modules/widgets/widgets.module';
 
 @Module({
@@ -77,6 +78,7 @@ import { WidgetsModule } from './modules/widgets/widgets.module';
     EventsModule,
     RealtimeModule,
     PrivacyModule,
+    RoomsModule,
     // Площадки без коннекторов донатов: в API нужен только OAuth-контур и
     // чтение метрик. Долгоживущие соединения поднимает воркер.
     IntegrationsModule,

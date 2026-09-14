@@ -11,6 +11,10 @@ import { Redis } from 'ioredis';
  */
 async function registerStreamer(page: Page, prefix: string): Promise<void> {
   await page.goto('/register');
+  await fillRegistration(page, prefix);
+}
+
+async function fillRegistration(page: Page, prefix: string): Promise<void> {
   await page.getByLabel('Отображаемое имя').fill('E2E Регрессии');
   await page.getByLabel('Электронная почта').fill(`${prefix}-${Date.now()}@example.com`);
   await page.getByLabel('Пароль').fill('очень-надёжный-пароль-1');
@@ -130,4 +134,25 @@ test('чат доезжает до оверлея, если канал впис�
   } finally {
     redis.disconnect();
   }
+});
+
+test('согласие на cookie не переходит к следующему пользователю той же вкладки', async ({
+  page,
+}) => {
+  // Найдено код-ревью, а не вручную: выход не чистил кэш запросов, и баннер
+  // нового пользователя сверялся с журналом согласий предыдущего. «Принять все»
+  // одного человека молча становилось согласием другого.
+  await registerStreamer(page, 'e2e-consent-a');
+  await page.getByRole('button', { name: 'Принять все' }).click();
+  await expect(page.getByRole('button', { name: 'Принять все' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Выйти' }).click();
+  await expect(page).toHaveURL(/\/login$/);
+
+  // Без перезагрузки страницы — ровно так, как это делает человек у общего
+  // компьютера: вышел, и следующий сразу регистрируется. Переход по ссылке, а не
+  // goto: полная загрузка страницы очистила бы кэш сама и спрятала баг.
+  await page.getByRole('link', { name: 'Нет аккаунта? Зарегистрироваться' }).click();
+  await fillRegistration(page, 'e2e-consent-b');
+  await expect(page.getByRole('button', { name: 'Принять все' })).toBeVisible({ timeout: 5_000 });
 });

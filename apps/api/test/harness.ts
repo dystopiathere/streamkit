@@ -1,8 +1,10 @@
 import type { INestApplication, ModuleMetadata } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
+import { Test, type TestingModuleBuilder } from '@nestjs/testing';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import type { Redis } from 'ioredis';
 import { AppModule } from '../src/app.module';
+import { registerBodyParsers } from '../src/common/http/body-parsers';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { REDIS_CLIENT } from '../src/common/redis/redis.module';
 
@@ -26,15 +28,20 @@ export interface TestHarness {
  */
 export async function createHarness(
   extraImports: NonNullable<ModuleMetadata['imports']> = [],
+  configure: (builder: TestingModuleBuilder) => TestingModuleBuilder = (builder) => builder,
 ): Promise<TestHarness> {
   // Дополнительные модули нужны воркерным тестам: ChatModule в AppModule не
   // входит намеренно — в API он поднимал бы соединение с чатом на каждом
   // инстансе и рвал бы его при каждом деплое.
-  const moduleRef = await Test.createTestingModule({
-    imports: [AppModule, ...extraImports],
-  }).compile();
+  //
+  // `configure` подменяет внешние системы, которых в прогоне нет, — например,
+  // медиасервер комнат. Хранилища не подменяются никогда, см. выше.
+  const moduleRef = await configure(
+    Test.createTestingModule({ imports: [AppModule, ...extraImports] }),
+  ).compile();
 
-  const app = moduleRef.createNestApplication({ rawBody: true });
+  const app = moduleRef.createNestApplication<NestExpressApplication>({ rawBody: true });
+  registerBodyParsers(app);
   app.setGlobalPrefix('api');
   app.use(cookieParser());
   // Глобальный ValidationPipe из Nest здесь не нужен и вреден: он тянет

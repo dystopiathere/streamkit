@@ -2,6 +2,7 @@ import {
   ALERT_EVENT_TYPES,
   ALERT_TEMPLATE_VARS,
   CURRENCIES,
+  GUEST_LAYOUTS,
   TOP_DONORS_PERIODS,
   type WidgetType,
 } from '@streamkit/contracts';
@@ -9,6 +10,7 @@ import type { FieldValues, UseFormReturn } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui';
 import { useChannels } from '@/features/analytics/queries';
+import { useRooms } from '@/features/rooms/queries';
 import {
   CheckboxField,
   CheckboxGroupField,
@@ -49,6 +51,8 @@ export function WidgetConfigForm({
       return <TopDonorsFields form={form} />;
     case 'chat':
       return <ChatFields form={form} />;
+    case 'guests':
+      return <GuestsFields form={form} />;
   }
 }
 
@@ -332,6 +336,86 @@ function ChatFields({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.E
       <Card className="space-y-4">
         <h2 className="font-medium">{t('widgets.section.appearance')}</h2>
         <TextStyleFields form={form} labels={textLabels} withHighlight />
+      </Card>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+function GuestsFields({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.Element {
+  const { t } = useTranslation();
+  const textLabels = useTextLabels();
+  const rooms = useRooms();
+  const roomId = String(form.watch('roomId') ?? '');
+
+  return (
+    <>
+      <Card className="space-y-4">
+        <h2 className="font-medium">{t('widgets.section.guests')}</h2>
+        {/* Предупреждение прямо у поля, а не в документации: ссылка OBS этого
+            виджета открывает видео приватной комнаты, и хранить её надо как пароль. */}
+        {/* Поле монтируется только со списком комнат. Выпадающий список,
+            зарегистрированный раньше своих вариантов, получает значение, которого
+            среди них нет, браузер сбрасывает его в пустое — и «Сохранить»
+            молча отвязывала бы виджет от комнаты. */}
+        {rooms.data ? (
+          <div>
+            <SelectField
+              form={form}
+              name="roomId"
+              label={t('widgets.field.room')}
+              options={[
+                { value: '', label: t('widgets.roomNotSelected') },
+                ...rooms.data.map((room) => ({ value: room.id, label: room.name })),
+              ]}
+            />
+            <p className="mt-1 text-xs text-muted">
+              {rooms.data.length === 0 ? t('widgets.hint.noRooms') : t('widgets.hint.room')}
+            </p>
+            {/* Без комнаты оверлей подключается, отмечает активность и молча
+                остаётся пустым, а предпросмотр рядом показывает примеры гостей.
+                Снаружи это неотличимо от поломки — так и было в первой ручной
+                проверке, — поэтому пустое поле подсвечено прямо здесь. */}
+            {!roomId ? (
+              <p
+                role="alert"
+                className="mt-2 rounded-lg border border-danger/40 bg-danger/10 p-2 text-sm"
+              >
+                {t('widgets.hint.roomMissing')}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-sm text-muted">{t('common.loading')}</p>
+        )}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <SelectField
+            form={form}
+            name="layout"
+            label={t('widgets.field.guestsLayout')}
+            options={GUEST_LAYOUTS.map((value) => ({
+              value,
+              label: t(`widgets.guestsLayout.${value}`),
+            }))}
+          />
+          <NumberField form={form} name="maxTiles" label={t('widgets.field.maxTiles')} />
+          <NumberField form={form} name="gap" label={t('widgets.field.tileGap')} />
+          <NumberField form={form} name="cornerRadius" label={t('widgets.field.cornerRadius')} />
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <CheckboxField form={form} name="showNames" label={t('widgets.field.showNames')} />
+          <CheckboxField
+            form={form}
+            name="showWithoutVideo"
+            label={t('widgets.field.showWithoutVideo')}
+          />
+        </div>
+      </Card>
+
+      <Card className="space-y-4">
+        <h2 className="font-medium">{t('widgets.section.appearance')}</h2>
+        <TextStyleFields form={form} labels={textLabels} />
       </Card>
     </>
   );

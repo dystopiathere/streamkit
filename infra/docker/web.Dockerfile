@@ -50,8 +50,26 @@ RUN pnpm --filter @streamkit/contracts build \
 RUN cp -r apps/${APP}/dist /dist
 
 FROM nginx:1.27-alpine AS runtime
+# ARG не переживает границу стадии и объявляется заново.
+ARG APP=web
 COPY --from=build /dist /usr/share/nginx/html
 COPY infra/docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY infra/docker/security-headers.conf /etc/nginx/snippets/security-headers.conf
+COPY infra/docker/permissions-${APP}.conf /etc/nginx/snippets/permissions.conf
+
+# Дополнительные адреса для connect-src — только для локального стека.
+#
+# В проде API и LiveKit ходят по https:// и wss://, и базовой политики хватает.
+# Локальный compose.yml отдаёт API по http://localhost:3000 и LiveKit по ws://,
+# и CSP их блокирует. Пока заголовки не доходили до страницы (см. грабли в
+# CLAUDE.md про add_header), это работало случайно. Аргумент сборки, а не
+# переменная запуска, — по той же причине, что и VITE_API_URL: адреса статики
+# всё равно вшиваются при сборке. Пустое значение не меняет политику.
+ARG CSP_CONNECT_EXTRA=""
+RUN if [ -n "$CSP_CONNECT_EXTRA" ]; then \
+      sed -i "s#connect-src 'self' https: wss:#connect-src 'self' https: wss: $CSP_CONNECT_EXTRA#" \
+        /etc/nginx/snippets/security-headers.conf; \
+    fi
 
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \

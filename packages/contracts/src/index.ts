@@ -10,6 +10,7 @@ export * from './common.js';
 export * from './analytics.js';
 export * from './events.js';
 export * from './chat.js';
+export * from './rooms.js';
 export * from './widgets.js';
 export * from './auth.js';
 export * from './realtime.js';

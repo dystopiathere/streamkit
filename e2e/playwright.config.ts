@@ -24,6 +24,13 @@ export default defineConfig({
     baseURL: WEB_URL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // Приватные комнаты: камера и микрофон — фальшивые устройства Chromium
+    // (цветная тестовая картинка и тон), разрешение выдано заранее. Без первого
+    // флага в CI нет ни одного устройства, без второго — висит диалог разрешения.
+    permissions: ['camera', 'microphone'],
+    launchOptions: {
+      args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
+    },
   },
 
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
@@ -47,6 +54,12 @@ export default defineConfig({
         // страницу входа посреди теста, то есть как ошибка сессии, а не лимита.
         THROTTLE_LIMIT: '100000',
         THROTTLE_AUTH_LIMIT: '100000',
+        // LiveKit в сквозном прогоне НАСТОЯЩИЙ — в режиме --dev с его встроенными
+        // ключами: локально из compose.dev.yml, в CI отдельным контейнером.
+        LIVEKIT_URL: process.env.LIVEKIT_URL ?? 'http://127.0.0.1:7880',
+        LIVEKIT_PUBLIC_URL: process.env.LIVEKIT_PUBLIC_URL ?? 'ws://127.0.0.1:7880',
+        LIVEKIT_API_KEY: process.env.LIVEKIT_API_KEY ?? 'devkey',
+        LIVEKIT_API_SECRET: process.env.LIVEKIT_API_SECRET ?? 'secret',
       },
     },
     {

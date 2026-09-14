@@ -40,3 +40,11 @@ for (const key of [
 ]) {
   delete process.env[key];
 }
+
+// LiveKit — фиксированные тестовые значения, а не те, что в `.env` разработчика.
+// Медиасервер в интеграционных тестах подменён: они проверяют, кому и с какими
+// правами выдаётся токен, а подпись токена сверяется этим же секретом.
+process.env.LIVEKIT_URL = 'http://livekit.test:7880';
+process.env.LIVEKIT_PUBLIC_URL = 'wss://livekit.test';
+process.env.LIVEKIT_API_KEY = 'test-livekit-key';
+process.env.LIVEKIT_API_SECRET = 'test-livekit-secret-at-least-32-characters';

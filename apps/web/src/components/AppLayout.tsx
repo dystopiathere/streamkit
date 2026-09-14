@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { to: '/widgets', label: 'nav.widgets' },
   { to: '/events', label: 'nav.events' },
   { to: '/analytics', label: 'nav.analytics' },
+  { to: '/rooms', label: 'nav.rooms' },
   { to: '/sources', label: 'nav.sources' },
   { to: '/privacy', label: 'nav.privacy' },
 ];

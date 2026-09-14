@@ -1,5 +1,6 @@
 import type { PublicUser } from '@streamkit/contracts';
 import { create } from 'zustand';
+import { queryClient } from './query-client';
 
 interface AuthState {
   /**
@@ -19,13 +20,24 @@ interface AuthState {
   setRestoring: (value: boolean) => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   accessToken: null,
   user: null,
   isRestoring: true,
 
-  setSession: (accessToken, user) => set({ accessToken, user, isRestoring: false }),
-  clearSession: () => set({ accessToken: null, user: null, isRestoring: false }),
+  setSession: (accessToken, user) => {
+    // Вход под другим пользователем без явного выхода (сессия истекла, вошли
+    // заново другим аккаунтом) — кэш прежнего тоже не должен дожить до рендера.
+    const previous = get().user;
+    if (previous && previous.id !== user.id) queryClient.clear();
+    set({ accessToken, user, isRestoring: false });
+  },
+  clearSession: () => {
+    // Кэш запросов принадлежит пользователю: без очистки следующий вошедший в
+    // этой вкладке видел бы чужие данные, пока они не устареют.
+    queryClient.clear();
+    set({ accessToken: null, user: null, isRestoring: false });
+  },
   setRestoring: (value) => set({ isRestoring: value }),
 }));
 

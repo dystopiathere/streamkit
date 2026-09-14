@@ -104,6 +104,21 @@ export class AppConfig {
   }
 
   /**
+   * Подключение к LiveKit, либо null — комнаты не настроены.
+   *
+   * Через `get`, а не `value`, по той же причине, что и у площадок: без LiveKit
+   * приложение обязано стартовать, а не падать на первом обращении.
+   */
+  get livekit(): { url: string; publicUrl: string; apiKey: string; apiSecret: string } | null {
+    const url = this.config.get<string>('LIVEKIT_URL');
+    const publicUrl = this.config.get<string>('LIVEKIT_PUBLIC_URL');
+    const apiKey = this.config.get<string>('LIVEKIT_API_KEY');
+    const apiSecret = this.config.get<string>('LIVEKIT_API_SECRET');
+    if (!url || !publicUrl || !apiKey || !apiSecret) return null;
+    return { url, publicUrl, apiKey, apiSecret };
+  }
+
+  /**
    * Учётные данные приложения площадки, либо null, если оно не настроено.
    *
    * Через `config.get`, а не `value`: `value` использует getOrThrow и уронил бы

@@ -36,7 +36,7 @@ const storedTimerSchema = z.object({
 });
 
 type StoredGoal = z.infer<typeof storedGoalSchema>;
-type StoredTimer = z.infer<typeof storedTimerSchema>;
+export type StoredTimer = z.infer<typeof storedTimerSchema>;
 
 const PERIOD_MS: Record<Exclude<TopDonorsPeriod, 'all'>, number> = {
   '24h': 24 * 60 * 60 * 1000,
@@ -300,7 +300,13 @@ export class WidgetStateService {
     // топа такого нет: они считаются запросом по событиям и сходятся сами. У
     // таймера состояние из событий не выводится, и потерянная минута марафона
     // не восстановится уже ничем.
-    await this.lock.withLockWaiting(timerLockKey(widget.id), TIMER_LOCK_TTL_MS, async () => {
+    //
+    // Снимок считается и публикуется ТОЖЕ под блокировкой. Иначе оверлей видел
+    // гонку уже на выходе: первый донат записал «плюс минуту» и отпустил
+    // блокировку, второй записал «плюс две» и опубликовал, а медленная публикация
+    // первого приходила последней — и марафон на экране оказывался на минуту
+    // короче записанного до следующего доната.
+    return this.lock.withLockWaiting(timerLockKey(widget.id), TIMER_LOCK_TTL_MS, async () => {
       const next = applyTimerAction(await this.readTimer(widget.id), action, {
         nowMs: Date.now(),
         initialSeconds: config.initialSeconds,
@@ -308,11 +314,11 @@ export class WidgetStateService {
         seconds,
       });
       await this.write(widget.id, next);
-    });
 
-    const state = await this.compute(widget);
-    if (state) await this.bus.publish({ kind: 'widget-state', widgetId: widget.id, state });
-    return state;
+      const state = await this.compute(widget);
+      if (state) await this.bus.publish({ kind: 'widget-state', widgetId: widget.id, state });
+      return state;
+    });
   }
 
   /**
