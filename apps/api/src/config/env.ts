@@ -189,6 +189,15 @@ export const envSchema = z.object({
   /** `StreamKit <noreply@stream-kit.ru>`. Домен должен быть подтверждён в Postbox. */
   MAIL_FROM: optionalValue(),
 
+  /**
+   * Статистика посещений (Umami на своём сервере). Идентификатор сайта
+   * выдаёт интерфейс Umami после первого входа; без него скрипт не грузится.
+   * Адрес базы Umami нужен воркеру: срок хранения статистики держим мы, у
+   * самого Umami удаления старых данных нет.
+   */
+  UMAMI_WEBSITE_ID: optionalValue().pipe(z.string().uuid().optional()),
+  UMAMI_DATABASE_URL: optionalValue().pipe(z.string().url().optional()),
+
   /** Лимит запросов в минуту на IP для обычных ручек. */
   THROTTLE_LIMIT: z.coerce.number().int().min(1).default(120),
   /** Лимит попыток логина в минуту на IP. Жёстче общего. */

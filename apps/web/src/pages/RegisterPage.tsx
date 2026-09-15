@@ -6,6 +6,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button, Card, FieldError, Input, Label } from '@/components/ui';
 import { PublicFooter } from '@/features/public/PublicFooter';
+import { trackSiteEvent } from '@/features/public/site-stats';
 import { ApiError, api } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 
@@ -45,6 +46,7 @@ export function RegisterPage(): React.JSX.Element {
     try {
       const result = await api.post<AuthResult>('/auth/register', values);
       setSession(result.accessToken, result.user);
+      trackSiteEvent('signup');
       void navigate('/widgets');
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : t('common.error'));

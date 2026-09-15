@@ -1,6 +1,7 @@
 import type { PublicUser } from '@streamkit/contracts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useAuthStore } from './auth-store';
+import { readCookieChoice, writeCookieChoice } from './cookie-consent';
 import { queryClient } from './query-client';
 
 function user(id: string): PublicUser {
@@ -53,5 +54,16 @@ describe('кэш запросов и сессия', () => {
     useAuthStore.getState().setSession('fresh-token', ALICE);
 
     expect(queryClient.getQueryData(['widgets'])).toEqual(['виджет Алисы']);
+  });
+});
+
+describe('копия согласия на cookie и сессия', () => {
+  it('выход стирает копию согласия: следующий человек за компьютером увидит баннер', () => {
+    useAuthStore.getState().setSession('token', ALICE);
+    writeCookieChoice('all');
+
+    useAuthStore.getState().clearSession();
+
+    expect(readCookieChoice()).toBeNull();
   });
 });

@@ -30,6 +30,18 @@ resource "random_password" "token_hash_pepper" {
   special = false
 }
 
+resource "random_password" "umami_app_secret" {
+  length  = 48
+  special = false
+}
+
+# Пароль входа на stats.<домен>: Caddy спрашивает его раньше, чем Umami покажет
+# свою форму входа с паролем по умолчанию.
+resource "random_password" "stats_password" {
+  length  = 24
+  special = false
+}
+
 resource "random_password" "livekit_api_key" {
   length  = 16
   special = false
@@ -81,6 +93,20 @@ resource "yandex_lockbox_secret_version" "app" {
   entries {
     key        = "SMTP_PASSWORD"
     text_value = yandex_iam_service_account_api_key.mail_sender.secret_key
+  }
+  # Статистика посещений. В окружение API эти значения не попадают: deploy.sh
+  # отделяет их и отдаёт только контейнеру Umami, Caddy и воркеру (адрес базы).
+  entries {
+    key        = "UMAMI_DB_PASSWORD"
+    text_value = random_password.umami_db.result
+  }
+  entries {
+    key        = "UMAMI_APP_SECRET"
+    text_value = random_password.umami_app_secret.result
+  }
+  entries {
+    key        = "STATS_PASSWORD"
+    text_value = random_password.stats_password.result
   }
 }
 

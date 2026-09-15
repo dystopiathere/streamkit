@@ -1,5 +1,6 @@
 import type { PublicUser } from '@streamkit/contracts';
 import { create } from 'zustand';
+import { writeCookieChoice } from './cookie-consent';
 import { queryClient } from './query-client';
 
 interface AuthState {
@@ -36,6 +37,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // Кэш запросов принадлежит пользователю: без очистки следующий вошедший в
     // этой вкладке видел бы чужие данные, пока они не устареют.
     queryClient.clear();
+    // Копия согласия на cookie — тоже. Иначе после выхода статистика на странице
+    // входа считала бы по согласию предыдущего человека за этим компьютером.
+    // Вернувшийся тот же пользователь согласия не лишается: оно в его журнале, и
+    // сверка после входа восстановит копию без вопроса.
+    writeCookieChoice(null);
     set({ accessToken: null, user: null, isRestoring: false });
   },
   setRestoring: (value) => set({ isRestoring: value }),

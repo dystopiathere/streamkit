@@ -57,7 +57,7 @@ test('«Принять все» в баннере отражается в раз
   await page.getByRole('button', { name: 'Принять все' }).click();
   await page.getByRole('link', { name: 'Приватность' }).click();
 
-  const row = page.getByRole('listitem').filter({ hasText: 'Аналитические cookie' });
+  const row = page.getByRole('listitem').filter({ hasText: 'Статистика посещений (cookie)' });
   await expect(row).toContainText('Принято');
 
   // И в обратную сторону: отзыв в разделе — это ответ «только необходимые», а не
@@ -66,7 +66,7 @@ test('«Принять все» в баннере отражается в раз
   await expect(row).toContainText('Не принято');
   await page.reload();
   await expect(
-    page.getByRole('listitem').filter({ hasText: 'Аналитические cookie' }),
+    page.getByRole('listitem').filter({ hasText: 'Статистика посещений (cookie)' }),
   ).toContainText('Не принято');
   await expect(page.getByRole('button', { name: 'Принять все' })).toHaveCount(0);
 });

@@ -3,6 +3,8 @@ import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AppLayout } from './components/AppLayout';
+import { CookieBanner } from './components/CookieBanner';
+import { SiteStats } from './features/public/SiteStats';
 import { api } from './lib/api';
 import { useAuthStore } from './lib/auth-store';
 import { queryClient } from './lib/query-client';
@@ -120,6 +122,10 @@ export function App(): React.JSX.Element {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        {/* Вне маршрутов: баннер нужен и публичным страницам, и дашборду, а
+            статистика — только публичным, это решает сама SiteStats. */}
+        <CookieBanner />
+        <SiteStats />
       </BrowserRouter>
 
       <Toaster theme="dark" position="bottom-right" />
