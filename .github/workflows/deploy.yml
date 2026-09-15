@@ -51,6 +51,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
+          # Полная история — для проверки, что коммит входит в main.
+          fetch-depth: 0
 
       - name: Коммит из main
         env:

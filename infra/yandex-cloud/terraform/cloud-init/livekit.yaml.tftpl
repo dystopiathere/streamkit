@@ -22,6 +22,14 @@ packages:
   - curl
 
 write_files:
+  # Буфер приёма UDP по умолчанию мал для медиа: при нескольких гостях пакеты
+  # отбрасываются ядром до LiveKit, и в эфире это слышно как рваный звук. Сам
+  # LiveKit предупреждает об этом в логе при старте.
+  - path: /etc/sysctl.d/99-livekit.conf
+    permissions: "0644"
+    content: |
+      net.core.rmem_max=5000000
+      net.core.wmem_max=5000000
   - path: /opt/livekit/infra.env
     permissions: "0644"
     content: |
@@ -30,6 +38,7 @@ write_files:
 %{ endfor ~}
 
 runcmd:
+  - sysctl --system
   - usermod -aG docker deploy
   - chown -R deploy:deploy /opt/livekit
   - systemctl enable --now docker

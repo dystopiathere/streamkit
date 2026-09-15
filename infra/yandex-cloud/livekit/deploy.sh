@@ -48,10 +48,10 @@ lockbox_env "$LOCKBOX_LIVEKIT_SECRET_ID" >.env.next
 LIVEKIT_API_KEY=$(env_value .env.next LIVEKIT_API_KEY)
 LIVEKIT_API_SECRET=$(env_value .env.next LIVEKIT_API_SECRET)
 
-# Конфигурация целиком в LIVEKIT_CONFIG: файл LiveKit не шаблонизирует, а ключ
-# вебхука берётся по имени из окружения (infra/livekit/README.md).
+# Конфиг собирается здесь, с ключами из Lockbox подставленными: LiveKit файлы не
+# шаблонизирует, а ключ вебхука указывается по имени (infra/livekit/README.md).
+# Файл закрыт от чтения всем, кроме владельца: в нём секрет подписи токенов.
 {
-  echo "LIVEKIT_CONFIG='"
   cat <<EOF
 port: 7880
 keys:
@@ -80,9 +80,9 @@ webhook:
 logging:
   level: info
 EOF
-  echo "'"
-} >.env
-rm -f .env.next
+} >livekit.yaml.next
+mv livekit.yaml.next livekit.yaml
+rm -f .env.next .env
 
 echo "==> Запуск"
 compose up -d --remove-orphans

@@ -13,9 +13,12 @@ services:
     # --node-ip — публичный адрес: его LiveKit сообщает браузерам для медиа.
     # Ошибка в нём ничего не ломает на входе — участник подключается и остаётся
     # без видео и звука, без единой ошибки (грабли в CLAUDE.md).
-    command: ['--node-ip', '${LIVEKIT_PUBLIC_IP}']
-    env_file: .env
+    command: ['--config', '/etc/livekit/livekit.yaml', '--node-ip', '${LIVEKIT_PUBLIC_IP}']
     volumes:
+      # Конфиг с ключами собирает deploy.sh из Lockbox. Файлом, а не многострочной
+      # LIVEKIT_CONFIG в .env: разбор многострочных значений в env-файлах у
+      # разных версий compose различается, а ошибка здесь — сервер без ключей.
+      - ./livekit.yaml:/etc/livekit/livekit.yaml:ro
       - ./lego/certificates:/certs:ro
     logging:
       driver: json-file
