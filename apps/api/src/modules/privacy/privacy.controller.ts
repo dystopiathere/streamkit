@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { AuditService } from '../../common/audit/audit.service';
 import { type AuthenticatedUser, CurrentUser, Public } from '../../common/auth/auth.decorators';
 import { zodBody } from '../../common/pipes/zod-validation.pipe';
-import { LEGAL_DOCUMENTS } from './legal-documents';
+import { publishedDocuments } from './legal-documents';
 import { type ConsentView, PrivacyService } from './privacy.service';
 
 const consentSchema = z.object({
@@ -38,7 +38,7 @@ export class PrivacyController {
   @Public()
   @Get('documents')
   documents() {
-    return Object.values(LEGAL_DOCUMENTS);
+    return publishedDocuments();
   }
 
   @Get('consents')
