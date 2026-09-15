@@ -78,6 +78,12 @@ jobs:
           target: ${{ matrix.target }}
           build-args: ${{ matrix.build-args }}
           push: true
+          # Без аттестаций. С ними buildx публикует индекс с дополнительным
+          # манифестом in-toto, а Container Registry отвергает такой push целиком:
+          # «Cannot read manifest data». Образ собирается под одну платформу ВМ.
+          provenance: false
+          sbom: false
+          platforms: linux/amd64
           tags: ${{ vars.YC_REGISTRY }}/streamkit-${{ matrix.image }}:${{ github.event.workflow_run.head_sha }}
           cache-from: type=gha,scope=release-${{ matrix.image }}
           cache-to: type=gha,scope=release-${{ matrix.image }},mode=max
@@ -89,9 +95,8 @@ jobs:
     name: Сторонние образы
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: docker/setup-buildx-action@v4
-
       - name: Вход в Container Registry
         uses: docker/login-action@v4
         with:
@@ -104,8 +109,13 @@ jobs:
           REGISTRY: ${{ vars.YC_REGISTRY }}
         run: |
           set -euo pipefail
+          # Копия одной платформы через pull и push, а не imagetools create: тот
+          # переносит индекс Docker Hub целиком, с манифестами аттестаций, и
+          # Container Registry его не принимает. ВМ — linux/amd64.
           copy() {
-            docker buildx imagetools create --tag "${REGISTRY}/mirror/$2" "$1"
+            docker pull --platform linux/amd64 "$1"
+            docker tag "$1" "${REGISTRY}/mirror/$2"
+            docker push "${REGISTRY}/mirror/$2"
           }
           copy caddy:2.10.0 caddy:2.10.0
           copy livekit/livekit-server:v1.13.6 livekit-server:v1.13.6
