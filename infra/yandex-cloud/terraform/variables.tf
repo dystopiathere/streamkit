@@ -114,3 +114,12 @@ variable "valkey" {
     version = "8.1-valkey"
   }
 }
+
+variable "postbox_dkim" {
+  description = "Запись DKIM из консоли Postbox для домена отправителя: имя (с точкой в конце) и значение TXT. null — запись ещё не заведена"
+  type = object({
+    name  = string
+    value = string
+  })
+  default = null
+}

@@ -2,6 +2,7 @@ import {
   BILLING_PERIODS,
   type BillingPeriod,
   formatMoney,
+  type Money,
   PLAN_PRICES,
   type SubscriptionView,
 } from '@streamkit/contracts';
@@ -121,7 +122,14 @@ function CurrentPlan({ subscription }: { subscription: SubscriptionView }): Reac
                     : update.mutate({ period }, { onError: handleError })
                 }
               >
-                {t(`billing.period.${period}`)} · {formatMoney(PLAN_PRICES[period])}
+                {t(`billing.period.${period}`)} ·{' '}
+                {/* У текущего периода — цена подписки: у оформивших раньше она
+                    может отличаться от прайса, и списана будет именно она. */}
+                {formatMoney(
+                  period === nextPeriod && subscription.renewalAmount
+                    ? subscription.renewalAmount
+                    : PLAN_PRICES[period],
+                )}
               </Button>
             ))}
           </div>
@@ -136,7 +144,12 @@ function CurrentPlan({ subscription }: { subscription: SubscriptionView }): Reac
         </div>
       ) : subscription.paymentMethodTitle ? (
         <div className="space-y-3">
-          <OfferConsent checked={renewConsent} onChange={setRenewConsent} period={nextPeriod} />
+          <OfferConsent
+            checked={renewConsent}
+            onChange={setRenewConsent}
+            period={nextPeriod}
+            amount={subscription.renewalAmount ?? undefined}
+          />
           <Button
             variant="secondary"
             disabled={!renewConsent}
@@ -220,10 +233,13 @@ function OfferConsent({
   checked,
   onChange,
   period,
+  amount = PLAN_PRICES[period],
 }: {
   checked: boolean;
   onChange: (value: boolean) => void;
   period: BillingPeriod;
+  /** Сумма списаний. У действующей подписки — её цена, а не прайс. */
+  amount?: Money;
 }): React.JSX.Element {
   const { t } = useTranslation();
   return (
@@ -241,7 +257,7 @@ function OfferConsent({
           {t('billing.offer.link')}
         </Link>
         <span className="mt-1 block text-xs text-muted">
-          {t(`billing.offer.recurring.${period}`, { amount: formatMoney(PLAN_PRICES[period]) })}
+          {t(`billing.offer.recurring.${period}`, { amount: formatMoney(amount) })}
         </span>
       </span>
     </label>

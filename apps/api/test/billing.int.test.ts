@@ -14,7 +14,10 @@ import {
 } from '@streamkit/contracts';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { MAILER, type MailMessage, type Mailer } from '../src/common/mail/mailer';
 import { BillingService } from '../src/modules/billing/billing.service';
+import { MaintenanceModule } from '../src/modules/maintenance/maintenance.module';
+import { MaintenanceService } from '../src/modules/maintenance/maintenance.service';
 import {
   type ChargeSavedRequest,
   type CreatePaymentRequest,
@@ -124,6 +127,24 @@ class FakeGateway implements PaymentGateway {
   }
 }
 
+/** Почта в памяти: что и кому ушло. */
+class FakeMailer implements Mailer {
+  readonly sent: MailMessage[] = [];
+  configured = true;
+  fail = false;
+
+  async send(message: MailMessage): Promise<void> {
+    if (this.fail) throw new Error('SMTP недоступен');
+    this.sent.push(message);
+  }
+
+  reset(): void {
+    this.sent.length = 0;
+    this.configured = true;
+    this.fail = false;
+  }
+}
+
 /** Медиасервер с пустыми комнатами: здесь проверяется только тариф. */
 class EmptyMediaServer implements RoomMediaServer {
   readonly removed: string[] = [];
@@ -142,14 +163,17 @@ describe('Подписка на платформу (feature)', () => {
   let billing: BillingService;
   const gateway = new FakeGateway();
   const media = new EmptyMediaServer();
+  const mailer = new FakeMailer();
 
   beforeAll(async () => {
-    harness = await createHarness([], (builder) =>
+    harness = await createHarness([MaintenanceModule], (builder) =>
       builder
         .overrideProvider(PAYMENT_GATEWAY)
         .useValue(gateway)
         .overrideProvider(ROOM_MEDIA_SERVER)
-        .useValue(media),
+        .useValue(media)
+        .overrideProvider(MAILER)
+        .useValue(mailer),
     );
     billing = harness.app.get(BillingService);
   });
@@ -161,6 +185,7 @@ describe('Подписка на платформу (feature)', () => {
   beforeEach(async () => {
     await harness.reset();
     gateway.reset();
+    mailer.reset();
     media.removed.length = 0;
   });
 
@@ -507,17 +532,124 @@ describe('Подписка на платформу (feature)', () => {
   /* Продление                                                          */
   /* ---------------------------------------------------------------- */
 
-  /** Подписка, которая кончится через 12 часов: продление уже положено. */
+  /**
+   * Подписка, которая кончится через 12 часов: продление уже положено, письмо о
+   * списании ушло четыре дня назад.
+   */
   async function dueSoon(): Promise<{ userId: string; end: Date }> {
     const owner = await streamer();
     await subscribed(owner.token);
     const end = new Date(Date.now() + 12 * 60 * 60 * 1000);
     await harness.prisma.subscription.update({
       where: { userId: owner.userId },
-      data: { currentPeriodEnd: end },
+      data: {
+        currentPeriodEnd: end,
+        renewalNoticeFor: end,
+        renewalNoticeSentAt: new Date(Date.now() - 4 * DAY_MS),
+      },
     });
     return { userId: owner.userId, end };
   }
+
+  it('письмо о списании уходит за три дня до окна продления, один раз и с суммой подписки', async () => {
+    const owner = await streamer();
+    await subscribed(owner.token);
+    const now = new Date();
+    const end = new Date(now.getTime() + 3.5 * DAY_MS);
+    await harness.prisma.subscription.update({
+      where: { userId: owner.userId },
+      data: { currentPeriodEnd: end },
+    });
+
+    expect(await billing.sendRenewalNotices(now)).toBe(1);
+    expect(await billing.sendRenewalNotices(now)).toBe(0);
+    expect(mailer.sent).toHaveLength(1);
+    expect(mailer.sent[0]!.to).toBe(owner.email);
+    expect(mailer.sent[0]!.text).toContain('490');
+    expect(mailer.sent[0]!.text).toContain('/billing');
+
+    // Через сутки окно продления уже открыто, но трёх дней с письма нет.
+    await billing.renewDue(new Date(now.getTime() + 2.6 * DAY_MS));
+    expect(gateway.charged).toHaveLength(0);
+    await billing.renewDue(new Date(now.getTime() + 3.01 * DAY_MS));
+    expect(gateway.charged).toHaveLength(1);
+  });
+
+  it('без письма о списании продление не списывается', async () => {
+    const { userId } = await dueSoon();
+    await harness.prisma.subscription.update({
+      where: { userId },
+      data: { renewalNoticeFor: null, renewalNoticeSentAt: null },
+    });
+
+    await billing.renewDue();
+    expect(gateway.charged).toHaveLength(0);
+  });
+
+  it('без настроенной почты письма не уходят — и продления не списываются', async () => {
+    mailer.configured = false;
+    const owner = await streamer();
+    await subscribed(owner.token);
+    await harness.prisma.subscription.update({
+      where: { userId: owner.userId },
+      data: { currentPeriodEnd: new Date(Date.now() + 12 * 60 * 60 * 1000) },
+    });
+
+    expect(await billing.sendRenewalNotices()).toBe(0);
+    await billing.renewDue(new Date(Date.now() + 3 * DAY_MS));
+    expect(gateway.charged).toHaveLength(0);
+  });
+
+  it('упавшая отправка письма не считается отправленной', async () => {
+    const owner = await streamer();
+    await subscribed(owner.token);
+    await harness.prisma.subscription.update({
+      where: { userId: owner.userId },
+      data: { currentPeriodEnd: new Date(Date.now() + 2 * DAY_MS) },
+    });
+    mailer.fail = true;
+
+    expect(await billing.sendRenewalNotices()).toBe(0);
+    const row = await harness.prisma.subscription.findUniqueOrThrow({
+      where: { userId: owner.userId },
+    });
+    expect(row.renewalNoticeFor).toBeNull();
+
+    mailer.fail = false;
+    expect(await billing.sendRenewalNotices()).toBe(1);
+  });
+
+  it('смена периода меняет сумму продления и требует нового письма', async () => {
+    const { userId } = await dueSoon();
+    const owner = await harness.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const token = (
+      await request(server())
+        .post('/api/auth/login')
+        .send({ email: owner.email, password: registrationPayload().password })
+        .expect(200)
+    ).body.accessToken as string;
+
+    const view = await request(server())
+      .patch('/api/billing/subscription')
+      .set(auth(token))
+      .send({ period: 'year' })
+      .expect(200);
+    expect(view.body.renewalAmount).toEqual(PLAN_PRICES.year);
+
+    await billing.renewDue();
+    expect(gateway.charged).toHaveLength(0);
+  });
+
+  it('продление списывает цену подписки, а не текущий прайс', async () => {
+    const { userId } = await dueSoon();
+    await harness.prisma.subscription.update({
+      where: { userId },
+      data: { renewalAmountMinor: 39_000 },
+    });
+
+    await billing.renewDue();
+    expect(gateway.charged[0]).toMatchObject({ amountMinor: 39_000 });
+  });
 
   it('за сутки до конца списывает продление по сохранённому способу, от конца периода', async () => {
     const { userId, end } = await dueSoon();
@@ -644,6 +776,19 @@ describe('Подписка на платформу (feature)', () => {
   /* ---------------------------------------------------------------- */
   /* Приватность                                                        */
   /* ---------------------------------------------------------------- */
+
+  it('уборка удаляет платежи старше срока хранения, но не незакрытые', async () => {
+    const owner = await streamer();
+    const paid = await subscribed(owner.token);
+    const { payment: pending } = await checkout((await streamer()).token);
+    const sixYearsAgo = new Date(Date.now() - 6 * 365 * DAY_MS);
+    await harness.prisma.payment.updateMany({ data: { createdAt: sixYearsAgo } });
+
+    const maintenance = harness.app.get(MaintenanceService);
+    expect(await maintenance.purgeOldPayments(5 * 365)).toBe(1);
+    expect(await harness.prisma.payment.findUnique({ where: { id: paid } })).toBeNull();
+    expect(await harness.prisma.payment.findUnique({ where: { id: pending.id } })).not.toBeNull();
+  });
 
   it('выгрузка включает подписку и платежи без способа оплаты; удаление аккаунта стирает его', async () => {
     const owner = await streamer();
