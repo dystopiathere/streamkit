@@ -61,6 +61,23 @@ export function formatMinorForInput(amountMinor: number): string {
     : `${sign}${whole}.${String(fraction).padStart(2, '0')}`;
 }
 
+/**
+ * Копейки → сумма строкой с двумя знаками: `49000` → `"490.00"`.
+ *
+ * Так суммы принимают платёжные API (ЮKassa в том числе). Целочисленно: деление
+ * `amountMinor / 100` дало бы float, а `toFixed` на нём округляет по-своему —
+ * ровно та ошибка в копейку, которую потом ищут в сверке.
+ */
+export function minorToDecimalString(amountMinor: number): string {
+  if (!Number.isSafeInteger(amountMinor) || amountMinor < 0) {
+    throw new RangeError(`Сумма должна быть неотрицательным целым: ${amountMinor}`);
+  }
+  const fraction = amountMinor % MINOR_UNITS_PER_MAJOR;
+  // Вычитание остатка делает деление точным: частное — целое число.
+  const whole = (amountMinor - fraction) / MINOR_UNITS_PER_MAJOR;
+  return `${whole}.${String(fraction).padStart(2, '0')}`;
+}
+
 export function formatMoney(money: Money, locale = 'ru-RU'): string {
   return new Intl.NumberFormat(locale, {
     style: 'currency',

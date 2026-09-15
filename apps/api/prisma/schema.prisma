@@ -58,6 +58,8 @@ model User {
   credentials     IntegrationCredential[]
   channels        Channel[]
   rooms           Room[]
+  subscription    Subscription?
+  payments        Payment[]
   auditLogs       AuditLog[]
 
   @@index([status])
@@ -105,6 +107,9 @@ enum ConsentDocument {
   PERSONAL_DATA
   COOKIE_ANALYTICS
   MARKETING
+  /// Оферта тарифа и согласие на автоматические списания. Даётся только при
+  /// оплате; отзыв выключает автопродление.
+  SUBSCRIPTION_OFFER
 }
 
 /// Журнал согласий. Хранится версия документа, действовавшая в момент согласия:
@@ -452,4 +457,92 @@ model IntegrationCredential {
 
   @@unique([userId, provider])
   @@index([expiresAt])
+}
+
+/**
+ * --------------------------------------------------------------------------
+ */
+/**
+ * Подписка на платформу (docs/adr/0011)
+ */
+/**
+ * --------------------------------------------------------------------------
+ */
+
+enum BillingPeriod {
+  MONTH
+  YEAR
+}
+
+/// Подписка стримера на тариф «Про». Одна на пользователя: история — в Payment.
+///
+/// Статус не хранится, а вычисляется из конца периода и автопродления: хранимый
+/// статус пришлось бы переключать задачей по расписанию ровно в полночь, и
+/// между концом периода и тактом задачи доступ был бы то открыт, то закрыт.
+model Subscription {
+  id                     String        @id @default(uuid()) @db.Uuid
+  userId                 String        @unique @db.Uuid
+  /// Период СЛЕДУЮЩЕГО продления: смена месяца на год применяется при нём.
+  period                 BillingPeriod
+  currentPeriodEnd       DateTime?
+  autoRenew              Boolean       @default(false)
+  /// Шифротекст идентификатора сохранённого способа оплаты ЮKassa. По нему
+  /// списываются деньги без участия стримера — это секрет, как токен площадки.
+  paymentMethodEncrypted String?
+  /// «Карта *4444» — только для интерфейса.
+  paymentMethodTitle     String?       @db.VarChar(120)
+  renewalFailures        Int           @default(0)
+  nextRenewalAttemptAt   DateTime?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments Payment[]
+
+  @@index([autoRenew, currentPeriodEnd])
+}
+
+enum PaymentKind {
+  INITIAL
+  RENEWAL
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  CANCELED
+}
+
+/// Платёж за период. Сумма — снимок цены на момент создания: списание берёт её
+/// отсюда, а не из текущего прайса.
+///
+/// Удаление пользователя платежи не стирает (Restrict): это учёт выручки, а
+/// аккаунты у нас не удаляются, а обезличиваются.
+model Payment {
+  id                 String        @id @default(uuid()) @db.Uuid
+  userId             String        @db.Uuid
+  subscriptionId     String?       @db.Uuid
+  kind               PaymentKind
+  period             BillingPeriod
+  amountMinor        Int
+  currency           String        @db.VarChar(3)
+  status             PaymentStatus @default(PENDING)
+  /// Идентификатор платежа в ЮKassa. NULL, пока запрос на создание не прошёл.
+  providerPaymentId  String?       @unique
+  cancellationReason String?       @db.VarChar(80)
+  /// За какой конец периода это продление. Вместе с attempt не даёт двум
+  /// репликам воркера списать одно и то же продление дважды.
+  renewalFor         DateTime?
+  attempt            Int           @default(1)
+  periodStart        DateTime?
+  periodEnd          DateTime?
+  createdAt          DateTime      @default(now())
+  paidAt             DateTime?
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@unique([subscriptionId, renewalFor, attempt])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
 }

@@ -17,7 +17,7 @@ import { expect, test, type Page } from '@playwright/test';
  */
 const videoWidth = (element: unknown): number => (element as { videoWidth: number }).videoWidth;
 
-const API_URL = 'http://localhost:3000';
+const API_URL = process.env.E2E_API_URL ?? 'http://localhost:3000';
 
 /** Регистрирует стримера и возвращает его access-токен — для проверок через API. */
 async function registerStreamer(page: Page): Promise<string> {
@@ -37,7 +37,35 @@ async function registerStreamer(page: Page): Promise<string> {
   const banner = page.getByRole('button', { name: 'Только необходимые' });
   await banner.waitFor({ state: 'visible', timeout: 5_000 }).catch(() => undefined);
   if (await banner.isVisible()) await banner.click();
-  return ((await (await registered).json()) as { accessToken: string }).accessToken;
+  const accessToken = ((await (await registered).json()) as { accessToken: string }).accessToken;
+  await subscribe(page, accessToken);
+  return accessToken;
+}
+
+/**
+ * Тариф «Про» стримеру — если оплата на сервере настроена: без него комнаты
+ * закрыты. Через API и страницу подтверждения фальшивой ЮKassa, а не через
+ * интерфейс: сам путь оплаты проверяет billing.spec.ts.
+ */
+async function subscribe(page: Page, accessToken: string): Promise<void> {
+  const headers = { Authorization: `Bearer ${accessToken}` };
+  const subscription = await page.request.get(`${API_URL}/api/billing/subscription`, { headers });
+  const view = (await subscription.json()) as { roomsAccess: boolean };
+  if (view.roomsAccess) return;
+
+  const checkout = await page.request.post(`${API_URL}/api/billing/checkout`, {
+    headers,
+    data: { period: 'month', acceptOffer: true },
+  });
+  expect(checkout.status()).toBe(201);
+  const { confirmationUrl } = (await checkout.json()) as { confirmationUrl: string };
+  await page.request.get(confirmationUrl, { maxRedirects: 0 });
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(`${API_URL}/api/billing/subscription`, { headers });
+      return ((await response.json()) as { roomsAccess: boolean }).roomsAccess;
+    })
+    .toBe(true);
 }
 
 /** Комната с одним приглашением. Стример остаётся на странице комнаты. */
@@ -300,6 +328,22 @@ test('виджет, созданный со страницы комнаты, с�
   await page.getByRole('link', { name: 'Комнаты' }).click();
   await page.getByRole('link', { name: 'Открыть' }).click();
   await expect(page.getByRole('listitem').filter({ hasText: 'Вечерний эфир' })).toBeVisible();
+
+  // Удалённая комната виджет не отвязывает: в конфиге остаётся её идентификатор.
+  // Редактор обязан сказать об этом так же, как о невыбранной комнате.
+  const widgetLink = page
+    .getByRole('listitem')
+    .filter({ hasText: 'Вечерний эфир' })
+    .getByRole('link');
+  const widgetPath = await widgetLink.getAttribute('href');
+  page.on('dialog', (dialog) => void dialog.accept());
+  await page.getByRole('link', { name: 'Комнаты' }).click();
+  await page.getByRole('button', { name: 'Удалить' }).click();
+  await expect(page.getByRole('link', { name: 'Открыть' })).toHaveCount(0);
+  await page.goto(widgetPath!);
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Комната этого виджета удалена' }),
+  ).toBeVisible();
 });
 
 test('гость, удалённый с отзывом ссылки, не входит обратно сохранённым токеном', async ({

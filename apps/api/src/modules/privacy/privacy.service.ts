@@ -10,6 +10,8 @@ export interface ConsentView {
   title: string;
   path: string;
   required: boolean;
+  /** Принимается только при оплате — раздел «Приватность» кнопку «Принять» не показывает. */
+  acceptedAtCheckout: boolean;
   /** Актуальная редакция документа. */
   currentVersion: string;
   /** Версия, на которую пользователь согласился. null — согласия нет. */
@@ -53,6 +55,7 @@ export class PrivacyService {
         title: document.title,
         path: document.path,
         required: document.requiredOnRegister,
+        acceptedAtCheckout: document.acceptedAtCheckout,
         currentVersion: document.version,
         acceptedVersion: accepted?.documentVersion ?? null,
         acceptedAt: accepted?.grantedAt.toISOString() ?? null,
@@ -67,6 +70,9 @@ export class PrivacyService {
     context: AuditContext = {},
   ): Promise<void> {
     const definition = LEGAL_DOCUMENTS[document];
+    if (definition.acceptedAtCheckout) {
+      throw new BadRequestException('Это согласие даётся при оплате тарифа.');
+    }
     await this.prisma.consent.create({
       data: {
         userId,
@@ -94,9 +100,17 @@ export class PrivacyService {
       );
     }
 
-    await this.prisma.consent.updateMany({
-      where: { userId, document, revokedAt: null },
-      data: { revokedAt: new Date() },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.consent.updateMany({
+        where: { userId, document, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      // Отозванное согласие на списания — это выключенное автопродление, а не
+      // пометка в журнале: иначе воркер списал бы деньги у человека, который
+      // только что от этого отказался. Доступ доживает оплаченный период.
+      if (document === 'SUBSCRIPTION_OFFER') {
+        await tx.subscription.updateMany({ where: { userId }, data: { autoRenew: false } });
+      }
     });
     await this.audit.record('consent.revoked', userId, { ...context, metadata: { document } });
   }
@@ -107,55 +121,93 @@ export class PrivacyService {
    * пользователя, а учётные данные доступа.
    */
   async exportData(userId: string, context: AuditContext = {}): Promise<Record<string, unknown>> {
-    const [user, consents, widgets, events, sources, channels, snapshots, rooms] =
-      await Promise.all([
-        this.prisma.user.findUniqueOrThrow({
-          where: { id: userId },
-          select: {
-            id: true,
-            email: true,
-            displayName: true,
-            status: true,
-            isTotpEnabled: true,
-            createdAt: true,
+    const [
+      user,
+      consents,
+      widgets,
+      events,
+      sources,
+      channels,
+      snapshots,
+      rooms,
+      subscription,
+      payments,
+    ] = await Promise.all([
+      this.prisma.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          displayName: true,
+          status: true,
+          isTotpEnabled: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.consent.findMany({ where: { userId } }),
+      this.prisma.widget.findMany({ where: { userId } }),
+      this.prisma.alertEvent.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
+      this.prisma.donationSource.findMany({
+        where: { userId },
+        select: {
+          provider: true,
+          isEnabled: true,
+          disabledReason: true,
+          externalAccountId: true,
+          lastEventAt: true,
+        },
+      }),
+      this.prisma.channel.findMany({ where: { userId } }),
+      // Снимки метрик — тоже данные субъекта: это поминутная история его
+      // эфиров. Отдаём их вместе с каналами, иначе выгрузка формально неполная,
+      // а по сути стример не может забрать собственную аналитику при уходе.
+      this.prisma.analyticsSnapshot.findMany({
+        where: { channel: { userId } },
+        orderBy: { capturedAt: 'desc' },
+      }),
+      // Комнаты и приглашения — без хэшей токенов: это учётные данные доступа, а
+      // не данные субъекта. Согласия гостей сюда тоже не входят — это данные
+      // третьих лиц, а не стримера, как и отпечатки их запросов.
+      this.prisma.room.findMany({
+        where: { userId },
+        select: {
+          id: true,
+          name: true,
+          createdAt: true,
+          invites: {
+            select: { id: true, label: true, createdAt: true, lastUsedAt: true, revokedAt: true },
           },
-        }),
-        this.prisma.consent.findMany({ where: { userId } }),
-        this.prisma.widget.findMany({ where: { userId } }),
-        this.prisma.alertEvent.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
-        this.prisma.donationSource.findMany({
-          where: { userId },
-          select: {
-            provider: true,
-            isEnabled: true,
-            disabledReason: true,
-            externalAccountId: true,
-            lastEventAt: true,
-          },
-        }),
-        this.prisma.channel.findMany({ where: { userId } }),
-        // Снимки метрик — тоже данные субъекта: это поминутная история его
-        // эфиров. Отдаём их вместе с каналами, иначе выгрузка формально неполная,
-        // а по сути стример не может забрать собственную аналитику при уходе.
-        this.prisma.analyticsSnapshot.findMany({
-          where: { channel: { userId } },
-          orderBy: { capturedAt: 'desc' },
-        }),
-        // Комнаты и приглашения — без хэшей токенов: это учётные данные доступа, а
-        // не данные субъекта. Согласия гостей сюда тоже не входят — это данные
-        // третьих лиц, а не стримера, как и отпечатки их запросов.
-        this.prisma.room.findMany({
-          where: { userId },
-          select: {
-            id: true,
-            name: true,
-            createdAt: true,
-            invites: {
-              select: { id: true, label: true, createdAt: true, lastUsedAt: true, revokedAt: true },
-            },
-          },
-        }),
-      ]);
+        },
+      }),
+      // Подписка — без шифротекста способа оплаты: по нему списывают деньги,
+      // это учётные данные доступа к кошельку, а не сведения о человеке.
+      this.prisma.subscription.findUnique({
+        where: { userId },
+        select: {
+          period: true,
+          currentPeriodEnd: true,
+          autoRenew: true,
+          paymentMethodTitle: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.payment.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          kind: true,
+          period: true,
+          amountMinor: true,
+          currency: true,
+          status: true,
+          periodStart: true,
+          periodEnd: true,
+          createdAt: true,
+          paidAt: true,
+        },
+      }),
+    ]);
 
     await this.audit.record('privacy.data.exported', userId, context);
 
@@ -169,6 +221,8 @@ export class PrivacyService {
       donationSources: sources,
       channels,
       rooms,
+      subscription,
+      payments,
       // BigInt не сериализуется в JSON — приводим к строке, а не к number:
       // просмотры крупного канала в number ещё влезают, но правило «не терять
       // точность молча» дешевле соблюдать везде, чем помнить, где можно.
@@ -238,6 +292,17 @@ export class PrivacyService {
       // обязаны перестать открывать комнату немедленно, а хранить согласия на
       // участие в эфире, которого больше не будет, не на каком основании.
       await tx.room.deleteMany({ where: { userId } });
+
+      // Способ оплаты — доступ к деньгам человека, который ушёл. Платежи
+      // остаются: это учёт выручки, а не данные для работы сервиса.
+      await tx.subscription.updateMany({
+        where: { userId },
+        data: { autoRenew: false, paymentMethodEncrypted: null, paymentMethodTitle: null },
+      });
+      await tx.consent.updateMany({
+        where: { userId, document: 'SUBSCRIPTION_OFFER', revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
 
       // Имена и сообщения донатеров — это ПДн третьих лиц, привязанные к аккаунту.
       await tx.alertEvent.updateMany({

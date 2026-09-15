@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Button, Card, Input } from '@/components/ui';
+import { RoomsPaywall, useRoomsAccess } from '@/features/billing/RoomsPaywall';
 import { useCreateRoom, useDeleteRoom, useRooms } from '@/features/rooms/queries';
 
 export function RoomsPage(): React.JSX.Element {
@@ -10,6 +11,7 @@ export function RoomsPage(): React.JSX.Element {
   const rooms = useRooms();
   const createRoom = useCreateRoom();
   const deleteRoom = useDeleteRoom();
+  const roomsAccess = useRoomsAccess();
 
   const handleCreate = async (): Promise<void> => {
     const trimmed = name.trim();
@@ -31,6 +33,8 @@ export function RoomsPage(): React.JSX.Element {
         <p className="max-w-2xl text-sm text-muted">{t('rooms.description')}</p>
       </div>
 
+      <RoomsPaywall />
+
       <Card>
         <div className="flex flex-wrap gap-3">
           <Input
@@ -46,7 +50,7 @@ export function RoomsPage(): React.JSX.Element {
           <Button
             onClick={handleCreate}
             isLoading={createRoom.isPending}
-            disabled={name.trim().length === 0}
+            disabled={!roomsAccess || name.trim().length === 0}
           >
             {t('rooms.create')}
           </Button>

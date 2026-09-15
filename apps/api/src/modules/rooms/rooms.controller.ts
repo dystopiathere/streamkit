@@ -11,6 +11,7 @@ import {
   Query,
   type RawBodyRequest,
   Req,
+  ServiceUnavailableException,
   UnauthorizedException,
   Logger,
 } from '@nestjs/common';
@@ -253,8 +254,12 @@ export class LiveKitWebhookController {
       return { status: 'ignored' };
     }
 
-    // Подпись уже проверена, дальше — наши сбои, а не чужие. Отвечаем 200 в любом
-    // случае: повтор того же вебхука ничего не исправит, а ошибка видна в логе.
+    // Подпись уже проверена, дальше — наши сбои, а не чужие. На сбой отвечаем
+    // ошибкой, а не 200: LiveKit повторяет доставку только неудачных вебхуков.
+    // Раньше здесь был 200 «потому что повтор ничего не исправит», но исправит
+    // именно он: база или медиасервер недоступны секунду, а отозванный гость,
+    // вошедший в эту секунду, без повтора остался бы в комнате. Проверка
+    // идемпотентна — повторное удаление ушедшего участника ничего не делает.
     try {
       const status = await this.rooms.enforceJoin(event.room.name, event.participant.identity);
       if (status !== 'allowed') {
@@ -263,7 +268,7 @@ export class LiveKitWebhookController {
       return { status };
     } catch (error) {
       this.logger.error({ err: error, room: event.room.name }, 'Не удалось проверить участника');
-      return { status: 'error' };
+      throw new ServiceUnavailableException();
     }
   }
 }

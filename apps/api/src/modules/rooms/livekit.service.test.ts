@@ -103,3 +103,26 @@ describe('вебхук LiveKit и лимиты запросов', () => {
     }
   });
 });
+
+describe('медиасервер и ушедшие участники', () => {
+  /** Медиасервер с подменённым клиентом SDK: отвечает «не найдено» на всё. */
+  function goneServer(): LiveKitRoomMediaServer {
+    const server = new LiveKitRoomMediaServer(configured);
+    const notFound = () => Promise.reject(Object.assign(new Error('not found'), { status: 404 }));
+    (server as unknown as { client: unknown }).client = {
+      removeParticipant: notFound,
+      mutePublishedTrack: notFound,
+      updateParticipant: notFound,
+    };
+    return server;
+  }
+
+  it('действие над ушедшим участником не считается сбоем', async () => {
+    // Запрет микрофона обходит все вкладки гостя, и вкладка, которую он только
+    // что перезагрузил, уже не существует. Сбой на ней оставлял микрофон остальным.
+    const server = goneServer();
+    await expect(server.removeParticipant(ROOM, 'guest:x:y')).resolves.toBeUndefined();
+    await expect(server.muteTrack(ROOM, 'guest:x:y', 'TR_1')).resolves.toBeUndefined();
+    await expect(server.setPublishSources(ROOM, 'guest:x:y', ['camera'])).resolves.toBeUndefined();
+  });
+});

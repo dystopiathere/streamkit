@@ -20,6 +20,13 @@ export interface PlatformRequest {
   headers?: Record<string, string>;
   /** Тело формы — так требуют оба токен-эндпоинта, и Twitch, и Google. */
   form?: Record<string, string>;
+  /** JSON-тело — так принимает платёжный API. Взаимоисключимо с `form`. */
+  json?: unknown;
+  /**
+   * Basic-авторизация учётными данными приложения (ЮKassa: идентификатор
+   * магазина и секретный ключ). В логи не попадает, как и `accessToken`.
+   */
+  basicAuth?: { username: string; password: string };
 }
 
 /**
@@ -83,10 +90,19 @@ export class HttpClient {
       headers: {
         Accept: 'application/json',
         ...(request.accessToken ? { Authorization: `Bearer ${request.accessToken}` } : {}),
+        ...(request.basicAuth
+          ? {
+              Authorization: `Basic ${Buffer.from(
+                `${request.basicAuth.username}:${request.basicAuth.password}`,
+              ).toString('base64')}`,
+            }
+          : {}),
         ...(request.form ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
+        ...(request.json !== undefined ? { 'Content-Type': 'application/json' } : {}),
         ...request.headers,
       },
       ...(request.form ? { body: new URLSearchParams(request.form).toString() } : {}),
+      ...(request.json !== undefined ? { body: JSON.stringify(request.json) } : {}),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
 

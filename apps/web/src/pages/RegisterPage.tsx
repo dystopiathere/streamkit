@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button, Card, FieldError, Input, Label } from '@/components/ui';
+import { PublicFooter } from '@/features/public/PublicFooter';
 import { ApiError, api } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 
@@ -53,62 +54,65 @@ export function RegisterPage(): React.JSX.Element {
   const consentsInvalid = Boolean(form.formState.errors.consents);
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <h1 className="mb-6 text-xl font-semibold">{t('auth.registerTitle')}</h1>
+    <div className="flex min-h-screen flex-col">
+      <div className="flex flex-1 items-center justify-center p-4">
+        <Card className="w-full max-w-sm">
+          <h1 className="mb-6 text-xl font-semibold">{t('auth.registerTitle')}</h1>
 
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div>
-            <Label htmlFor="displayName">{t('auth.displayName')}</Label>
-            <Input id="displayName" autoComplete="nickname" {...form.register('displayName')} />
-            <FieldError message={form.formState.errors.displayName?.message} />
-          </div>
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="displayName">{t('auth.displayName')}</Label>
+              <Input id="displayName" autoComplete="nickname" {...form.register('displayName')} />
+              <FieldError message={form.formState.errors.displayName?.message} />
+            </div>
 
-          <div>
-            <Label htmlFor="email">{t('auth.email')}</Label>
-            <Input id="email" type="email" autoComplete="email" {...form.register('email')} />
-            <FieldError message={form.formState.errors.email?.message} />
-          </div>
+            <div>
+              <Label htmlFor="email">{t('auth.email')}</Label>
+              <Input id="email" type="email" autoComplete="email" {...form.register('email')} />
+              <FieldError message={form.formState.errors.email?.message} />
+            </div>
 
-          <div>
-            <Label htmlFor="password">{t('auth.password')}</Label>
-            <Input
-              id="password"
-              type="password"
-              autoComplete="new-password"
-              {...form.register('password')}
-            />
-            <p className="mt-1 text-xs text-muted">{t('auth.passwordHint')}</p>
-            <FieldError message={form.formState.errors.password?.message} />
-          </div>
+            <div>
+              <Label htmlFor="password">{t('auth.password')}</Label>
+              <Input
+                id="password"
+                type="password"
+                autoComplete="new-password"
+                {...form.register('password')}
+              />
+              <p className="mt-1 text-xs text-muted">{t('auth.passwordHint')}</p>
+              <FieldError message={form.formState.errors.password?.message} />
+            </div>
 
-          <div className="space-y-2 border-t border-border pt-4">
-            {CONSENT_FIELDS.map((field) => (
-              <label key={field.name} className="flex items-start gap-2 text-xs text-muted">
-                <input
-                  type="checkbox"
-                  className="mt-0.5"
-                  {...form.register(field.name as 'consents.terms')}
-                />
-                <span>
-                  <Link to={field.href} target="_blank" className="underline hover:text-fg">
-                    {t(field.label)}
-                  </Link>
-                </span>
-              </label>
-            ))}
-            {consentsInvalid ? <FieldError message={t('auth.consentRequired')} /> : null}
-          </div>
+            <div className="space-y-2 border-t border-border pt-4">
+              {CONSENT_FIELDS.map((field) => (
+                <label key={field.name} className="flex items-start gap-2 text-xs text-muted">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    {...form.register(field.name as 'consents.terms')}
+                  />
+                  <span>
+                    <Link to={field.href} target="_blank" className="underline hover:text-fg">
+                      {t(field.label)}
+                    </Link>
+                  </span>
+                </label>
+              ))}
+              {consentsInvalid ? <FieldError message={t('auth.consentRequired')} /> : null}
+            </div>
 
-          <Button type="submit" className="w-full" isLoading={form.formState.isSubmitting}>
-            {t('auth.submitRegister')}
-          </Button>
-        </form>
+            <Button type="submit" className="w-full" isLoading={form.formState.isSubmitting}>
+              {t('auth.submitRegister')}
+            </Button>
+          </form>
 
-        <Link to="/login" className="mt-4 block text-center text-sm text-muted hover:text-fg">
-          {t('auth.toLogin')}
-        </Link>
-      </Card>
+          <Link to="/login" className="mt-4 block text-center text-sm text-muted hover:text-fg">
+            {t('auth.toLogin')}
+          </Link>
+        </Card>
+      </div>
+      <PublicFooter />
     </div>
   );
 }

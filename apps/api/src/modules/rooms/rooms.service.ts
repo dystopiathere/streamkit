@@ -25,6 +25,7 @@ import { CryptoService } from '../../common/crypto/crypto.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AppConfig } from '../../config/app-config.service';
 import { ROOM_GUEST_TERMS } from '../privacy/legal-documents';
+import { BillingService, SubscriptionRequiredException } from '../billing/billing.service';
 import { WidgetsService } from '../widgets/widgets.service';
 import {
   LiveKitTokens,
@@ -50,6 +51,7 @@ export class RoomsService {
     private readonly config: AppConfig,
     private readonly tokens: LiveKitTokens,
     private readonly widgets: WidgetsService,
+    private readonly billing: BillingService,
     @Inject(ROOM_MEDIA_SERVER) private readonly media: RoomMediaServer,
   ) {}
 
@@ -66,6 +68,7 @@ export class RoomsService {
   }
 
   async create(userId: string, name: string, context: AuditContext = {}): Promise<Room> {
+    await this.billing.requireRoomsAccess(userId);
     const row = await this.prisma.room.create({ data: { userId, name } });
     await this.audit.record('room.created', userId, { ...context, metadata: { roomId: row.id } });
     return toRoom(row);
@@ -168,6 +171,7 @@ export class RoomsService {
 
   async hostAccess(userId: string, roomId: string): Promise<RoomAccess> {
     await this.requireOwned(userId, roomId);
+    await this.billing.requireRoomsAccess(userId);
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
       select: { displayName: true },
@@ -195,10 +199,26 @@ export class RoomsService {
       include: { room: true },
     });
     if (!invite || invite.revokedAt) throw new NotFoundException('Приглашение недействительно');
+    // Проверяется до записи согласия: гостю, которого всё равно не впустят,
+    // соглашаться не на что. Ответ 402 гость видит как «комната стримера сейчас
+    // недоступна» — почему именно, ему знать незачем.
+    if (!(await this.billing.roomsAccess(invite.room.userId))) {
+      throw new SubscriptionRequiredException();
+    }
 
     const participants = await this.media.listParticipants(invite.roomId);
-    const guests = participants.filter((participant) => participant.role === 'guest');
-    if (guests.length >= MAX_GUESTS_PER_ROOM) {
+    // Место занимает ссылка, а не вкладка, и своя ссылка входящему места не
+    // отнимает. Гость, перезагрузивший вкладку, ещё числится в комнате прежней
+    // идентичностью, пока LiveKit не заметит уход, — и в полной комнате получал
+    // «нет мест» на собственное место. Вкладок одной ссылки больше одной не
+    // бывает надолго, а общий потолок участников держит сам LiveKit.
+    const seats = new Set(
+      participants
+        .filter((participant) => participant.role === 'guest')
+        .map((participant) => parseParticipantIdentity(participant.identity)?.id)
+        .filter((inviteId) => inviteId !== invite.id),
+    );
+    if (seats.size >= MAX_GUESTS_PER_ROOM) {
       throw new ConflictException('В комнате нет свободных мест');
     }
 
@@ -254,7 +274,11 @@ export class RoomsService {
       where: { id: roomId, userId: resolved.userId },
       select: { id: true },
     });
-    if (!room) throw new NotFoundException('Нет доступа');
+    // Истёкший тариф — тот же 404, что и любой недоступный доступ: оверлей
+    // открыт по публичной ссылке, и рассказывать ей о тарифе владельца незачем.
+    if (!room || !(await this.billing.roomsAccess(resolved.userId))) {
+      throw new NotFoundException('Нет доступа');
+    }
 
     await this.widgets.touchOverlayToken(resolved.tokenId);
     return this.tokens.issue(room.id, {
@@ -342,22 +366,29 @@ export class RoomsService {
         participant.role === 'guest' &&
         parseParticipantIdentity(participant.identity)?.id === inviteId,
     );
-    for (const tab of tabs) {
-      if (blocked) {
-        // Сначала тишина, потом права: смена прав доходит до клиента не мгновенно,
-        // а звук в эфире должен пропасть сразу после нажатия.
-        for (const track of tab.tracks.filter(
-          (candidate) => candidate.kind === 'audio' && !candidate.muted,
-        )) {
-          await this.media.muteTrack(roomId, tab.identity, track.sid);
+    // Вкладки обрабатываются независимо: сбой на одной не должен оставить
+    // микрофон остальным. Раньше цикл обрывался на первой же ошибке — чаще всего
+    // на вкладке, которую гость только что перезагрузил.
+    const results = await Promise.allSettled(
+      tabs.map(async (tab) => {
+        if (blocked) {
+          // Сначала тишина, потом права: смена прав доходит до клиента не
+          // мгновенно, а звук в эфире должен пропасть сразу после нажатия.
+          for (const track of tab.tracks.filter(
+            (candidate) => candidate.kind === 'audio' && !candidate.muted,
+          )) {
+            await this.media.muteTrack(roomId, tab.identity, track.sid);
+          }
         }
-      }
-      await this.media.setPublishSources(
-        roomId,
-        tab.identity,
-        blocked ? ['camera'] : ['camera', 'microphone'],
-      );
-    }
+        await this.media.setPublishSources(
+          roomId,
+          tab.identity,
+          blocked ? ['camera'] : ['camera', 'microphone'],
+        );
+      }),
+    );
+    const failed = results.find((result) => result.status === 'rejected');
+    if (failed) throw failed.reason;
   }
 
   /**
@@ -394,6 +425,9 @@ export class RoomsService {
     });
     // Токен с неизвестной идентичностью мы не выпускали, а комнаты уже нет.
     if (!parsed || !room) return remove();
+    // Токен, выданный до конца оплаченного периода, живёт ещё пять минут.
+    // Вошедшего по нему после конца выгоняем так же, как отозванного.
+    if (!(await this.billing.roomsAccess(room.userId))) return remove();
 
     switch (parsed.role) {
       case 'host':

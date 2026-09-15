@@ -130,6 +130,53 @@ export const envSchema = z.object({
   LIVEKIT_API_KEY: optionalValue(),
   LIVEKIT_API_SECRET: optionalValue(),
 
+  /**
+   * ЮKassa — приём оплаты подписки. Без идентификатора магазина и ключа оплата
+   * не настроена, и приватные комнаты бесплатны (docs/adr/0011).
+   *
+   * `YOOKASSA_API_URL` задают только тесты: сквозной прогон ходит в фальшивый
+   * сервер. `YOOKASSA_VAT_CODE` зависит от налогового режима юрлица и
+   * выбирается бухгалтером, а не кодом: 1 — без НДС.
+   */
+  YOOKASSA_SHOP_ID: optionalValue(),
+  YOOKASSA_SECRET_KEY: optionalValue(),
+  YOOKASSA_API_URL: z.string().url().default('https://api.yookassa.ru/v3'),
+  /**
+   * Кто формирует чек. `none` — самозанятый: доход регистрирует и чек формирует
+   * сама ЮKassa через интеграцию с «Мой налог», объект `receipt` не нужен, а без
+   * подключённых «Чеков от ЮKassa» платёж с ним отклоняется. `fiscal` — ИП или
+   * юрлицо: чек 54-ФЗ формирует касса ЮKassa по `receipt`, со ставкой НДС и
+   * системой налогообложения ниже.
+   */
+  YOOKASSA_RECEIPTS: z.enum(['none', 'fiscal']).default('none'),
+  YOOKASSA_VAT_CODE: z.coerce.number().int().min(1).max(12).default(1),
+  // Через optionalValue: пустое `YOOKASSA_TAX_SYSTEM_CODE=` в .env иначе стало
+  // бы нулём и уронило старт (грабля с пустыми значениями в CLAUDE.md).
+  YOOKASSA_TAX_SYSTEM_CODE: optionalValue().pipe(
+    z
+      .string()
+      .regex(/^[1-6]$/, 'Система налогообложения в чеке — число от 1 до 6')
+      .transform(Number)
+      .optional(),
+  ),
+
+  /**
+   * Реквизиты продавца — на публичной странице, в оферте и в документах.
+   *
+   * ЮKassa проверяет сайт до подключения: цены, порядок получения услуги,
+   * оферта и реквизиты должны быть видны без входа в аккаунт. В переменных, а не
+   * в коде: это персональные данные владельца, и в репозитории им не место.
+   */
+  SELLER_NAME: optionalValue(),
+  SELLER_INN: optionalValue().pipe(
+    z
+      .string()
+      .regex(/^(\d{10}|\d{12})$/, 'ИНН — 10 цифр у организации или 12 у физического лица')
+      .optional(),
+  ),
+  SELLER_EMAIL: optionalValue().pipe(z.string().email().optional()),
+  SELLER_PHONE: optionalValue(),
+
   THROTTLE_LIMIT: z.coerce.number().int().min(1).default(120),
   /** Лимит попыток логина в минуту на IP. Жёстче общего. */
   THROTTLE_AUTH_LIMIT: z.coerce.number().int().min(1).default(10),

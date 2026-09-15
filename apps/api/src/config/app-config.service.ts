@@ -119,6 +119,48 @@ export class AppConfig {
   }
 
   /**
+   * Приём оплаты в ЮKassa, либо null — оплата не настроена.
+   *
+   * Через `get`, как у LiveKit: без магазина приложение обязано стартовать, а
+   * приватные комнаты в таком случае бесплатны.
+   */
+  get billing(): {
+    shopId: string;
+    secretKey: string;
+    apiUrl: string;
+    receipts: 'none' | 'fiscal';
+    vatCode: number;
+    taxSystemCode: number | undefined;
+  } | null {
+    const shopId = this.config.get<string>('YOOKASSA_SHOP_ID');
+    const secretKey = this.config.get<string>('YOOKASSA_SECRET_KEY');
+    if (!shopId || !secretKey) return null;
+    return {
+      shopId,
+      secretKey,
+      apiUrl: this.config.get<string>('YOOKASSA_API_URL') ?? 'https://api.yookassa.ru/v3',
+      receipts: this.config.get<'none' | 'fiscal'>('YOOKASSA_RECEIPTS') ?? 'none',
+      vatCode: this.config.get<number>('YOOKASSA_VAT_CODE') ?? 1,
+      taxSystemCode: this.config.get<number>('YOOKASSA_TAX_SYSTEM_CODE'),
+    };
+  }
+
+  /** Реквизиты продавца. Незаполненное — null: страница покажет, что его нет. */
+  get seller(): {
+    name: string | null;
+    inn: string | null;
+    email: string | null;
+    phone: string | null;
+  } {
+    return {
+      name: this.config.get<string>('SELLER_NAME') ?? null,
+      inn: this.config.get<string>('SELLER_INN') ?? null,
+      email: this.config.get<string>('SELLER_EMAIL') ?? null,
+      phone: this.config.get<string>('SELLER_PHONE') ?? null,
+    };
+  }
+
+  /**
    * Учётные данные приложения площадки, либо null, если оно не настроено.
    *
    * Через `config.get`, а не `value`: `value` использует getOrThrow и уронил бы

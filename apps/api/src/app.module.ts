@@ -19,6 +19,7 @@ import { PrivacyModule } from './modules/privacy/privacy.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { RoomsModule } from './modules/rooms/rooms.module';
 import { WidgetsModule } from './modules/widgets/widgets.module';
+import { BillingModule } from './modules/billing/billing.module';
 
 @Module({
   imports: [
@@ -79,6 +80,7 @@ import { WidgetsModule } from './modules/widgets/widgets.module';
     RealtimeModule,
     PrivacyModule,
     RoomsModule,
+    BillingModule,
     // Площадки без коннекторов донатов: в API нужен только OAuth-контур и
     // чтение метрик. Долгоживущие соединения поднимает воркер.
     IntegrationsModule,

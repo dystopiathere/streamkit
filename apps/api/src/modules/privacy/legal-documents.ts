@@ -18,32 +18,42 @@ export interface LegalDocument {
   path: string;
   /** Обязателен ли документ для регистрации. */
   requiredOnRegister: boolean;
+  /**
+   * Принимается только при оплате, а не кнопкой в разделе «Приватность».
+   * Согласие на автоматические списания без выбора тарифа и суммы — не
+   * согласие ни на что: человек не знает, сколько и когда с него спишут.
+   */
+  acceptedAtCheckout: boolean;
 }
 
 export const LEGAL_DOCUMENTS: Record<ConsentDocument, LegalDocument> = {
   TERMS: {
     document: 'TERMS',
-    version: '2026-09-11',
+    // Раздел об оплате и оператор-самозанятый с реквизитами из окружения.
+    version: '2026-09-15',
     title: 'Пользовательское соглашение',
     path: '/legal/terms',
     requiredOnRegister: true,
+    acceptedAtCheckout: false,
   },
   PRIVACY: {
     document: 'PRIVACY',
     // Добавлен срок хранения снимков метрик — новый раздел данных, новая
     // редакция. Согласившиеся со старой увидят needsRenewal: это и есть смысл
     // реестра версий.
-    version: '2026-09-12',
+    version: '2026-09-15',
     title: 'Политика конфиденциальности',
     path: '/legal/privacy',
     requiredOnRegister: true,
+    acceptedAtCheckout: false,
   },
   PERSONAL_DATA: {
     document: 'PERSONAL_DATA',
-    version: '2026-09-11',
+    version: '2026-09-15',
     title: 'Согласие на обработку персональных данных',
     path: '/legal/personal-data',
     requiredOnRegister: true,
+    acceptedAtCheckout: false,
   },
   COOKIE_ANALYTICS: {
     document: 'COOKIE_ANALYTICS',
@@ -51,6 +61,7 @@ export const LEGAL_DOCUMENTS: Record<ConsentDocument, LegalDocument> = {
     title: 'Аналитические cookie',
     path: '/legal/cookies',
     requiredOnRegister: false,
+    acceptedAtCheckout: false,
   },
   MARKETING: {
     document: 'MARKETING',
@@ -58,6 +69,15 @@ export const LEGAL_DOCUMENTS: Record<ConsentDocument, LegalDocument> = {
     title: 'Рекламные рассылки',
     path: '/legal/marketing',
     requiredOnRegister: false,
+    acceptedAtCheckout: false,
+  },
+  SUBSCRIPTION_OFFER: {
+    document: 'SUBSCRIPTION_OFFER',
+    version: '2026-09-15',
+    title: 'Оферта тарифа «Про» и автоматические списания',
+    path: '/legal/subscription',
+    requiredOnRegister: false,
+    acceptedAtCheckout: true,
   },
 };
 

@@ -112,7 +112,12 @@ export class LiveKitRoomMediaServer implements RoomMediaServer {
   }
 
   async muteTrack(roomId: string, identity: string, trackSid: string): Promise<void> {
-    await this.service().mutePublishedTrack(livekitRoomName(roomId), identity, trackSid, true);
+    try {
+      await this.service().mutePublishedTrack(livekitRoomName(roomId), identity, trackSid, true);
+    } catch (error) {
+      // Участник ушёл между списком и действием — глушить уже нечего.
+      if (!isNotFound(error)) throw error;
+    }
   }
 
   /**
@@ -125,16 +130,21 @@ export class LiveKitRoomMediaServer implements RoomMediaServer {
     identity: string,
     sources: PublishSource[],
   ): Promise<void> {
-    await this.service().updateParticipant(livekitRoomName(roomId), identity, {
-      permission: {
-        canSubscribe: true,
-        canPublish: sources.length > 0,
-        canPublishSources: sources.map((source) => TRACK_SOURCES[source]),
-        canPublishData: false,
-        canUpdateMetadata: false,
-        hidden: false,
-      },
-    });
+    try {
+      await this.service().updateParticipant(livekitRoomName(roomId), identity, {
+        permission: {
+          canSubscribe: true,
+          canPublish: sources.length > 0,
+          canPublishSources: sources.map((source) => TRACK_SOURCES[source]),
+          canPublishData: false,
+          canUpdateMetadata: false,
+          hidden: false,
+        },
+      });
+    } catch (error) {
+      // Ушедшей вкладке права не нужны: следующий токен выдаётся по приглашению.
+      if (!isNotFound(error)) throw error;
+    }
   }
 
   private service(): RoomServiceClient {

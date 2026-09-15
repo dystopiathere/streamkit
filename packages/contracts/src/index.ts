@@ -13,4 +13,5 @@ export * from './chat.js';
 export * from './rooms.js';
 export * from './widgets.js';
 export * from './auth.js';
+export * from './billing.js';
 export * from './realtime.js';

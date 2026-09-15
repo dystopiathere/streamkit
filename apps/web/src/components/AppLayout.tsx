@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { to: '/analytics', label: 'nav.analytics' },
   { to: '/rooms', label: 'nav.rooms' },
   { to: '/sources', label: 'nav.sources' },
+  { to: '/billing', label: 'nav.billing' },
   { to: '/privacy', label: 'nav.privacy' },
 ];
 
