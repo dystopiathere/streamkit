@@ -30,7 +30,7 @@ resource "yandex_compute_instance" "app" {
   }
 
   network_interface {
-    subnet_id          = yandex_vpc_subnet.main.id
+    subnet_id          = yandex_vpc_subnet.vms.id
     ip_address         = local.app_private_ip
     nat                = true
     nat_ip_address     = local.app_public_ip
@@ -86,7 +86,7 @@ resource "yandex_compute_instance" "livekit" {
   }
 
   network_interface {
-    subnet_id          = yandex_vpc_subnet.main.id
+    subnet_id          = yandex_vpc_subnet.vms.id
     ip_address         = local.livekit_private_ip
     nat                = true
     nat_ip_address     = local.livekit_public_ip

@@ -26,9 +26,15 @@ variable "acme_email" {
 }
 
 variable "subnet_cidr" {
-  description = "Адреса внутренней подсети. По ним разрешён трафик между ВМ и к базам"
+  description = "Подсеть управляемых PostgreSQL и Valkey: адреса хостам раздаёт облако"
   type        = string
   default     = "10.10.0.0/24"
+}
+
+variable "vm_subnet_cidr" {
+  description = "Подсеть ВМ с фиксированными адресами. По ней разрешён трафик между ВМ приложений и медиасервером"
+  type        = string
+  default     = "10.10.1.0/24"
 }
 
 variable "admin_ssh_cidrs" {
@@ -103,6 +109,8 @@ variable "valkey" {
   default = {
     resource_preset_id = "hm3-c2-m8"
     disk_gb            = 16
-    version            = "8.1"
+    # С суффиксом: API отвечает «version not found» на голое "8.1". Допустимые
+    # значения — 7.2-valkey, 8.0-valkey, 8.1-valkey, 9.0-valkey.
+    version = "8.1-valkey"
   }
 }
