@@ -4,7 +4,11 @@
 # Yandex Cloud. Compose-файлы и секреты привозит выкатка (deploy.yml).
 
 users:
-  - name: admin
+  # Не «admin»: на образе Ubuntu 24.04 в Yandex Cloud этот пользователь не
+  # создаётся («Failed to create user admin» в консоли ВМ), и cloud-init бросает
+  # модуль целиком — вместе с пользователем deploy, так что выкатка получает
+  # «Permission denied (publickey)» без единой подсказки почему.
+  - name: ops
     groups: sudo
     shell: /bin/bash
     sudo: "ALL=(ALL) NOPASSWD:ALL"

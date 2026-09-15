@@ -50,7 +50,7 @@ variable "deploy_ssh_cidrs" {
 }
 
 variable "admin_ssh_public_key" {
-  description = "Публичный ключ администратора (пользователь admin, sudo)"
+  description = "Публичный ключ администратора (пользователь ops, sudo)"
   type        = string
 }
 

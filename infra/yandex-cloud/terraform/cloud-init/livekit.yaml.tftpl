@@ -3,7 +3,8 @@
 # сертификат для TURN привозит и обновляет выкатка (deploy.yml).
 
 users:
-  - name: admin
+  # Не «admin»: см. cloud-init/app.yaml.tftpl.
+  - name: ops
     groups: sudo
     shell: /bin/bash
     sudo: "ALL=(ALL) NOPASSWD:ALL"
