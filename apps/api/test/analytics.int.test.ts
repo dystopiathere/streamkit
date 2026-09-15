@@ -177,9 +177,12 @@ describe('Аналитика каналов (feature)', () => {
 
   it('прореживает ряд по часам для недели и по суткам для месяца', async () => {
     const channelId = await createChannel();
+    // Снимки привязаны к началу часа: «25 часов и 25 без минуты назад», взятые
+    // от текущего момента, в последнюю минуту часа попадали в соседние корзины.
+    const hourStartAgo = 25 + (Date.now() % HOUR) / HOUR;
     await seedSnapshots(channelId, [
-      { hoursAgo: 25, viewers: 10, isLive: true },
-      { hoursAgo: 25 - 1 / 60, viewers: 30, isLive: true },
+      { hoursAgo: hourStartAgo - 10 / 60, viewers: 10, isLive: true },
+      { hoursAgo: hourStartAgo - 20 / 60, viewers: 30, isLive: true },
       { hoursAgo: 2, viewers: 50, isLive: true },
     ]);
 
