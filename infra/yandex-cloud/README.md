@@ -135,6 +135,10 @@ yc compute instance get-serial-port-output streamkit-app | grep -A4 'BEGIN SSH H
 ssh-keyscan -t ed25519 <app_ip> <livekit_ip>   # сверить с выводом выше и сохранить
 ```
 
+Ключ хоста новый у каждой пересозданной ВМ: после `terraform apply -replace=...`
+секрет собирается заново, иначе выкатка остановится на «Host key verification
+failed». Администратор входит на ВМ как `ops`.
+
 ## 6. Выпуск и выкатка
 
 1. Слияние в `main` → CI → workflow **«Выпуск образов»** публикует

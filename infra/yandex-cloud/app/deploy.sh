@@ -57,12 +57,35 @@ LIVEKIT_PUBLIC_URL='wss://rtc.${DOMAIN}'
 EOF
 mv .env.next .env
 
+# Движок миграций Prisma читает из sslcert только ПЕРВЫЙ сертификат, а в CA.pem
+# Yandex Cloud первым идёт промежуточный YandexCLCA, корень — вторым. С полным
+# файлом миграции падают на «unable to get issuer certificate», хотя openssl с
+# ним цепочку проверяет. Движку — отдельный файл с одним корнем, найденным по
+# самоподписи, а не по порядку в файле.
+echo "==> Корневой сертификат для миграций"
+certs=$(mktemp -d)
+awk -v dir="$certs" '/BEGIN CERTIFICATE/ { n++ } n { print > (dir "/" n ".pem") }' yandex-ca.pem
+rm -f yandex-root-ca.pem
+for cert in "$certs"/*.pem; do
+  if [[ $(openssl x509 -in "$cert" -noout -subject -nameopt RFC2253) == \
+    "subject=$(openssl x509 -in "$cert" -noout -issuer -nameopt RFC2253 | cut -d= -f2-)" ]]; then
+    cp "$cert" yandex-root-ca.pem
+  fi
+done
+rm -rf "$certs"
+if [[ ! -s yandex-root-ca.pem ]]; then
+  echo "В yandex-ca.pem нет самоподписанного корневого сертификата" >&2
+  exit 1
+fi
+# umask 077 выше закрыл бы файл от пользователя node в контейнере миграций.
+chmod 644 yandex-root-ca.pem
+
 # Переменные подстановки в compose.yml — отдельно от окружения контейнеров:
 # пароль попадает сюда только в адресе для миграций.
 cat >release.env <<EOF
 IMAGE_TAG=${TAG}
 CADDY_VERSION=${CADDY_VERSION}
-MIGRATE_DATABASE_URL=postgresql://${DATABASE}?sslmode=require&sslaccept=strict&sslcert=/etc/streamkit/yandex-ca.pem
+MIGRATE_DATABASE_URL=postgresql://${DATABASE}?sslmode=require&sslaccept=strict&sslcert=/etc/streamkit/yandex-root-ca.pem
 EOF
 
 compose() {
