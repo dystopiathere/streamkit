@@ -18,6 +18,7 @@ import {
   checkoutInputSchema,
   type CheckoutResult,
   type PaymentView,
+  type SellerInfo,
   type SubscriptionView,
   type UpdateSubscriptionInput,
   updateSubscriptionSchema,
@@ -27,7 +28,26 @@ import { z } from 'zod';
 import { AuditService } from '../../common/audit/audit.service';
 import { type AuthenticatedUser, CurrentUser, Public } from '../../common/auth/auth.decorators';
 import { zodBody } from '../../common/pipes/zod-validation.pipe';
+import { AppConfig } from '../../config/app-config.service';
 import { BillingService } from './billing.service';
+
+/**
+ * Реквизиты продавца для публичных страниц: главной, оферты и документов.
+ *
+ * Открыто без входа: ЮKassa проверяет сайт до подключения, и реквизиты, цены и
+ * оферта должны быть видны любому посетителю.
+ */
+@SkipThrottle({ auth: true })
+@Controller('public')
+export class PublicSellerController {
+  constructor(private readonly config: AppConfig) {}
+
+  @Public()
+  @Get('seller')
+  seller(): SellerInfo {
+    return this.config.seller;
+  }
+}
 
 // Жёсткий лимитер auth — только для входа и регистрации.
 @SkipThrottle({ auth: true })

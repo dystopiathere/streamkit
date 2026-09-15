@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button, Card, FieldError, Input, Label } from '@/components/ui';
+import { PublicFooter } from '@/features/public/PublicFooter';
 import { ApiError, api } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 
@@ -39,52 +40,55 @@ export function LoginPage(): React.JSX.Element {
   });
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <h1 className="mb-6 text-xl font-semibold">{t('auth.loginTitle')}</h1>
+    <div className="flex min-h-screen flex-col">
+      <div className="flex flex-1 items-center justify-center p-4">
+        <Card className="w-full max-w-sm">
+          <h1 className="mb-6 text-xl font-semibold">{t('auth.loginTitle')}</h1>
 
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div>
-            <Label htmlFor="email">{t('auth.email')}</Label>
-            <Input id="email" type="email" autoComplete="email" {...form.register('email')} />
-            <FieldError message={form.formState.errors.email?.message} />
-          </div>
-
-          <div>
-            <Label htmlFor="password">{t('auth.password')}</Label>
-            <Input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              {...form.register('password')}
-            />
-            <FieldError message={form.formState.errors.password?.message} />
-          </div>
-
-          {needsTotp ? (
+          <form onSubmit={onSubmit} className="space-y-4">
             <div>
-              <Label htmlFor="totpCode">{t('auth.totpCode')}</Label>
-              <Input
-                id="totpCode"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                autoFocus
-                {...form.register('totpCode')}
-              />
-              <FieldError message={form.formState.errors.totpCode?.message} />
-              <p className="mt-1 text-xs text-muted">{t('auth.totpRequired')}</p>
+              <Label htmlFor="email">{t('auth.email')}</Label>
+              <Input id="email" type="email" autoComplete="email" {...form.register('email')} />
+              <FieldError message={form.formState.errors.email?.message} />
             </div>
-          ) : null}
 
-          <Button type="submit" className="w-full" isLoading={form.formState.isSubmitting}>
-            {t('auth.submitLogin')}
-          </Button>
-        </form>
+            <div>
+              <Label htmlFor="password">{t('auth.password')}</Label>
+              <Input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                {...form.register('password')}
+              />
+              <FieldError message={form.formState.errors.password?.message} />
+            </div>
 
-        <Link to="/register" className="mt-4 block text-center text-sm text-muted hover:text-fg">
-          {t('auth.toRegister')}
-        </Link>
-      </Card>
+            {needsTotp ? (
+              <div>
+                <Label htmlFor="totpCode">{t('auth.totpCode')}</Label>
+                <Input
+                  id="totpCode"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  {...form.register('totpCode')}
+                />
+                <FieldError message={form.formState.errors.totpCode?.message} />
+                <p className="mt-1 text-xs text-muted">{t('auth.totpRequired')}</p>
+              </div>
+            ) : null}
+
+            <Button type="submit" className="w-full" isLoading={form.formState.isSubmitting}>
+              {t('auth.submitLogin')}
+            </Button>
+          </form>
+
+          <Link to="/register" className="mt-4 block text-center text-sm text-muted hover:text-fg">
+            {t('auth.toRegister')}
+          </Link>
+        </Card>
+      </div>
+      <PublicFooter />
     </div>
   );
 }

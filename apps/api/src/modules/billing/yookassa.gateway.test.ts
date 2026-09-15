@@ -8,10 +8,14 @@ const config = {
     shopId: 'shop-1',
     secretKey: 'secret-1',
     apiUrl: 'https://yookassa.test/v3',
+    receipts: 'fiscal',
     vatCode: 1,
     taxSystemCode: 2,
   },
 } as AppConfig;
+
+/** Самозанятый: чек выдаётся через «Мой налог», не кассой ЮKassa. */
+const selfEmployed = { billing: { ...config.billing!, receipts: 'none' } } as AppConfig;
 
 const PAYMENT = {
   id: 'yk-1',
@@ -79,6 +83,18 @@ describe('клиент ЮKassa', () => {
       paymentId: 'our-1',
       confirmationUrl: 'https://yookassa.test/pay/yk-1',
     });
+  });
+
+  it('у самозанятого чек 54-ФЗ не передаётся', async () => {
+    // Без подключённых «Чеков от ЮKassa» платёж с `receipt` отклоняется, а
+    // самозанятый выдаёт чек через «Мой налог» и кассы не имеет.
+    const { http, requests } = recordingClient(PAYMENT);
+    await new YooKassaGateway(http, selfEmployed).createPayment({
+      ...base,
+      returnUrl: 'https://app.example/billing?payment=our-1',
+    });
+    expect(requests[0]!.json).not.toHaveProperty('receipt');
+    expect(requests[0]!.json).toMatchObject({ save_payment_method: true });
   });
 
   it('продление списывает по сохранённому способу, без страницы оплаты', async () => {

@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
+import { PublicFooter } from '@/features/public/PublicFooter';
+import { fillDocumentDetails, useSeller } from '@/features/public/seller';
 
 /** Соответствие адреса страницы файлу документа в public/legal. */
 const DOCUMENT_FILES: Record<string, string> = {
@@ -25,6 +27,7 @@ const DOCUMENT_FILES: Record<string, string> = {
 export function LegalPage(): React.JSX.Element {
   const { slug = '' } = useParams();
   const file = DOCUMENT_FILES[slug];
+  const seller = useSeller();
 
   const document = useQuery({
     queryKey: ['legal', slug],
@@ -37,20 +40,23 @@ export function LegalPage(): React.JSX.Element {
   });
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
-      <Link to="/" className="text-sm text-muted hover:text-fg">
-        ← StreamKit
-      </Link>
+    <div className="flex min-h-screen flex-col">
+      <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
+        <Link to="/" className="text-sm text-muted hover:text-fg">
+          ← StreamKit
+        </Link>
 
-      {!file ? <p className="mt-6">Документ не найден</p> : null}
-      {document.isLoading ? <p className="mt-6 text-muted">Загрузка…</p> : null}
-      {document.isError ? <p className="mt-6 text-danger">Документ недоступен</p> : null}
+        {!file ? <p className="mt-6">Документ не найден</p> : null}
+        {document.isLoading ? <p className="mt-6 text-muted">Загрузка…</p> : null}
+        {document.isError ? <p className="mt-6 text-danger">Документ недоступен</p> : null}
 
-      {document.data ? (
-        <pre className="mt-6 whitespace-pre-wrap font-sans text-sm leading-relaxed">
-          {document.data}
-        </pre>
-      ) : null}
+        {document.data ? (
+          <pre className="mt-6 whitespace-pre-wrap font-sans text-sm leading-relaxed">
+            {fillDocumentDetails(document.data, seller.data)}
+          </pre>
+        ) : null}
+      </div>
+      <PublicFooter />
     </div>
   );
 }

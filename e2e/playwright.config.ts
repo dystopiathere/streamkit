@@ -70,6 +70,11 @@ export default defineConfig({
         YOOKASSA_SHOP_ID: 'e2e-shop',
         YOOKASSA_SECRET_KEY: 'e2e-secret',
         YOOKASSA_API_URL: `http://127.0.0.1:${FAKE_YOOKASSA_PORT}/v3`,
+        // Реквизиты продавца — выдуманные, но в формате настоящих: главная и
+        // оферта показывают их, и сценарий проверяет, что они там есть.
+        SELLER_NAME: 'Тестов Тест Тестович',
+        SELLER_INN: '500100732259',
+        SELLER_EMAIL: 'support@streamkit.test',
       },
     },
     {

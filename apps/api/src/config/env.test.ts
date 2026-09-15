@@ -64,4 +64,25 @@ describe('проверка окружения', () => {
     expect(env.YOUTUBE_DAILY_QUOTA).toBe(9000);
     expect(env.WEB_BASE_URL).toBe('http://localhost:5173');
   });
+
+  it('реквизиты продавца и налоговый режим из .env.example: пустые — не заданы, а не ошибка', () => {
+    const env = validateEnv({
+      ...BASE,
+      SELLER_NAME: '',
+      SELLER_INN: '',
+      SELLER_EMAIL: '',
+      YOOKASSA_TAX_SYSTEM_CODE: '',
+    });
+    expect(env.SELLER_INN).toBeUndefined();
+    expect(env.YOOKASSA_TAX_SYSTEM_CODE).toBeUndefined();
+    expect(env.YOOKASSA_RECEIPTS).toBe('none');
+  });
+
+  it('ИНН — 10 или 12 цифр, опечатка роняет старт, а не уезжает на сайт', () => {
+    expect(validateEnv({ ...BASE, SELLER_INN: '123456789012' }).SELLER_INN).toBe('123456789012');
+    expect(() => validateEnv({ ...BASE, SELLER_INN: '12345678901' })).toThrow();
+    expect(validateEnv({ ...BASE, YOOKASSA_TAX_SYSTEM_CODE: '2' }).YOOKASSA_TAX_SYSTEM_CODE).toBe(
+      2,
+    );
+  });
 });

@@ -48,8 +48,9 @@ const processingSchema = z.object({ type: z.literal('processing'), retry_after: 
  *   повторяет запрос на 5xx и обрыв сети, и без ключа повтор создал бы второй
  *   платёж и второе списание;
  * - сумма уходит строкой с двумя знаками (`"490.00"`), собранной из целых копеек;
- * - чек 54-ФЗ формирует ЮKassa по `receipt`. НДС и налоговый режим — из
- *   окружения: это решение бухгалтерии, а не кода.
+ * - чек зависит от статуса продавца. Самозанятый выдаёт его через «Мой налог»,
+ *   и `receipt` не передаётся вовсе. ИП и организация — чек 54-ФЗ по `receipt`,
+ *   НДС и налоговый режим из окружения: это решение бухгалтерии, а не кода.
  */
 @Injectable()
 export class YooKassaGateway implements PaymentGateway {
@@ -94,20 +95,24 @@ export class YooKassaGateway implements PaymentGateway {
       capture: true,
       description: request.description.slice(0, 128),
       metadata: { paymentId: request.paymentId },
-      receipt: {
-        customer: { email: request.customerEmail },
-        items: [
-          {
-            description: request.description.slice(0, 128),
-            quantity: '1.00',
-            amount,
-            vat_code: settings.vatCode,
-            payment_subject: 'service',
-            payment_mode: 'full_payment',
-          },
-        ],
-        ...(settings.taxSystemCode ? { tax_system_code: settings.taxSystemCode } : {}),
-      },
+      ...(settings.receipts === 'fiscal'
+        ? {
+            receipt: {
+              customer: { email: request.customerEmail },
+              items: [
+                {
+                  description: request.description.slice(0, 128),
+                  quantity: '1.00',
+                  amount,
+                  vat_code: settings.vatCode,
+                  payment_subject: 'service',
+                  payment_mode: 'full_payment',
+                },
+              ],
+              ...(settings.taxSystemCode ? { tax_system_code: settings.taxSystemCode } : {}),
+            },
+          }
+        : {}),
     };
   }
 

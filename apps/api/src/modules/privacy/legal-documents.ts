@@ -29,8 +29,8 @@ export interface LegalDocument {
 export const LEGAL_DOCUMENTS: Record<ConsentDocument, LegalDocument> = {
   TERMS: {
     document: 'TERMS',
-    // Заполнен раздел об оплате: появился платный тариф.
-    version: '2026-09-14',
+    // Раздел об оплате и оператор-самозанятый с реквизитами из окружения.
+    version: '2026-09-15',
     title: 'Пользовательское соглашение',
     path: '/legal/terms',
     requiredOnRegister: true,
@@ -41,7 +41,7 @@ export const LEGAL_DOCUMENTS: Record<ConsentDocument, LegalDocument> = {
     // Добавлен срок хранения снимков метрик — новый раздел данных, новая
     // редакция. Согласившиеся со старой увидят needsRenewal: это и есть смысл
     // реестра версий.
-    version: '2026-09-12',
+    version: '2026-09-15',
     title: 'Политика конфиденциальности',
     path: '/legal/privacy',
     requiredOnRegister: true,
@@ -49,7 +49,7 @@ export const LEGAL_DOCUMENTS: Record<ConsentDocument, LegalDocument> = {
   },
   PERSONAL_DATA: {
     document: 'PERSONAL_DATA',
-    version: '2026-09-11',
+    version: '2026-09-15',
     title: 'Согласие на обработку персональных данных',
     path: '/legal/personal-data',
     requiredOnRegister: true,
@@ -73,7 +73,7 @@ export const LEGAL_DOCUMENTS: Record<ConsentDocument, LegalDocument> = {
   },
   SUBSCRIPTION_OFFER: {
     document: 'SUBSCRIPTION_OFFER',
-    version: '2026-09-14',
+    version: '2026-09-15',
     title: 'Оферта тарифа «Про» и автоматические списания',
     path: '/legal/subscription',
     requiredOnRegister: false,

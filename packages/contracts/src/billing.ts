@@ -10,6 +10,18 @@ import { isoDateSchema, type Money, moneySchema, uuidSchema } from './common.js'
  * списания — docs/adr/0011.
  */
 
+/**
+ * Реквизиты продавца на публичных страницах. Поле null — не заполнено в
+ * окружении: страница показывает это явно, а не прячет строку.
+ */
+export const sellerInfoSchema = z.object({
+  name: z.string().nullable(),
+  inn: z.string().nullable(),
+  email: z.string().nullable(),
+  phone: z.string().nullable(),
+});
+export type SellerInfo = z.infer<typeof sellerInfoSchema>;
+
 export const BILLING_PERIODS = ['month', 'year'] as const;
 export const billingPeriodSchema = z.enum(BILLING_PERIODS);
 export type BillingPeriod = z.infer<typeof billingPeriodSchema>;

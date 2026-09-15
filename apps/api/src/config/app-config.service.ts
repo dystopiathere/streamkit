@@ -128,6 +128,7 @@ export class AppConfig {
     shopId: string;
     secretKey: string;
     apiUrl: string;
+    receipts: 'none' | 'fiscal';
     vatCode: number;
     taxSystemCode: number | undefined;
   } | null {
@@ -138,8 +139,24 @@ export class AppConfig {
       shopId,
       secretKey,
       apiUrl: this.config.get<string>('YOOKASSA_API_URL') ?? 'https://api.yookassa.ru/v3',
+      receipts: this.config.get<'none' | 'fiscal'>('YOOKASSA_RECEIPTS') ?? 'none',
       vatCode: this.config.get<number>('YOOKASSA_VAT_CODE') ?? 1,
       taxSystemCode: this.config.get<number>('YOOKASSA_TAX_SYSTEM_CODE'),
+    };
+  }
+
+  /** Реквизиты продавца. Незаполненное — null: страница покажет, что его нет. */
+  get seller(): {
+    name: string | null;
+    inn: string | null;
+    email: string | null;
+    phone: string | null;
+  } {
+    return {
+      name: this.config.get<string>('SELLER_NAME') ?? null,
+      inn: this.config.get<string>('SELLER_INN') ?? null,
+      email: this.config.get<string>('SELLER_EMAIL') ?? null,
+      phone: this.config.get<string>('SELLER_PHONE') ?? null,
     };
   }
 

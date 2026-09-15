@@ -2,6 +2,9 @@
 // старте. setup.ts ключи ЮKassa вычищает, иначе прогон зависел бы от .env.
 process.env.YOOKASSA_SHOP_ID = 'test-shop';
 process.env.YOOKASSA_SECRET_KEY = 'test-secret-key';
+process.env.SELLER_NAME = 'Иванов Иван Иванович';
+process.env.SELLER_INN = '123456789012';
+process.env.SELLER_EMAIL = 'support@example.ru';
 
 import {
   guestIdentity,
@@ -203,6 +206,16 @@ describe('Подписка на платформу (feature)', () => {
     await notify(payment.providerPaymentId!).expect(200);
     return payment.id;
   }
+
+  it('реквизиты продавца открыты без входа — их проверяет модерация ЮKassa', async () => {
+    const response = await request(server()).get('/api/public/seller').expect(200);
+    expect(response.body).toEqual({
+      name: 'Иванов Иван Иванович',
+      inn: '123456789012',
+      email: 'support@example.ru',
+      phone: null,
+    });
+  });
 
   /* ---------------------------------------------------------------- */
   /* Оформление                                                         */

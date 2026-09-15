@@ -2,14 +2,18 @@ import { Injectable, Logger, Module } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { HttpClient } from '../../common/http/http-client.service';
 import { RedisLock } from '../../common/redis/lock.service';
-import { BillingController, YooKassaWebhookController } from './billing.controller';
+import {
+  BillingController,
+  PublicSellerController,
+  YooKassaWebhookController,
+} from './billing.controller';
 import { BillingService } from './billing.service';
 import { PAYMENT_GATEWAY } from './payment-gateway';
 import { YooKassaGateway } from './yookassa.gateway';
 
 /** Подписка на платформу: оформление и уведомления — в API, продление — в воркере. */
 @Module({
-  controllers: [BillingController, YooKassaWebhookController],
+  controllers: [BillingController, YooKassaWebhookController, PublicSellerController],
   providers: [BillingService, HttpClient, { provide: PAYMENT_GATEWAY, useClass: YooKassaGateway }],
   exports: [BillingService],
 })

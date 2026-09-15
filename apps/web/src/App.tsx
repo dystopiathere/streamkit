@@ -7,6 +7,7 @@ import { api } from './lib/api';
 import { useAuthStore } from './lib/auth-store';
 import { queryClient } from './lib/query-client';
 import { EventsPage } from './pages/EventsPage';
+import { LandingPage } from './pages/LandingPage';
 import { LegalPage } from './pages/LegalPage';
 import { LoginPage } from './pages/LoginPage';
 import { BillingPage } from './pages/BillingPage';
@@ -74,6 +75,8 @@ export function App(): React.JSX.Element {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
+          {/* Главная открыта без входа: её проверяет ЮKassa перед подключением оплаты. */}
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/legal/:slug" element={<LegalPage />} />
@@ -115,7 +118,7 @@ export function App(): React.JSX.Element {
             </Route>
           </Route>
 
-          <Route path="*" element={<Navigate to="/widgets" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
 

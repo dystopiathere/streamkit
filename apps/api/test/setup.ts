@@ -41,6 +41,10 @@ for (const key of [
   // без них бесплатны. Тест оплаты выставляет ключи сам.
   'YOOKASSA_SHOP_ID',
   'YOOKASSA_SECRET_KEY',
+  'SELLER_NAME',
+  'SELLER_INN',
+  'SELLER_EMAIL',
+  'SELLER_PHONE',
 ]) {
   delete process.env[key];
 }

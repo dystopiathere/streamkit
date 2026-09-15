@@ -62,6 +62,12 @@ async function bootstrap(): Promise<void> {
   if (config.nodeEnv === 'production' && !config.billing) {
     bootstrapLogger.warn('Оплата подписки не настроена: приватные комнаты доступны бесплатно');
   }
+  // Приём оплаты без реквизитов продавца на сайте — это и отказ модерации
+  // ЮKassa, и нарушение закона о защите прав потребителей.
+  const seller = config.seller;
+  if (config.billing && (!seller.name || !seller.inn || !seller.email)) {
+    bootstrapLogger.warn('Оплата настроена, а реквизиты продавца (SELLER_*) заполнены не все');
+  }
 }
 
 void bootstrap();
