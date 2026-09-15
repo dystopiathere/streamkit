@@ -103,7 +103,11 @@ export class BillingController {
 const notificationSchema = z.object({
   type: z.literal('notification'),
   event: z.string(),
-  object: z.object({ id: z.string().min(1).max(64) }),
+  object: z.object({
+    id: z.string().min(1).max(64),
+    // Есть только у возврата: платёж, по которому он сделан.
+    payment_id: z.string().min(1).max(64).optional(),
+  }),
 });
 
 /**
@@ -130,7 +134,12 @@ export class YooKassaWebhookController {
     if (!parsed.success) return { status: 'ignored' };
 
     try {
-      return { status: await this.billing.handleNotification(parsed.data.object.id) };
+      const { event, object } = parsed.data;
+      if (event.startsWith('refund.')) {
+        if (!object.payment_id) return { status: 'ignored' };
+        return { status: await this.billing.handleRefundNotification(object.payment_id) };
+      }
+      return { status: await this.billing.handleNotification(object.id) };
     } catch (error) {
       // Свой сбой — ошибка, чтобы ЮKassa повторила: иначе оплаченный период
       // применился бы только дочисткой, и стример час смотрел бы на «не оплачено».

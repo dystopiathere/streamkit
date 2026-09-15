@@ -90,6 +90,8 @@ export const paymentViewSchema = moneySchema.extend({
   status: z.enum(PAYMENT_STATUSES),
   createdAt: isoDateSchema,
   paidAt: isoDateSchema.nullable(),
+  /** Возвращено по платежу, в той же валюте. 0 — возвратов не было. */
+  refundedAmountMinor: z.number().int().min(0),
 });
 export type PaymentView = z.infer<typeof paymentViewSchema>;
 

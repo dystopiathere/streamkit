@@ -434,7 +434,8 @@
         "pending": "Обрабатывается",
         "succeeded": "Оплачен",
         "canceled": "Не прошёл"
-      }
+      },
+      "refunded": "Возвращено {{amount}}"
     }
   },
   "public": {

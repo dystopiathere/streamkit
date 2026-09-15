@@ -299,6 +299,16 @@ function PaymentHistory(): React.JSX.Element | null {
                   )}
                 >
                   {t(`billing.history.state.${payment.status}`)}
+                  {payment.refundedAmountMinor > 0 ? (
+                    <span className="block text-xs text-muted">
+                      {t('billing.history.refunded', {
+                        amount: formatMoney({
+                          amountMinor: payment.refundedAmountMinor,
+                          currency: payment.currency,
+                        }),
+                      })}
+                    </span>
+                  ) : null}
                 </td>
               </tr>
             ))}

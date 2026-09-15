@@ -29,6 +29,7 @@ export type AuditAction =
   | 'billing.payment.succeeded'
   | 'billing.payment.canceled'
   | 'billing.payment.amount_mismatch'
+  | 'billing.payment.refunded'
   | 'billing.renewal.failed'
   | 'billing.autorenew.changed'
   | 'webhook.signature.invalid'

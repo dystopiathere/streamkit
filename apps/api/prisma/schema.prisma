@@ -535,25 +535,30 @@ enum PaymentStatus {
 /// Удаление пользователя платежи не стирает (Restrict): это учёт выручки, а
 /// аккаунты у нас не удаляются, а обезличиваются.
 model Payment {
-  id                 String        @id @default(uuid()) @db.Uuid
-  userId             String        @db.Uuid
-  subscriptionId     String?       @db.Uuid
-  kind               PaymentKind
-  period             BillingPeriod
-  amountMinor        Int
-  currency           String        @db.VarChar(3)
-  status             PaymentStatus @default(PENDING)
+  id                  String        @id @default(uuid()) @db.Uuid
+  userId              String        @db.Uuid
+  subscriptionId      String?       @db.Uuid
+  kind                PaymentKind
+  period              BillingPeriod
+  amountMinor         Int
+  currency            String        @db.VarChar(3)
+  status              PaymentStatus @default(PENDING)
   /// Идентификатор платежа в ЮKassa. NULL, пока запрос на создание не прошёл.
-  providerPaymentId  String?       @unique
-  cancellationReason String?       @db.VarChar(80)
+  providerPaymentId   String?       @unique
+  cancellationReason  String?       @db.VarChar(80)
   /// За какой конец периода это продление. Вместе с attempt не даёт двум
   /// репликам воркера списать одно и то же продление дважды.
-  renewalFor         DateTime?
-  attempt            Int           @default(1)
-  periodStart        DateTime?
-  periodEnd          DateTime?
-  createdAt          DateTime      @default(now())
-  paidAt             DateTime?
+  renewalFor          DateTime?
+  attempt             Int           @default(1)
+  periodStart         DateTime?
+  periodEnd           DateTime?
+  /// Сколько возвращено по платежу — сумма успешных возвратов в ЮKassa,
+  /// пересчитанная целиком при каждом уведомлении, а не накопленная: повтор
+  /// уведомления не должен удваивать возврат.
+  refundedAmountMinor Int           @default(0)
+  refundedAt          DateTime?
+  createdAt           DateTime      @default(now())
+  paidAt              DateTime?
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Restrict)
   subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)

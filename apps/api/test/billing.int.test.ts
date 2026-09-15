@@ -91,6 +91,15 @@ class FakeGateway implements PaymentGateway {
     return { ...payment };
   }
 
+  /** Возвраты в копейках по идентификатору платежа ЮKassa. */
+  readonly refunds = new Map<string, number>();
+  refundQueries = 0;
+
+  async refundedAmount(providerPaymentId: string) {
+    this.refundQueries += 1;
+    return { amountMinor: this.refunds.get(providerPaymentId) ?? 0, currency: 'RUB' };
+  }
+
   async getPayment(providerPaymentId: string): Promise<ProviderPayment> {
     this.gets += 1;
     if (this.failGet) throw new Error('ЮKassa недоступна');
@@ -118,6 +127,8 @@ class FakeGateway implements PaymentGateway {
 
   reset(): void {
     this.payments.clear();
+    this.refunds.clear();
+    this.refundQueries = 0;
     this.created.length = 0;
     this.charged.length = 0;
     this.gets = 0;
@@ -776,6 +787,51 @@ describe('Подписка на платформу (feature)', () => {
   /* ---------------------------------------------------------------- */
   /* Приватность                                                        */
   /* ---------------------------------------------------------------- */
+
+  function notifyRefund(providerPaymentId: string) {
+    return request(server())
+      .post('/api/billing/yookassa/webhook')
+      .send({
+        type: 'notification',
+        event: 'refund.succeeded',
+        object: { id: 'refund-1', payment_id: providerPaymentId, status: 'succeeded' },
+      });
+  }
+
+  it('возврат по текущему периоду закрывает доступ и выключает продление; повтор ничего не удваивает', async () => {
+    const owner = await streamer();
+    const paymentId = await subscribed(owner.token);
+    const payment = await harness.prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+    // Возврат за неиспользованные дни — часть суммы.
+    gateway.refunds.set(payment.providerPaymentId!, 30_000);
+
+    const first = await notifyRefund(payment.providerPaymentId!).expect(200);
+    expect(first.body.status).toBe('processed');
+    const second = await notifyRefund(payment.providerPaymentId!).expect(200);
+    expect(second.body.status).toBe('ignored');
+
+    const row = await harness.prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+    expect(row.refundedAmountMinor).toBe(30_000);
+    const view = await request(server())
+      .get('/api/billing/subscription')
+      .set(auth(owner.token))
+      .expect(200);
+    expect(view.body).toMatchObject({ status: 'expired', roomsAccess: false, autoRenew: false });
+    const history = await request(server())
+      .get('/api/billing/payments')
+      .set(auth(owner.token))
+      .expect(200);
+    expect(history.body[0]).toMatchObject({ refundedAmountMinor: 30_000 });
+  });
+
+  it('уведомление о возврате по чужому или неоплаченному платежу не идёт в ЮKassa', async () => {
+    const owner = await streamer();
+    const { payment } = await checkout(owner.token);
+
+    await notifyRefund('yk-unknown').expect(200);
+    await notifyRefund(payment.providerPaymentId!).expect(200);
+    expect(gateway.refundQueries).toBe(0);
+  });
 
   it('уборка удаляет платежи старше срока хранения, но не незакрытые', async () => {
     const owner = await streamer();

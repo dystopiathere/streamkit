@@ -291,6 +291,72 @@ export class BillingService {
     return 'processed';
   }
 
+  /**
+   * Уведомление о возврате.
+   *
+   * Тело уведомления не подписано, как и у платежей, поэтому из него берётся
+   * только идентификатор платежа — и только оплаченного, который есть у нас:
+   * иначе открытый эндпоинт гонял бы запросы к ЮKassa по любым присланным
+   * строкам. Сумма возврата — итог по платежу из ЮKassa, а не из тела.
+   *
+   * Любой возврат по платежу ТЕКУЩЕГО периода прекращает доступ сразу и
+   * выключает автопродление: возврат делается за неиспользованные дни (п. 7
+   * оферты), и оставлять доступ к оплаченному обратно периоду нельзя.
+   */
+  async handleRefundNotification(providerPaymentId: string): Promise<'processed' | 'ignored'> {
+    if (!this.configured) return 'ignored';
+    const row = await this.prisma.payment.findUnique({ where: { providerPaymentId } });
+    if (!row || row.status !== 'SUCCEEDED') return 'ignored';
+
+    const refunded = await this.gateway.refundedAmount(providerPaymentId);
+    if (refunded.amountMinor === row.refundedAmountMinor) return 'ignored';
+    if (refunded.amountMinor > row.amountMinor || refunded.currency !== row.currency) {
+      this.logger.error({ paymentId: row.id }, 'Возврат больше платежа или в другой валюте');
+      await this.audit.record('billing.payment.amount_mismatch', row.userId, {
+        metadata: { paymentId: row.id, refund: true },
+      });
+      return 'ignored';
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.update({
+        where: { id: row.id },
+        data: { refundedAmountMinor: refunded.amountMinor, refundedAt: now },
+      });
+      if (!row.subscriptionId || refunded.amountMinor === 0) return;
+
+      await tx.$queryRaw`SELECT id FROM "Subscription" WHERE id = ${row.subscriptionId}::uuid FOR UPDATE`;
+      const subscription = await tx.subscription.findUniqueOrThrow({
+        where: { id: row.subscriptionId },
+      });
+      const isCurrentPeriod =
+        row.periodEnd !== null &&
+        subscription.currentPeriodEnd !== null &&
+        row.periodEnd.getTime() === subscription.currentPeriodEnd.getTime();
+      if (!isCurrentPeriod) return;
+
+      await tx.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          currentPeriodEnd: now,
+          autoRenew: false,
+          renewalNoticeFor: null,
+          renewalNoticeSentAt: null,
+        },
+      });
+      await tx.consent.updateMany({
+        where: { userId: row.userId, document: 'SUBSCRIPTION_OFFER', revokedAt: null },
+        data: { revokedAt: now },
+      });
+    });
+
+    await this.audit.record('billing.payment.refunded', row.userId, {
+      metadata: { paymentId: row.id, refundedAmountMinor: refunded.amountMinor },
+    });
+    return 'processed';
+  }
+
   /** Переспросить платёж у ЮKassa и применить ответ. */
   async syncPayment(row: Payment): Promise<void> {
     if (!row.providerPaymentId) return;
@@ -764,5 +830,6 @@ function toPaymentView(row: Payment): PaymentView {
       row.status === 'SUCCEEDED' ? 'succeeded' : row.status === 'CANCELED' ? 'canceled' : 'pending',
     createdAt: row.createdAt.toISOString(),
     paidAt: row.paidAt?.toISOString() ?? null,
+    refundedAmountMinor: row.refundedAmountMinor,
   };
 }

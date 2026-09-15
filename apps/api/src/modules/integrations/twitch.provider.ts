@@ -20,8 +20,12 @@ const HELIX = 'https://api.twitch.tv/helix';
  *
  * `moderator:read:followers` — не опечатка: с 2023 года число фолловеров
  * отдаётся только этим правом, старый эндпоинт без него закрыт.
+ *
+ * `user:read:email` здесь был и не использовался: почта аккаунта Twitch нигде
+ * не читалась и не хранилась. Право, которое не нужно, — это данные, которые
+ * можно получить, и строка в политике, которую пришлось бы объяснять.
  */
-const SCOPES = ['user:read:email', 'moderator:read:followers', 'channel:read:subscriptions'];
+const SCOPES = ['moderator:read:followers', 'channel:read:subscriptions'];
 
 interface TwitchUser {
   id: string;
