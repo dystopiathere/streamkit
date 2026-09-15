@@ -103,6 +103,8 @@ variable "valkey" {
   default = {
     resource_preset_id = "hm3-c2-m8"
     disk_gb            = 16
-    version            = "8.1"
+    # С суффиксом: API отвечает «version not found» на голое "8.1". Допустимые
+    # значения — 7.2-valkey, 8.0-valkey, 8.1-valkey, 9.0-valkey.
+    version = "8.1-valkey"
   }
 }
