@@ -1,0 +1,7 @@
+# Скопируйте в backend.hcl (он в .gitignore) и выполните:
+#   terraform init -backend-config=backend.hcl
+# Статический ключ доступа к бакету — в переменных окружения AWS_ACCESS_KEY_ID и
+# AWS_SECRET_ACCESS_KEY, а не здесь.
+
+bucket = "streamkit-terraform-state"
+key    = "production/terraform.tfstate"

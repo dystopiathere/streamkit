@@ -1,0 +1,44 @@
+# TLS и маршрутизация по доменам. Сертификаты Let's Encrypt Caddy выпускает и
+# продлевает сам — по HTTP на 80-м порту, поэтому он открыт в группе безопасности.
+{
+	email {$ACME_EMAIL}
+}
+
+(common) {
+	encode zstd gzip
+	# HSTS — здесь, а не в nginx образов: TLS заканчивается на Caddy, и только он
+	# знает, что соединение защищено.
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	header -Server
+}
+
+# Главная, публичные страницы и дашборд. Заголовки безопасности (CSP и прочие)
+# ставит nginx внутри образа — Caddy их не трогает.
+{$DOMAIN} {
+	import common
+	reverse_proxy web:80
+}
+
+www.{$DOMAIN} {
+	redir https://{$DOMAIN}{uri} permanent
+}
+
+overlay.{$DOMAIN} {
+	import common
+	reverse_proxy overlay:80
+}
+
+# API и Socket.IO. WebSocket Caddy проксирует сам. API за одним прокси, и
+# `trust proxy 1` в main.ts берёт адрес клиента из X-Forwarded-For — лимиты
+# запросов считаются по посетителю, а не по Caddy.
+api.{$DOMAIN} {
+	import common
+	reverse_proxy api:3000
+}
+
+# Сигнализация LiveKit по wss://. Браузер на https-странице не подключится к ws://,
+# а сам LiveKit TLS не держит — его порт 7880 открыт только внутри сети.
+rtc.{$DOMAIN} {
+	import common
+	reverse_proxy {$LIVEKIT_PRIVATE_IP}:7880
+}

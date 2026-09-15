@@ -1,0 +1,128 @@
+name: Выкатка
+
+# Только вручную: выкатка — решение человека, а не побочный эффект слияния.
+# Откат — этот же workflow с тегом предыдущего выпуска.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Полный sha коммита из main, образы которого опубликованы
+        required: true
+        type: string
+      target:
+        description: Что выкатывать
+        required: true
+        default: app
+        type: choice
+        options:
+          - app
+          - livekit
+          - all
+
+permissions:
+  contents: read
+
+# Две выкатки одновременно на одни ВМ — это миграции наперегонки.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Выкатка ${{ inputs.target }} ${{ inputs.tag }}
+    runs-on: ubuntu-latest
+    # Окружение production на GitHub: здесь секреты выкатки и, при желании,
+    # обязательное подтверждение вторым человеком.
+    environment: production
+    steps:
+      # Тег приходит строкой из формы и идёт в команду на сервере — проверяется
+      # до всякого использования.
+      - name: Проверка тега
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [[ ! $TAG =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Тег должен быть полным sha коммита: $TAG" >&2
+            exit 1
+          fi
+
+      # Файлы выкатки — из того же коммита, что и образы: compose.yml и скрипты
+      # выпуска должны совпадать с кодом, который они запускают.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Коммит из main
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$TAG" origin/main; then
+            echo "Коммит $TAG не входит в main: в прод выкатывается только проверенное" >&2
+            exit 1
+          fi
+
+      - name: Образы опубликованы
+        if: inputs.target != 'livekit'
+        env:
+          REGISTRY: ${{ vars.YC_REGISTRY }}
+          TAG: ${{ inputs.tag }}
+          REGISTRY_KEY: ${{ secrets.YC_REGISTRY_KEY }}
+        run: |
+          set -euo pipefail
+          echo "$REGISTRY_KEY" | docker login --username json_key --password-stdin cr.yandex
+          for image in api migrate web overlay; do
+            docker manifest inspect "${REGISTRY}/streamkit-${image}:${TAG}" >/dev/null ||
+              { echo "Нет образа streamkit-${image}:${TAG} — выпуск ещё не собран?" >&2; exit 1; }
+          done
+
+      - name: SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          # Отпечатки ВМ заданы заранее: без них выкатка отдала бы секреты любому,
+          # кто подменит адрес.
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Приложения
+        if: inputs.target == 'app' || inputs.target == 'all'
+        env:
+          HOST: ${{ vars.APP_HOST }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          ssh_opts=(-i ~/.ssh/deploy -o StrictHostKeyChecking=yes)
+          scp "${ssh_opts[@]}" infra/yandex-cloud/app/compose.yml infra/yandex-cloud/app/Caddyfile \
+            infra/yandex-cloud/app/deploy.sh infra/yandex-cloud/lib/lockbox.sh "deploy@${HOST}:/opt/streamkit/"
+          # Тег подставляется на стороне раннера намеренно: он уже проверен на
+          # 40 шестнадцатеричных символов и ничего, кроме них, в команду не несёт.
+          # shellcheck disable=SC2029
+          ssh "${ssh_opts[@]}" "deploy@${HOST}" "chmod +x /opt/streamkit/deploy.sh && /opt/streamkit/deploy.sh ${TAG}"
+
+      - name: Медиасервер
+        if: inputs.target == 'livekit' || inputs.target == 'all'
+        env:
+          HOST: ${{ vars.LIVEKIT_HOST }}
+        run: |
+          set -euo pipefail
+          ssh_opts=(-i ~/.ssh/deploy -o StrictHostKeyChecking=yes)
+          scp "${ssh_opts[@]}" infra/yandex-cloud/livekit/compose.yml infra/yandex-cloud/livekit/deploy.sh \
+            infra/yandex-cloud/livekit/renew-cert.sh infra/yandex-cloud/lib/lockbox.sh "deploy@${HOST}:/opt/livekit/"
+          ssh "${ssh_opts[@]}" "deploy@${HOST}" \
+            "chmod +x /opt/livekit/deploy.sh /opt/livekit/renew-cert.sh && /opt/livekit/deploy.sh"
+
+      - name: Проверка снаружи
+        if: inputs.target != 'livekit'
+        env:
+          DOMAIN: ${{ vars.DOMAIN }}
+        run: |
+          set -euo pipefail
+          curl -fsS "https://api.${DOMAIN}/api/readyz"
+          # Заголовки — по пути страницы, а не по конфигу (грабли с add_header).
+          curl -fsSI "https://${DOMAIN}/widgets" | grep -i '^content-security-policy:' >/dev/null
+          # Реквизиты продавца заполнены — без них модерация ЮKassa и оферта не пройдут.
+          curl -fsS "https://api.${DOMAIN}/api/public/seller" | jq -e '.name and .inn and .email' >/dev/null

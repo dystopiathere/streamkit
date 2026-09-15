@@ -1,0 +1,12 @@
+# Скопируйте в terraform.tfvars (он в .gitignore) и заполните.
+# Секретов здесь нет: пароли и ключи Terraform генерирует сам и кладёт в Lockbox.
+
+cloud_id   = "b1g..."
+folder_id  = "b1g..."
+acme_email = "admin@stream-kit.ru"
+
+# Ваш адрес — чтобы заходить по SSH. Пусто — SSH только для выкатки по ключу.
+admin_ssh_cidrs = ["203.0.113.10/32"]
+
+admin_ssh_public_key  = "ssh-ed25519 AAAA... admin"
+deploy_ssh_public_key = "ssh-ed25519 AAAA... github-actions-deploy"

@@ -28,3 +28,11 @@ pnpm-debug.log*
 
 # Сгенерированный клиент Prisma и локальные окружения приложений
 apps/*/.env
+
+# Terraform: рабочие файлы, состояние и локальные настройки с идентификаторами.
+# .terraform.lock.hcl коммитится — он фиксирует версии провайдеров.
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+backend.hcl

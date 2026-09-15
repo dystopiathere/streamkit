@@ -1,0 +1,35 @@
+#cloud-config
+# Первичная настройка ВМ медиасервера. Compose-файл, конфиг LiveKit и
+# сертификат для TURN привозит и обновляет выкатка (deploy.yml).
+
+users:
+  - name: admin
+    groups: sudo
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    ssh_authorized_keys:
+      - ${admin_ssh_public_key}
+  - name: deploy
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - ${deploy_ssh_public_key}
+
+package_update: true
+packages:
+  - docker.io
+  - docker-compose-v2
+  - jq
+  - curl
+
+write_files:
+  - path: /opt/livekit/infra.env
+    permissions: "0644"
+    content: |
+%{ for key, value in infra_env ~}
+      ${key}=${value}
+%{ endfor ~}
+
+runcmd:
+  - usermod -aG docker deploy
+  - chown -R deploy:deploy /opt/livekit
+  - systemctl enable --now docker

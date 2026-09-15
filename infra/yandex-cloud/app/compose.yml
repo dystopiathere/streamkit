@@ -1,0 +1,92 @@
+# Прод на ВМ приложений: api, worker, web, overlay и Caddy перед ними.
+#
+# PostgreSQL и Valkey — управляемые, LiveKit — на своей ВМ, поэтому здесь их нет.
+# Запускается только из deploy.sh: он собирает .env из Lockbox, логинится в
+# реестр и передаёт адреса инфраструктуры и тег выпуска:
+#   docker compose --env-file infra.env --env-file release.env ...
+name: streamkit
+
+x-app: &app
+  image: ${REGISTRY}/streamkit-api:${IMAGE_TAG}
+  restart: unless-stopped
+  env_file: .env
+  volumes:
+    # Корневой сертификат Yandex Cloud для TLS до PostgreSQL и Valkey.
+    - ./yandex-ca.pem:/etc/streamkit/yandex-ca.pem:ro
+  logging: &logging
+    driver: json-file
+    options:
+      max-size: 20m
+      max-file: '5'
+
+services:
+  migrate:
+    image: ${REGISTRY}/streamkit-migrate:${IMAGE_TAG}
+    env_file: .env
+    environment:
+      # CLI Prisma подключается своим движком, а не через node-postgres, и
+      # параметры TLS в адресе понимает по-своему: корневой сертификат — sslcert.
+      DATABASE_URL: ${MIGRATE_DATABASE_URL}
+    volumes:
+      - ./yandex-ca.pem:/etc/streamkit/yandex-ca.pem:ro
+    # Запускается только явно: docker compose run --rm migrate.
+    profiles: ['migrate']
+    restart: 'no'
+    logging: *logging
+
+  api:
+    <<: *app
+    environment:
+      PORT: 3000
+    ports:
+      # Наружу API отдаёт Caddy. Порт на внутреннем адресе — для вебхуков
+      # LiveKit: они не должны зависеть от сертификатов и публичного DNS.
+      - '${APP_PRIVATE_IP}:3000:3000'
+
+  worker:
+    <<: *app
+    command: ['node', 'dist/worker.js']
+    environment:
+      PORT: 3001
+    # У воркера нет HTTP, а проверка из образа API стучится в порт 3000.
+    healthcheck:
+      disable: true
+
+  web:
+    image: ${REGISTRY}/streamkit-web:${IMAGE_TAG}
+    restart: unless-stopped
+    logging: *logging
+
+  overlay:
+    image: ${REGISTRY}/streamkit-overlay:${IMAGE_TAG}
+    restart: unless-stopped
+    logging: *logging
+
+  caddy:
+    # Сторонние образы берутся из своего реестра, куда их зеркалирует выпуск:
+    # ВМ не зависит от доступности Docker Hub.
+    image: ${REGISTRY}/mirror/caddy:${CADDY_VERSION}
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+      LIVEKIT_PRIVATE_IP: ${LIVEKIT_PRIVATE_IP}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Сертификаты переживают пересоздание контейнера: иначе каждая выкатка
+      # выпускала бы новые и упиралась в лимиты Let's Encrypt.
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+      - web
+      - overlay
+    logging: *logging
+
+volumes:
+  caddy-data:
+  caddy-config:
