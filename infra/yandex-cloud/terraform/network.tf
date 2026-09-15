@@ -2,11 +2,23 @@ resource "yandex_vpc_network" "main" {
   name = "streamkit"
 }
 
+# Подсеть управляемых баз: адреса хостам облако раздаёт само.
 resource "yandex_vpc_subnet" "main" {
   name           = "streamkit-${var.zone}"
   zone           = var.zone
   network_id     = yandex_vpc_network.main.id
   v4_cidr_blocks = [var.subnet_cidr]
+}
+
+# ВМ — в своей подсети, где адреса назначает только Terraform. В общей с базами
+# облако выдало хосту кластера адрес, закреплённый за ВМ приложений, и ВМ не
+# создалась: «Address in use». Порядок создания ресурсов не гарантирован, так что
+# разводить адреса внутри одной подсети значило бы полагаться на удачу.
+resource "yandex_vpc_subnet" "vms" {
+  name           = "streamkit-vms-${var.zone}"
+  zone           = var.zone
+  network_id     = yandex_vpc_network.main.id
+  v4_cidr_blocks = [var.vm_subnet_cidr]
 }
 
 # Адреса статические: на них смотрят DNS-записи и сертификаты, и адрес,
@@ -34,6 +46,6 @@ locals {
 
   # Внутренние адреса фиксированы: по ним API ходит в LiveKit, а LiveKit шлёт
   # вебхуки в API, и оба адреса записываются в конфигурацию при создании ВМ.
-  app_private_ip     = cidrhost(var.subnet_cidr, 10)
-  livekit_private_ip = cidrhost(var.subnet_cidr, 20)
+  app_private_ip     = cidrhost(var.vm_subnet_cidr, 10)
+  livekit_private_ip = cidrhost(var.vm_subnet_cidr, 20)
 }

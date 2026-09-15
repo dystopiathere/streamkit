@@ -26,9 +26,15 @@ variable "acme_email" {
 }
 
 variable "subnet_cidr" {
-  description = "Адреса внутренней подсети. По ним разрешён трафик между ВМ и к базам"
+  description = "Подсеть управляемых PostgreSQL и Valkey: адреса хостам раздаёт облако"
   type        = string
   default     = "10.10.0.0/24"
+}
+
+variable "vm_subnet_cidr" {
+  description = "Подсеть ВМ с фиксированными адресами. По ней разрешён трафик между ВМ приложений и медиасервером"
+  type        = string
+  default     = "10.10.1.0/24"
 }
 
 variable "admin_ssh_cidrs" {
