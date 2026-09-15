@@ -25,10 +25,11 @@ services:
     env_file: .env
     environment:
       # CLI Prisma подключается своим движком, а не через node-postgres, и
-      # параметры TLS в адресе понимает по-своему: корневой сертификат — sslcert.
+      # параметры TLS в адресе понимает по-своему: корневой сертификат — sslcert,
+      # и в файле должен быть только он (deploy.sh).
       DATABASE_URL: ${MIGRATE_DATABASE_URL}
     volumes:
-      - ./yandex-ca.pem:/etc/streamkit/yandex-ca.pem:ro
+      - ./yandex-root-ca.pem:/etc/streamkit/yandex-root-ca.pem:ro
     # Запускается только явно: docker compose run --rm migrate.
     profiles: ['migrate']
     restart: 'no'
