@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import type { AvailablePlatform, Platform } from '@streamkit/contracts';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
+import { CryptoService } from '../../common/crypto/crypto.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { OAuthStateService } from './oauth-state.service';
 import { PlatformRegistry } from './platform-registry.service';
@@ -24,6 +25,7 @@ export class PlatformConnectionService {
     private readonly tokens: PlatformTokenService,
     private readonly state: OAuthStateService,
     private readonly audit: AuditService,
+    private readonly crypto: CryptoService,
   ) {}
 
   async listAvailable(userId: string): Promise<AvailablePlatform[]> {
@@ -37,13 +39,20 @@ export class PlatformConnectionService {
     return this.registry.list(connected);
   }
 
-  /** Ссылка, по которой пользователь уходит логиниться на площадку. */
-  async buildAuthorizeUrl(userId: string, platform: Platform): Promise<string> {
+  /**
+   * Ссылка, по которой пользователь уходит логиниться на площадку, и state —
+   * контроллер кладёт его в cookie браузера (`oauth-state-cookie.ts`).
+   */
+  async buildAuthorizeUrl(
+    userId: string,
+    platform: Platform,
+  ): Promise<{ url: string; state: string }> {
     const provider = this.registry.find(platform);
     if (!provider) {
       throw new BadRequestException('Эта площадка сейчас недоступна');
     }
-    return provider.buildAuthorizeUrl(await this.state.issue(userId, platform));
+    const state = await this.state.issue(userId, platform);
+    return { url: provider.buildAuthorizeUrl(state), state };
   }
 
   /**
@@ -56,15 +65,22 @@ export class PlatformConnectionService {
     platform: Platform,
     code: string,
     rawState: string,
+    browserState: string | undefined,
     context: AuditContext = {},
   ): Promise<{ userId: string }> {
-    const state = await this.state.consume(rawState, platform);
+    // State из адреса обязан совпасть с тем, что этот браузер получил на шаге
+    // authorize. Иначе чужой state, подсунутый ссылкой, подключил бы канал
+    // жертвы к аккаунту того, кто этот state выпустил. Проверка до consume:
+    // подсунутая ссылка не должна сжигать state настоящего владельца.
+    const boundToBrowser =
+      browserState !== undefined && this.crypto.safeCompare(browserState, rawState);
+    const state = boundToBrowser ? await this.state.consume(rawState, platform) : null;
     if (!state) {
       // Может быть чем угодно: истёкшим состоянием, повторным заходом по той же
       // ссылке, попыткой подделки. Снаружи все три выглядят одинаково.
       await this.audit.record('integration.state.invalid', null, {
         ...context,
-        metadata: { platform },
+        metadata: { platform, boundToBrowser },
       });
       throw new BadRequestException('Ссылка подключения недействительна, начните заново');
     }

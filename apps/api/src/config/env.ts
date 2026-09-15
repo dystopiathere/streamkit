@@ -76,7 +76,6 @@ export const envSchema = z.object({
   /** Базовый публичный URL overlay-приложения: из него собираются ссылки для OBS. */
   OVERLAY_BASE_URL: z.string().url(),
 
-  /** Лимит запросов в минуту на IP для обычных ручек. */
   /** Куда возвращать пользователя после OAuth площадки. */
   WEB_BASE_URL: z.string().url().default('http://localhost:5173'),
 
@@ -177,6 +176,7 @@ export const envSchema = z.object({
   SELLER_EMAIL: optionalValue().pipe(z.string().email().optional()),
   SELLER_PHONE: optionalValue(),
 
+  /** Лимит запросов в минуту на IP для обычных ручек. */
   THROTTLE_LIMIT: z.coerce.number().int().min(1).default(120),
   /** Лимит попыток логина в минуту на IP. Жёстче общего. */
   THROTTLE_AUTH_LIMIT: z.coerce.number().int().min(1).default(10),

@@ -271,7 +271,7 @@ describe('Виджеты и приём событий (feature)', () => {
       .expect(401);
   });
 
-  it('не принимает один и тот же подписанный запрос дважды', async () => {
+  it('повтор того же подписанного запроса — дубль, а не отказ в подписи', async () => {
     const { sourceId, secret } = await createWebhookSource();
     const body = JSON.stringify({ externalId: 'evt-5', username: 'Зритель' });
     const timestamp = Math.floor(Date.now() / 1000).toString();
@@ -286,8 +286,11 @@ describe('Виджеты и приём событий (feature)', () => {
         .send(body);
 
     await send().expect(202);
-    // Повтор перехваченного запроса отбивается защитой от replay.
-    await send().expect(401);
+    // Отправитель, не дождавшийся ответа, повторяет запрос как есть. Второго
+    // алерта быть не должно, но и 401 тоже: иначе интегратор ищет ошибку в
+    // секрете, а донат, упавший на нашем сбое, теряется.
+    const second = await send().expect(202);
+    expect(second.body.status).toBe('duplicate');
 
     expect(await harness.prisma.alertEvent.count()).toBe(1);
   });

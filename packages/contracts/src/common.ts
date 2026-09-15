@@ -107,7 +107,9 @@ export const httpsUrlSchema = z
 
 export const cursorPaginationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  cursor: z.string().max(256).optional(),
+  // Курсор — идентификатор записи. Произвольная строка доходила до Prisma как
+  // uuid и падала там пятисоткой.
+  cursor: z.string().uuid().optional(),
 });
 export type CursorPagination = z.infer<typeof cursorPaginationSchema>;
 

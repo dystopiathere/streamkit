@@ -1,10 +1,8 @@
-import { BadRequestException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { type WebhookAlertPayload, webhookAlertPayloadSchema } from '@streamkit/contracts';
-import type { Redis } from 'ioredis';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { EventsService, type IngestResult } from './events.service';
 
 export const WEBHOOK_TIMESTAMP_HEADER = 'x-streamkit-timestamp';
@@ -24,7 +22,6 @@ export class WebhookService {
     private readonly crypto: CryptoService,
     private readonly events: EventsService,
     private readonly audit: AuditService,
-    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
   /**
@@ -68,8 +65,12 @@ export class WebhookService {
       throw await this.invalid(sourceId, source.userId, context, 'bad-signature');
     }
 
-    await this.assertNotReplayed(signature, source.userId, context);
-
+    // Отдельной защиты от повтора подписанного запроса нет намеренно. Повтор
+    // несёт тот же `externalId`, и его отбрасывает дедупликация — Redis и
+    // уникальный индекс в БД, — отвечая «дубль», а не ошибкой. Раньше подпись
+    // запоминалась в Redis ДО записи события, и честный повтор отправителя после
+    // нашего же сбоя базы получал 401: донат терялся, а интегратор видел отказ в
+    // подписи и шёл проверять секрет. Окно по метке времени остаётся как было.
     const payload = parsePayload(body);
 
     return this.events.ingest({
@@ -120,24 +121,6 @@ export class WebhookService {
         ...context,
         metadata: { sourceId, skewSeconds: Math.round(skewSeconds) },
       });
-      throw new UnauthorizedException('Подпись недействительна');
-    }
-  }
-
-  /**
-   * Один и тот же подписанный запрос принимается только один раз в пределах окна.
-   * Без этого перехваченный запрос можно повторять 5 минут, и каждый повтор
-   * выглядит криптографически корректным.
-   */
-  private async assertNotReplayed(
-    signature: string,
-    userId: string,
-    context: AuditContext,
-  ): Promise<void> {
-    const key = `webhook:sig:${signature}`;
-    const claimed = await this.redis.set(key, '1', 'EX', MAX_CLOCK_SKEW_SECONDS, 'NX');
-    if (claimed !== 'OK') {
-      await this.audit.record('webhook.replay_rejected', userId, context);
       throw new UnauthorizedException('Подпись недействительна');
     }
   }

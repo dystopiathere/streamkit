@@ -11,6 +11,11 @@ import { AuditService } from '../../common/audit/audit.service';
 import { type AuthenticatedUser, CurrentUser, Public } from '../../common/auth/auth.decorators';
 import { zodQuery, ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { AppConfig } from '../../config/app-config.service';
+import {
+  clearOAuthStateCookie,
+  readOAuthStateCookie,
+  setOAuthStateCookie,
+} from './oauth-state-cookie';
 import { PlatformConnectionService } from './platform-connection.service';
 
 /**
@@ -55,8 +60,11 @@ export class IntegrationsController {
   async authorize(
     @CurrentUser() user: AuthenticatedUser,
     @Param('platform', new ZodValidationPipe(platformSchema)) platform: 'twitch' | 'youtube',
+    @Res({ passthrough: true }) response: Response,
   ): Promise<AuthorizeResponse> {
-    return { url: await this.connections.buildAuthorizeUrl(user.id, platform) };
+    const { url, state } = await this.connections.buildAuthorizeUrl(user.id, platform);
+    setOAuthStateCookie(response, state, this.config);
+    return { url };
   }
 
   /**
@@ -79,6 +87,10 @@ export class IntegrationsController {
     @Req() request: Request,
     @Res() response: Response,
   ): Promise<void> {
+    const browserState = readOAuthStateCookie(request);
+    // Cookie одноразовая, как и сам state: чем бы ни кончился возврат.
+    clearOAuthStateCookie(response, this.config);
+
     if (query.error || !query.code || !query.state) {
       // Пользователь отказался или площадка не дала код — молча возвращаем его
       // в дашборд. Подробности площадки в адресной строке ему ни о чём не скажут.
@@ -91,6 +103,7 @@ export class IntegrationsController {
         platform,
         query.code,
         query.state,
+        browserState,
         this.audit.contextFromRequest(request),
       );
       response.redirect(this.dashboardUrl(platform, 'connected'));

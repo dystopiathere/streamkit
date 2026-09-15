@@ -42,9 +42,19 @@ describe('Приватность и удаление аккаунта (feature)'
     await request(server())
       .delete('/api/privacy/account')
       .set(auth())
-      .send({ confirmation: 'УДАЛИТЬ' })
+      .send({ confirmation: 'УДАЛИТЬ', password: registrationPayload().password })
       .expect(204);
   }
+
+  it('не удаляет аккаунт без верного пароля', async () => {
+    for (const body of [
+      { confirmation: 'УДАЛИТЬ' },
+      { confirmation: 'УДАЛИТЬ', password: 'не тот' },
+    ]) {
+      await request(server()).delete('/api/privacy/account').set(auth()).send(body).expect(400);
+    }
+    await request(server()).get('/api/auth/me').set(auth()).expect(200);
+  });
 
   it('после удаления аккаунта вебхук перестаёт принимать события', async () => {
     const source = await request(server())

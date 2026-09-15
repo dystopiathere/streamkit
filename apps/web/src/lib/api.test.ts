@@ -107,6 +107,39 @@ describe('клиент API', () => {
     expect(useAuthStore.getState().accessToken).toBeNull();
   });
 
+  it('не разлогинивает, когда обновление упёрлось в лимит или сбой сервера', async () => {
+    useAuthStore.getState().setSession('истёкший', user);
+    stubFetch([{ status: 401 }, { status: 429 }]);
+
+    await expect(api.get('/events')).rejects.toMatchObject({ status: 503 });
+    // Сессию погасил бы только отказ по самой cookie. За общим IP 429 получал
+    // человек, который ничего не перебирал.
+    expect(useAuthStore.getState().user?.id).toBe(user.id);
+  });
+
+  it('обновляет токен под общей блокировкой вкладок', async () => {
+    useAuthStore.getState().setSession('истёкший', user);
+    const lockNames: string[] = [];
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      locks: {
+        request: async (name: string, task: () => Promise<unknown>) => {
+          lockNames.push(name);
+          return task();
+        },
+      },
+    });
+    stubFetch([
+      { status: 401 },
+      { status: 200, body: { accessToken: 'новый', user } },
+      { status: 200, body: {} },
+    ]);
+
+    await api.get('/events');
+
+    expect(lockNames).toEqual(['streamkit:auth-refresh']);
+  });
+
   it('на несколько параллельных 401 делает ровно одно обновление токена', async () => {
     useAuthStore.getState().setSession('истёкший', user);
 

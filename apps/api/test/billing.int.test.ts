@@ -660,7 +660,7 @@ describe('Подписка на платформу (feature)', () => {
     await request(server())
       .delete('/api/privacy/account')
       .set(auth(owner.token))
-      .send({ confirmation: 'УДАЛИТЬ' })
+      .send({ confirmation: 'УДАЛИТЬ', password: registrationPayload().password })
       .expect((response) => expect(response.status).toBeLessThan(300));
     const row = await harness.prisma.subscription.findUniqueOrThrow({
       where: { userId: owner.userId },
