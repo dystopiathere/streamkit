@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { AccessToken, TokenVerifier } from 'livekit-server-sdk';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { ROOM_GUEST_TERMS } from '../src/modules/privacy/legal-documents';
 import {
   type PublishSource,
   ROOM_MEDIA_SERVER,
@@ -224,7 +225,7 @@ describe('Приватные комнаты (feature)', () => {
 
     const consents = await harness.prisma.guestConsent.findMany({ where: { inviteId: invite.id } });
     expect(consents).toHaveLength(1);
-    expect(consents[0]!.documentVersion).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(consents[0]!.documentVersion).toBe(ROOM_GUEST_TERMS.version);
     // Имя гостя в БД не пишется: оно живёт только в токене.
     expect(JSON.stringify(consents)).not.toContain('Вася');
 
