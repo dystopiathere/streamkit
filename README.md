@@ -113,6 +113,7 @@ LiveKit здесь запускается без `--dev`, и dev-секрет `s
 | `e2e` | Сквозные сценарии Playwright |
 | `infra/docker` | Образы, compose, nginx |
 | `infra/livekit` | Медиасервер комнат и что сделать перед выкаткой |
+| `infra/yandex-cloud` | Прод в Yandex Cloud: Terraform, выкатка, порядок первого запуска |
 | `docs/adr` | Архитектурные решения и их причины |
 | `docs/legal` | Юридический блок |
 

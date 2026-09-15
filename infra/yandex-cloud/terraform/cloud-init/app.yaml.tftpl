@@ -1,0 +1,45 @@
+#cloud-config
+# Первичная настройка ВМ приложений. Только то, что не меняется от выкатки к
+# выкатке: пользователи, Docker, адреса инфраструктуры и корневой сертификат
+# Yandex Cloud. Compose-файлы и секреты привозит выкатка (deploy.yml).
+
+users:
+  - name: admin
+    groups: sudo
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    ssh_authorized_keys:
+      - ${admin_ssh_public_key}
+  # Выкатка из GitHub Actions: без sudo, с группой docker. Группа docker на
+  # хосте равносильна root, так что это граница не прав, а привычек: ключ
+  # выкатки хранится только в окружении production на GitHub.
+  - name: deploy
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - ${deploy_ssh_public_key}
+
+package_update: true
+packages:
+  - docker.io
+  - docker-compose-v2
+  - jq
+  - curl
+
+write_files:
+  # Несекретные адреса: откуда брать образы, где базы и какие секреты читать.
+  # Сами секреты здесь не лежат — их при выкатке достаёт deploy.sh из Lockbox.
+  - path: /opt/streamkit/infra.env
+    permissions: "0644"
+    content: |
+%{ for key, value in infra_env ~}
+      ${key}=${value}
+%{ endfor ~}
+
+runcmd:
+  - usermod -aG docker deploy
+  - chown -R deploy:deploy /opt/streamkit
+  # Корневой сертификат Yandex Cloud: без него TLS до управляемых PostgreSQL и
+  # Valkey не проверить, а без проверки шифрование не защищает от подмены.
+  - curl -fsSL https://storage.yandexcloud.net/cloud-certs/CA.pem -o /opt/streamkit/yandex-ca.pem
+  - chmod 0644 /opt/streamkit/yandex-ca.pem
+  - systemctl enable --now docker

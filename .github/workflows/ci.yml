@@ -226,6 +226,34 @@ jobs:
           # них пришлось бы выдавать токену право записи в pull requests.
           GITLEAKS_ENABLE_COMMENTS: false
 
+  # Конфигурация прода: Terraform, скрипты выкатки и Caddyfile. Ошибка в них
+  # иначе проявилась бы только на выкатке — то есть уже на живом сайте.
+  infra:
+    name: Инфраструктура прода
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: Terraform
+        working-directory: infra/yandex-cloud/terraform
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false -input=false
+          terraform validate
+
+      - name: Скрипты выкатки
+        run: shellcheck -x infra/yandex-cloud/app/deploy.sh infra/yandex-cloud/livekit/*.sh infra/yandex-cloud/lib/lockbox.sh
+
+      - name: Caddyfile
+        run: |
+          docker run --rm -e DOMAIN=stream-kit.ru -e ACME_EMAIL=ci@stream-kit.ru -e LIVEKIT_PRIVATE_IP=10.10.0.20 \
+            -v "$PWD/infra/yandex-cloud/app/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2.10.0 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
   # Три образа собираются ПАРАЛЛЕЛЬНО, по раннеру на образ, и у каждого СВОЙ
   # кэш. Раньше они шли одним заданием подряд и писали в общий scope кэша
   # GitHub Actions: образ, собранный последним, затирал кэш предыдущего. В
@@ -243,12 +271,21 @@ jobs:
         include:
           - image: api
             file: infra/docker/api.Dockerfile
+            target: runtime
+            build-args: ''
+          # Образ миграций — отдельно: без этой сборки поломка в нём нашлась бы
+          # только на выкатке, когда миграции уже нужны.
+          - image: migrate
+            file: infra/docker/api.Dockerfile
+            target: migrate
             build-args: ''
           - image: web
             file: infra/docker/web.Dockerfile
+            target: runtime
             build-args: APP=web
           - image: overlay
             file: infra/docker/web.Dockerfile
+            target: runtime
             build-args: APP=overlay
     steps:
       - uses: actions/checkout@v7
@@ -259,6 +296,7 @@ jobs:
         with:
           context: .
           file: ${{ matrix.file }}
+          target: ${{ matrix.target }}
           build-args: ${{ matrix.build-args }}
           push: false
           # В локальный Docker загружается только API: его сканирует trivy.

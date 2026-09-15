@@ -1,0 +1,27 @@
+# LiveKit на своей ВМ. Запускается только из deploy.sh.
+#
+# Сеть хоста, а не проброс портов: медиа идёт по UDP, и NAT Docker на каждый
+# пакет — это задержка и потери ровно там, где их слышно в эфире. Порты
+# ограничивает группа безопасности: 7880 открыт только изнутри сети.
+name: livekit
+
+services:
+  livekit:
+    image: ${REGISTRY}/mirror/livekit-server:${LIVEKIT_VERSION}
+    restart: unless-stopped
+    network_mode: host
+    # --node-ip — публичный адрес: его LiveKit сообщает браузерам для медиа.
+    # Ошибка в нём ничего не ломает на входе — участник подключается и остаётся
+    # без видео и звука, без единой ошибки (грабли в CLAUDE.md).
+    command: ['--config', '/etc/livekit/livekit.yaml', '--node-ip', '${LIVEKIT_PUBLIC_IP}']
+    volumes:
+      # Конфиг с ключами собирает deploy.sh из Lockbox. Файлом, а не многострочной
+      # LIVEKIT_CONFIG в .env: разбор многострочных значений в env-файлах у
+      # разных версий compose различается, а ошибка здесь — сервер без ключей.
+      - ./livekit.yaml:/etc/livekit/livekit.yaml:ro
+      - ./lego/certificates:/certs:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: '5'
