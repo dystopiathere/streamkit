@@ -63,6 +63,19 @@ RUN pnpm --filter @streamkit/api --prod deploy --legacy /deploy
 COPY apps/api/prisma /deploy/prisma
 RUN cd /deploy     && /app/apps/api/node_modules/.bin/prisma generate --schema /deploy/prisma/schema.prisma
 
+# --- Миграции --------------------------------------------------------------
+# Отдельный образ для одноразовой задачи `prisma migrate deploy`.
+#
+# В рантайм-образ CLI Prisma не попадает: он в devDependencies и выкидывается
+# `pnpm deploy --prod`, а npx удалён из базового образа вместе с npm. Команда
+# `npx prisma migrate deploy` в compose поэтому не работала бы вовсе — узнали бы
+# об этом на первой выкатке. Образ миграций берёт сборочную стадию, где CLI есть,
+# и запускает его напрямую через node, без npx и pnpm.
+FROM build AS migrate
+WORKDIR /app/apps/api
+USER node
+CMD ["node", "node_modules/prisma/build/index.js", "migrate", "deploy"]
+
 # --- Рантайм ---------------------------------------------------------------
 FROM base AS runtime
 ENV NODE_ENV=production
