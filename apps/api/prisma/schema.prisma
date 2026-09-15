@@ -144,6 +144,9 @@ model AuditLog {
 
   @@index([userId, createdAt])
   @@index([action, createdAt])
+  /// Уборка по сроку хранения удаляет по одному createdAt: составные индексы
+  /// выше ей не помогают, и каждый ночной проход читал таблицу целиком.
+  @@index([createdAt])
 }
 
 /**
@@ -435,9 +438,12 @@ model AnalyticsSnapshot {
 
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
-  /// Защита от двойной записи, если тик опроса выполнится дважды.
+  /// Защита от двойной записи, если тик опроса выполнится дважды. Уникальный
+  /// индекс заодно обслуживает выборку ряда канала — отдельный индекс на те же
+  /// колонки только удваивал стоимость записи снимка раз в минуту.
   @@unique([channelId, capturedAt])
-  @@index([channelId, capturedAt])
+  /// Уборка по сроку хранения — по одному capturedAt, без канала.
+  @@index([capturedAt])
 }
 
 /// OAuth-токены пользователя к внешним сервисам. Только шифротекст; наружу не
@@ -491,8 +497,18 @@ model Subscription {
   paymentMethodEncrypted String?
   /// «Карта *4444» — только для интерфейса.
   paymentMethodTitle     String?       @db.VarChar(120)
+  /// Цена продления — снимок на момент оформления или смены периода, а не
+  /// текущий прайс. Оферта обещает предупредить о новой цене за 30 дней, и
+  /// поправленная в коде константа не должна молча списаться с действующих
+  /// подписчиков при следующей выкатке.
+  renewalAmountMinor     Int
+  renewalCurrency        String        @db.VarChar(3)
   renewalFailures        Int           @default(0)
   nextRenewalAttemptAt   DateTime?
+  /// Письмо о предстоящем списании: за какой конец периода и когда ушло.
+  /// Продление без него не списывается — оферта обещает предупредить за три дня.
+  renewalNoticeFor       DateTime?
+  renewalNoticeSentAt    DateTime?
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
 
@@ -519,25 +535,30 @@ enum PaymentStatus {
 /// Удаление пользователя платежи не стирает (Restrict): это учёт выручки, а
 /// аккаунты у нас не удаляются, а обезличиваются.
 model Payment {
-  id                 String        @id @default(uuid()) @db.Uuid
-  userId             String        @db.Uuid
-  subscriptionId     String?       @db.Uuid
-  kind               PaymentKind
-  period             BillingPeriod
-  amountMinor        Int
-  currency           String        @db.VarChar(3)
-  status             PaymentStatus @default(PENDING)
+  id                  String        @id @default(uuid()) @db.Uuid
+  userId              String        @db.Uuid
+  subscriptionId      String?       @db.Uuid
+  kind                PaymentKind
+  period              BillingPeriod
+  amountMinor         Int
+  currency            String        @db.VarChar(3)
+  status              PaymentStatus @default(PENDING)
   /// Идентификатор платежа в ЮKassa. NULL, пока запрос на создание не прошёл.
-  providerPaymentId  String?       @unique
-  cancellationReason String?       @db.VarChar(80)
+  providerPaymentId   String?       @unique
+  cancellationReason  String?       @db.VarChar(80)
   /// За какой конец периода это продление. Вместе с attempt не даёт двум
   /// репликам воркера списать одно и то же продление дважды.
-  renewalFor         DateTime?
-  attempt            Int           @default(1)
-  periodStart        DateTime?
-  periodEnd          DateTime?
-  createdAt          DateTime      @default(now())
-  paidAt             DateTime?
+  renewalFor          DateTime?
+  attempt             Int           @default(1)
+  periodStart         DateTime?
+  periodEnd           DateTime?
+  /// Сколько возвращено по платежу — сумма успешных возвратов в ЮKassa,
+  /// пересчитанная целиком при каждом уведомлении, а не накопленная: повтор
+  /// уведомления не должен удваивать возврат.
+  refundedAmountMinor Int           @default(0)
+  refundedAt          DateTime?
+  createdAt           DateTime      @default(now())
+  paidAt              DateTime?
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Restrict)
   subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)

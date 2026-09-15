@@ -145,6 +145,31 @@ export class AppConfig {
     };
   }
 
+  /**
+   * SMTP для служебных писем, либо null — почта не настроена.
+   *
+   * Через `get`, как у ЮKassa: без почты приложение стартует, а продления
+   * подписки просто не списываются, пока не уйдёт предупреждение.
+   */
+  get mail(): {
+    host: string;
+    port: number;
+    user: string | undefined;
+    password: string | undefined;
+    from: string;
+  } | null {
+    const host = this.config.get<string>('SMTP_HOST');
+    const from = this.config.get<string>('MAIL_FROM');
+    if (!host || !from) return null;
+    return {
+      host,
+      port: this.config.get<number>('SMTP_PORT') ?? 587,
+      user: this.config.get<string>('SMTP_USER'),
+      password: this.config.get<string>('SMTP_PASSWORD'),
+      from,
+    };
+  }
+
   /** Реквизиты продавца. Незаполненное — null: страница покажет, что его нет. */
   get seller(): {
     name: string | null;

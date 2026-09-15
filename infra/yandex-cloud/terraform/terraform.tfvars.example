@@ -10,3 +10,9 @@ admin_ssh_cidrs = ["203.0.113.10/32"]
 
 admin_ssh_public_key  = "ssh-ed25519 AAAA... admin"
 deploy_ssh_public_key = "ssh-ed25519 AAAA... github-actions-deploy"
+
+# Запись DKIM из консоли Postbox (README, раздел «Почта»). До её появления — не задавать.
+# postbox_dkim = {
+#   name  = "postbox._domainkey.stream-kit.ru."
+#   value = "v=DKIM1; k=rsa; p=MIIBIjANBg..."
+# }

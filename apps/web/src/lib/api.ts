@@ -27,22 +27,41 @@ interface RequestOptions {
  * обновления гасят друг друга — сервер считает переиспользованием токена
  * второе обращение и выкидывает пользователя из аккаунта.
  */
-let refreshPromise: Promise<boolean> | null = null;
+type RefreshOutcome = 'refreshed' | 'rejected' | 'unavailable';
 
-async function refreshAccessToken(): Promise<boolean> {
+let refreshPromise: Promise<RefreshOutcome> | null = null;
+
+/**
+ * Между вкладками — по очереди.
+ *
+ * Кэш промиса выше живёт в одной вкладке. Браузер, восстановивший сессию с
+ * дашбордом и комнатой в двух вкладках, отправлял два обновления с одной и той же
+ * cookie разом, сервер видел повторное предъявление токена и гасил сессию
+ * целиком. Под общей блокировкой вторая вкладка ждёт первую и идёт уже с новой
+ * cookie: хранилище cookie у вкладок общее.
+ */
+async function acrossTabs<T>(task: () => Promise<T>): Promise<T> {
+  if (typeof navigator === 'undefined' || !navigator.locks) return task();
+  return navigator.locks.request('streamkit:auth-refresh', task);
+}
+
+async function refreshAccessToken(): Promise<RefreshOutcome> {
   refreshPromise ??= (async () => {
     try {
-      const response = await fetch(`${API_BASE}/auth/refresh`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      if (!response.ok) return false;
+      const response = await acrossTabs(() =>
+        fetch(`${API_BASE}/auth/refresh`, { method: 'POST', credentials: 'include' }),
+      );
+      // Разлогинивает только отказ по самой сессии. 429 и 5xx — это «сейчас не
+      // вышло», а не «сессии нет»: выкидывать человека из аккаунта из-за
+      // перегруженного API или лимита на общий IP нельзя.
+      if (response.status === 401 || response.status === 403) return 'rejected';
+      if (!response.ok) return 'unavailable';
 
       const data = (await response.json()) as { accessToken: string; user: unknown };
       useAuthStore.getState().setSession(data.accessToken, data.user as never);
-      return true;
+      return 'refreshed';
     } catch {
-      return false;
+      return 'unavailable';
     } finally {
       // Сбрасываем в микротаске, чтобы все ожидающие успели получить результат.
       queueMicrotask(() => {
@@ -71,11 +90,15 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   });
 
   if (response.status === 401 && !retried) {
-    const refreshed = await refreshAccessToken();
-    if (refreshed) {
+    const outcome = await refreshAccessToken();
+    if (outcome === 'refreshed') {
       return apiRequest<T>(path, { ...options, retried: true });
     }
-    useAuthStore.getState().clearSession();
+    if (outcome === 'rejected') {
+      useAuthStore.getState().clearSession();
+    } else {
+      throw new ApiError(503, 'Сервис временно недоступен, попробуйте ещё раз');
+    }
   }
 
   if (response.status === 204) {
@@ -106,5 +129,5 @@ export const api = {
   // (удаление аккаунта): подтверждение не должно уезжать в строку запроса.
   delete: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'DELETE', body }),
   /** Восстановление сессии при загрузке страницы: access-токен живёт только в памяти. */
-  restoreSession: refreshAccessToken,
+  restoreSession: async (): Promise<boolean> => (await refreshAccessToken()) === 'refreshed',
 };

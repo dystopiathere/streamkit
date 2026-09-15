@@ -67,6 +67,47 @@ export class MaintenanceService {
   }
 
   /**
+   * Журнал согласий, срок хранения которого истёк: три года после прекращения
+   * обработки, как заявлено в политике. Прекращение — это удаление учётной
+   * записи (для всех её согласий) или отзыв конкретного согласия.
+   */
+  async purgeExpiredConsents(retentionDays: number): Promise<number> {
+    const threshold = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+    const result = await this.prisma.consent.deleteMany({
+      where: {
+        OR: [
+          { user: { status: 'ANONYMIZED', anonymizedAt: { lt: threshold } } },
+          { revokedAt: { lt: threshold } },
+        ],
+      },
+    });
+
+    if (result.count > 0) {
+      this.logger.log({ count: result.count, retentionDays }, 'Удалены истёкшие записи согласий');
+    }
+    return result.count;
+  }
+
+  /**
+   * История платежей старше срока хранения.
+   *
+   * Платежи переживают удаление аккаунта: это учёт выручки и основание для
+   * разбора споров о списании. Но и они хранятся не вечно — срок заявлен в
+   * политике конфиденциальности, и незакрытые платежи уборка не трогает.
+   */
+  async purgeOldPayments(retentionDays: number): Promise<number> {
+    const threshold = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+    const result = await this.prisma.payment.deleteMany({
+      where: { createdAt: { lt: threshold }, status: { not: 'PENDING' } },
+    });
+
+    if (result.count > 0) {
+      this.logger.log({ count: result.count, retentionDays }, 'Удалены старые платежи');
+    }
+    return result.count;
+  }
+
+  /**
    * Согласия гостей приватных комнат старше срока хранения аудита.
    *
    * Это доказательство согласия, и живёт оно столько же, сколько журнал

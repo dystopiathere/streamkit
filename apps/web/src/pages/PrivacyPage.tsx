@@ -18,16 +18,20 @@ export function PrivacyPage(): React.JSX.Element {
   const { t } = useTranslation();
   const clearSession = useAuthStore((state) => state.clearSession);
   const [confirmation, setConfirmation] = useState('');
+  const [password, setPassword] = useState('');
 
   const consents = useConsents();
   const grant = useGrantConsent();
   const revoke = useRevokeConsent();
 
   const deleteAccount = useMutation({
-    mutationFn: () => api.delete<void>('/privacy/account', { confirmation: 'УДАЛИТЬ' }),
+    mutationFn: () => api.delete<void>('/privacy/account', { confirmation: 'УДАЛИТЬ', password }),
     onSuccess: () => {
       clearSession();
       window.location.href = '/login';
+    },
+    onError: (error) => {
+      toast.error(error instanceof ApiError ? error.message : t('common.error'));
     },
   });
 
@@ -117,9 +121,20 @@ export function PrivacyPage(): React.JSX.Element {
           />
         </div>
 
+        <div className="max-w-xs">
+          <Label htmlFor="delete-password">{t('privacy.deletePasswordLabel')}</Label>
+          <Input
+            id="delete-password"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </div>
+
         <Button
           variant="danger"
-          disabled={confirmation !== 'УДАЛИТЬ'}
+          disabled={confirmation !== 'УДАЛИТЬ' || password.length === 0}
           isLoading={deleteAccount.isPending}
           onClick={() => deleteAccount.mutate()}
         >

@@ -12,6 +12,11 @@ export interface PaymentGateway {
   chargeSaved(request: ChargeSavedRequest): Promise<ProviderPayment>;
   /** Статус платежа — единственный источник правды о том, прошли ли деньги. */
   getPayment(providerPaymentId: string): Promise<ProviderPayment>;
+  /**
+   * Сколько всего вернули по платежу: сумма УСПЕШНЫХ возвратов. Итог, а не
+   * последний возврат, — чтобы повтор уведомления ничего не удваивал.
+   */
+  refundedAmount(providerPaymentId: string): Promise<{ amountMinor: number; currency: string }>;
 }
 
 export const PAYMENT_GATEWAY = Symbol('PAYMENT_GATEWAY');

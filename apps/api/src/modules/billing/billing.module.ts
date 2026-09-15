@@ -44,6 +44,9 @@ export class BillingScheduler {
     try {
       await this.lock.withLock(RENEWAL_LOCK_KEY, 30 * 60 * 1000, async () => {
         await this.billing.reconcilePending();
+        // Письма раньше списаний: продление без отправленного письма не
+        // списывается, и порядок экономит лишний такт.
+        await this.billing.sendRenewalNotices();
         await this.billing.renewDue();
       });
     } catch (error) {

@@ -3,6 +3,7 @@ import { AuditService } from './audit/audit.service';
 import { RealtimeBus } from './bus/realtime-bus.service';
 import { CryptoService } from './crypto/crypto.service';
 import { PasswordService } from './crypto/password.service';
+import { MAILER, SmtpMailer } from './mail/mailer';
 import { RedisLock } from './redis/lock.service';
 
 /**
@@ -11,7 +12,14 @@ import { RedisLock } from './redis/lock.service';
  */
 @Global()
 @Module({
-  providers: [CryptoService, PasswordService, AuditService, RealtimeBus, RedisLock],
-  exports: [CryptoService, PasswordService, AuditService, RealtimeBus, RedisLock],
+  providers: [
+    CryptoService,
+    PasswordService,
+    AuditService,
+    RealtimeBus,
+    RedisLock,
+    { provide: MAILER, useClass: SmtpMailer },
+  ],
+  exports: [CryptoService, PasswordService, AuditService, RealtimeBus, RedisLock, MAILER],
 })
 export class CommonModule {}

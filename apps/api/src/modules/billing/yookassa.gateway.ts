@@ -37,6 +37,21 @@ const paymentResponseSchema = z.object({
   confirmation: z.object({ confirmation_url: z.string().url().nullish() }).nullish(),
 });
 
+/** Список возвратов по платежу. */
+const refundListSchema = z.object({
+  items: z.array(
+    z.object({
+      id: z.string(),
+      payment_id: z.string(),
+      status: z.enum(['pending', 'succeeded', 'canceled']),
+      amount: z.object({ value: z.string(), currency: z.string().length(3) }),
+    }),
+  ),
+  next_cursor: z.string().nullish(),
+});
+
+const MAX_REFUND_PAGES = 10;
+
 /** Ответ «запрос с этим ключом ещё обрабатывается» — HTTP 202. */
 const processingSchema = z.object({ type: z.literal('processing'), retry_after: z.number() });
 
@@ -85,6 +100,48 @@ export class YooKassaGateway implements PaymentGateway {
       basicAuth: { username: settings.shopId, password: settings.secretKey },
     });
     return toProviderPayment(paymentResponseSchema.parse(raw));
+  }
+
+  async refundedAmount(
+    providerPaymentId: string,
+  ): Promise<{ amountMinor: number; currency: string }> {
+    const settings = this.settings();
+    let amountMinor = 0;
+    let currency = 'RUB';
+    let cursor: string | null = null;
+
+    // Возвратов по одному платежу — единицы, но список ЮKassa постраничный, и
+    // потерянная вторая страница занизила бы сумму возврата.
+    for (let page = 0; page < MAX_REFUND_PAGES; page += 1) {
+      const url = new URL(`${settings.apiUrl}/refunds`);
+      url.searchParams.set('payment_id', providerPaymentId);
+      url.searchParams.set('limit', '100');
+      if (cursor) url.searchParams.set('cursor', cursor);
+
+      const list = refundListSchema.parse(
+        await this.http.json<unknown>({
+          platform: 'yookassa',
+          url: url.toString(),
+          basicAuth: { username: settings.shopId, password: settings.secretKey },
+        }),
+      );
+      for (const refund of list.items) {
+        if (refund.status !== 'succeeded' || refund.payment_id !== providerPaymentId) continue;
+        const minor = parseMajorToMinor(refund.amount.value);
+        if (minor === null) {
+          throw new PlatformError(
+            'yookassa',
+            200,
+            `Непонятная сумма возврата: ${refund.amount.value}`,
+          );
+        }
+        amountMinor += minor;
+        currency = refund.amount.currency;
+      }
+      cursor = list.next_cursor ?? null;
+      if (!cursor) break;
+    }
+    return { amountMinor, currency };
   }
 
   private common(request: CreatePaymentRequest | ChargeSavedRequest): Record<string, unknown> {

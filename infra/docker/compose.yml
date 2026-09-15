@@ -41,6 +41,13 @@ x-app-environment: &app-environment
   SELLER_INN: ${SELLER_INN:-}
   SELLER_EMAIL: ${SELLER_EMAIL:-}
   SELLER_PHONE: ${SELLER_PHONE:-}
+  # Почта для писем о списании. Пустой SMTP_HOST — почта не настроена, и
+  # продления подписки не списываются.
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  MAIL_FROM: ${MAIL_FROM:-}
 
 services:
   postgres:

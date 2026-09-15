@@ -353,6 +353,42 @@ describe('Аналитика каналов (feature)', () => {
     expect(await states.consume(state, 'youtube')).toBeNull();
   });
 
+  it('callback не принимает state без cookie браузера, выпустившего его, и не сжигает его', async () => {
+    // Сценарий подмены: state выпущен для аккаунта злоумышленника, а по ссылке
+    // с ним на экран подтверждения площадки уходит жертва. У её браузера cookie
+    // с этим state нет.
+    const states = harness.app.get(OAuthStateService);
+    const state = await states.issue(userId, 'twitch');
+
+    const withoutCookie = await request(server())
+      .get(`/api/integrations/twitch/callback?code=victim-code&state=${state}`)
+      .expect(302);
+    expect(withoutCookie.headers.location).toContain('status=failed');
+
+    await request(server())
+      .get(`/api/integrations/twitch/callback?code=victim-code&state=${state}`)
+      .set('Cookie', 'sk_oauth_state=someone-elses-state')
+      .expect(302);
+
+    expect(await states.consume(state, 'twitch')).toEqual({ userId, platform: 'twitch' });
+  });
+
+  it('callback пропускает state дальше, когда его вернул тот же браузер', async () => {
+    const states = harness.app.get(OAuthStateService);
+    const state = await states.issue(userId, 'twitch');
+
+    const response = await request(server())
+      .get(`/api/integrations/twitch/callback?code=code&state=${state}`)
+      .set('Cookie', `sk_oauth_state=${state}`)
+      .expect(302);
+
+    // Площадка в тестах не настроена, поэтому обмен кода не удаётся. Важно, что
+    // проверку привязки state прошёл: он израсходован, и cookie стёрта.
+    expect(response.headers.location).toContain('status=failed');
+    expect(await states.consume(state, 'twitch')).toBeNull();
+    expect(String(response.headers['set-cookie'])).toContain('sk_oauth_state=;');
+  });
+
   it('возврат с площадки без кода уводит в дашборд, а не в ошибку', async () => {
     const response = await request(server())
       .get('/api/integrations/twitch/callback?error=access_denied')

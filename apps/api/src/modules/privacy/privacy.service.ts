@@ -2,8 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { ConsentDocument } from '@prisma/client';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
+import { PasswordService } from '../../common/crypto/password.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { LEGAL_DOCUMENTS, REQUIRED_ON_REGISTER } from './legal-documents';
+import { LEGAL_DOCUMENTS, publishedDocuments, REQUIRED_ON_REGISTER } from './legal-documents';
 
 export interface ConsentView {
   document: ConsentDocument;
@@ -26,6 +27,7 @@ export class PrivacyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly passwords: PasswordService,
   ) {}
 
   /**
@@ -48,7 +50,7 @@ export class PrivacyService {
       }
     }
 
-    return Object.values(LEGAL_DOCUMENTS).map((document) => {
+    return publishedDocuments().map((document) => {
       const accepted = latestByDocument.get(document.document);
       return {
         document: document.document,
@@ -70,6 +72,9 @@ export class PrivacyService {
     context: AuditContext = {},
   ): Promise<void> {
     const definition = LEGAL_DOCUMENTS[document];
+    if (!definition.published) {
+      throw new BadRequestException('Такого документа нет.');
+    }
     if (definition.acceptedAtCheckout) {
       throw new BadRequestException('Это согласие даётся при оплате тарифа.');
     }
@@ -187,6 +192,8 @@ export class PrivacyService {
           period: true,
           currentPeriodEnd: true,
           autoRenew: true,
+          renewalAmountMinor: true,
+          renewalCurrency: true,
           paymentMethodTitle: true,
           createdAt: true,
         },
@@ -205,6 +212,8 @@ export class PrivacyService {
           periodEnd: true,
           createdAt: true,
           paidAt: true,
+          refundedAmountMinor: true,
+          refundedAt: true,
         },
       }),
     ]);
@@ -231,6 +240,23 @@ export class PrivacyService {
         totalViews: snapshot.totalViews === null ? null : snapshot.totalViews.toString(),
       })),
     };
+  }
+
+  /**
+   * Удаление по запросу владельца: пароль, затем обезличивание.
+   *
+   * 400, а не 401, на неверный пароль: 401 клиент понимает как протухший
+   * access-токен и уходит его обновлять, а человек просто ошибся в пароле.
+   */
+  async deleteAccount(userId: string, password: string, context: AuditContext = {}): Promise<void> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { passwordHash: true },
+    });
+    if (!(await this.passwords.verify(user.passwordHash, password))) {
+      throw new BadRequestException('Пароль указан неверно');
+    }
+    await this.anonymize(userId, context);
   }
 
   /**

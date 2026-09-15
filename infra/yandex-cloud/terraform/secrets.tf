@@ -73,6 +73,15 @@ resource "yandex_lockbox_secret_version" "app" {
     key        = "VALKEY_PASSWORD"
     text_value = random_password.valkey.result
   }
+  # SMTP Postbox: логин — идентификатор API-ключа, пароль — его секрет.
+  entries {
+    key        = "SMTP_USER"
+    text_value = yandex_iam_service_account_api_key.mail_sender.id
+  }
+  entries {
+    key        = "SMTP_PASSWORD"
+    text_value = yandex_iam_service_account_api_key.mail_sender.secret_key
+  }
 }
 
 resource "yandex_lockbox_secret" "livekit" {

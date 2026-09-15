@@ -12,6 +12,7 @@ import { type Payment, Prisma, type Subscription } from '@prisma/client';
 import {
   type BillingPeriod,
   type CheckoutResult,
+  GRACE_DAYS,
   MAX_RENEWAL_ATTEMPTS,
   type PaymentView,
   PLAN_PRICES,
@@ -20,6 +21,7 @@ import {
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { PlatformError } from '../../common/http/platform-errors';
+import { MAILER, type Mailer } from '../../common/mail/mailer';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AppConfig } from '../../config/app-config.service';
 import { LEGAL_DOCUMENTS } from '../privacy/legal-documents';
@@ -32,9 +34,26 @@ import {
   toPrismaPeriod,
 } from './billing-periods';
 import { PAYMENT_GATEWAY, type PaymentGateway, type ProviderPayment } from './payment-gateway';
+import { renewalNoticeMessage } from './renewal-notice';
 
 /** За сколько до конца периода начинаем списывать продление. */
 const RENEW_AHEAD_MS = DAY_MS;
+
+/** Сколько проходит между письмом о списании и самим списанием — п. 5 оферты. */
+const NOTICE_LEAD_MS = 3 * DAY_MS;
+
+/** Письмо уходит так, чтобы три дня истекли как раз к началу окна списания. */
+const NOTICE_AHEAD_MS = RENEW_AHEAD_MS + NOTICE_LEAD_MS;
+
+/**
+ * Граница, отделяющая письмо о ТЕКУЩЕМ конце периода от письма о прошлом.
+ *
+ * Сравнить `renewalNoticeFor` с `currentPeriodEnd` в одном запросе Prisma не
+ * умеет, но и не нужно. Письмо о текущем конце отмечено датой этого конца, а
+ * она не раньше, чем «сейчас минус льготные дни». Прошлый конец периода — это
+ * минимум месяц назад. Неделя лежит между ними с запасом в обе стороны.
+ */
+const STALE_NOTICE_MS = 7 * DAY_MS;
 
 /**
  * Отказы, после которых повторять списание бессмысленно: способ оплаты мёртв или
@@ -88,6 +107,7 @@ export class BillingService {
     private readonly audit: AuditService,
     private readonly config: AppConfig,
     @Inject(PAYMENT_GATEWAY) private readonly gateway: PaymentGateway,
+    @Inject(MAILER) private readonly mailer: Mailer,
   ) {}
 
   get configured(): boolean {
@@ -102,6 +122,9 @@ export class BillingService {
       period: row ? toContractPeriod(row.period) : null,
       currentPeriodEnd: row?.currentPeriodEnd?.toISOString() ?? null,
       autoRenew: row?.autoRenew ?? false,
+      renewalAmount: row
+        ? { amountMinor: row.renewalAmountMinor, currency: row.renewalCurrency as 'RUB' }
+        : null,
       paymentMethodTitle: row?.paymentMethodTitle ?? null,
       roomsAccess: !this.configured || hasRoomsAccess(status),
       billingConfigured: this.configured,
@@ -183,10 +206,17 @@ export class BillingService {
 
     const price = PLAN_PRICES[period];
     const payment = await this.prisma.$transaction(async (tx) => {
+      // Цена продления фиксируется здесь же: по ней будут списываться
+      // следующие периоды, пока стример сам не сменит период.
+      const renewal = {
+        period: toPrismaPeriod(period),
+        renewalAmountMinor: price.amountMinor,
+        renewalCurrency: price.currency,
+      };
       const subscription = await tx.subscription.upsert({
         where: { userId },
-        create: { userId, period: toPrismaPeriod(period) },
-        update: { period: toPrismaPeriod(period) },
+        create: { userId, ...renewal },
+        update: renewal,
       });
       await tx.consent.create({
         data: {
@@ -258,6 +288,72 @@ export class BillingService {
     const row = await this.prisma.payment.findUnique({ where: { providerPaymentId } });
     if (!row || row.status !== 'PENDING') return 'ignored';
     await this.syncPayment(row);
+    return 'processed';
+  }
+
+  /**
+   * Уведомление о возврате.
+   *
+   * Тело уведомления не подписано, как и у платежей, поэтому из него берётся
+   * только идентификатор платежа — и только оплаченного, который есть у нас:
+   * иначе открытый эндпоинт гонял бы запросы к ЮKassa по любым присланным
+   * строкам. Сумма возврата — итог по платежу из ЮKassa, а не из тела.
+   *
+   * Любой возврат по платежу ТЕКУЩЕГО периода прекращает доступ сразу и
+   * выключает автопродление: возврат делается за неиспользованные дни (п. 7
+   * оферты), и оставлять доступ к оплаченному обратно периоду нельзя.
+   */
+  async handleRefundNotification(providerPaymentId: string): Promise<'processed' | 'ignored'> {
+    if (!this.configured) return 'ignored';
+    const row = await this.prisma.payment.findUnique({ where: { providerPaymentId } });
+    if (!row || row.status !== 'SUCCEEDED') return 'ignored';
+
+    const refunded = await this.gateway.refundedAmount(providerPaymentId);
+    if (refunded.amountMinor === row.refundedAmountMinor) return 'ignored';
+    if (refunded.amountMinor > row.amountMinor || refunded.currency !== row.currency) {
+      this.logger.error({ paymentId: row.id }, 'Возврат больше платежа или в другой валюте');
+      await this.audit.record('billing.payment.amount_mismatch', row.userId, {
+        metadata: { paymentId: row.id, refund: true },
+      });
+      return 'ignored';
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.update({
+        where: { id: row.id },
+        data: { refundedAmountMinor: refunded.amountMinor, refundedAt: now },
+      });
+      if (!row.subscriptionId || refunded.amountMinor === 0) return;
+
+      await tx.$queryRaw`SELECT id FROM "Subscription" WHERE id = ${row.subscriptionId}::uuid FOR UPDATE`;
+      const subscription = await tx.subscription.findUniqueOrThrow({
+        where: { id: row.subscriptionId },
+      });
+      const isCurrentPeriod =
+        row.periodEnd !== null &&
+        subscription.currentPeriodEnd !== null &&
+        row.periodEnd.getTime() === subscription.currentPeriodEnd.getTime();
+      if (!isCurrentPeriod) return;
+
+      await tx.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          currentPeriodEnd: now,
+          autoRenew: false,
+          renewalNoticeFor: null,
+          renewalNoticeSentAt: null,
+        },
+      });
+      await tx.consent.updateMany({
+        where: { userId: row.userId, document: 'SUBSCRIPTION_OFFER', revokedAt: null },
+        data: { revokedAt: now },
+      });
+    });
+
+    await this.audit.record('billing.payment.refunded', row.userId, {
+      metadata: { paymentId: row.id, refundedAmountMinor: refunded.amountMinor },
+    });
     return 'processed';
   }
 
@@ -337,11 +433,23 @@ export class BillingService {
       throw new ConflictException('Нет сохранённого способа оплаты — оформите подписку заново');
     }
 
+    const periodChanged = input.period !== undefined && toPrismaPeriod(input.period) !== row.period;
+
     await this.prisma.$transaction(async (tx) => {
       await tx.subscription.update({
         where: { id: row.id },
         data: {
-          ...(input.period ? { period: toPrismaPeriod(input.period) } : {}),
+          // Новый период — новая сумма списания, и прежнее письмо о списании
+          // называло другую. Нужно новое письмо, а с ним и новые три дня.
+          ...(periodChanged && input.period
+            ? {
+                period: toPrismaPeriod(input.period),
+                renewalAmountMinor: PLAN_PRICES[input.period].amountMinor,
+                renewalCurrency: PLAN_PRICES[input.period].currency,
+                renewalNoticeFor: null,
+                renewalNoticeSentAt: null,
+              }
+            : {}),
           ...(input.autoRenew !== undefined
             ? { autoRenew: input.autoRenew, renewalFailures: 0, nextRenewalAttemptAt: null }
             : {}),
@@ -379,6 +487,88 @@ export class BillingService {
   /* Продление — вызывается планировщиком воркера                       */
   /* ---------------------------------------------------------------- */
 
+  /**
+   * Письма о предстоящем списании — за три дня до окна продления.
+   *
+   * Отметка ставится ДО отправки условным обновлением: две реплики воркера не
+   * пошлют два письма. Упала отправка — отметка снимается, и письмо уйдёт
+   * следующим тактом. Без настроенной почты писем нет, а значит, нет и
+   * списаний: `renewDue` берёт только подписки с отправленным письмом.
+   *
+   * @returns сколько писем отправлено.
+   */
+  async sendRenewalNotices(now = new Date()): Promise<number> {
+    if (!this.configured) return 0;
+    if (!this.mailer.configured) {
+      this.logger.warn('Почта не настроена: письма о списании не уходят, продления не списываются');
+      return 0;
+    }
+
+    const staleBefore = new Date(now.getTime() - STALE_NOTICE_MS);
+    const candidates = await this.prisma.subscription.findMany({
+      where: {
+        autoRenew: true,
+        paymentMethodEncrypted: { not: null },
+        currentPeriodEnd: {
+          lte: new Date(now.getTime() + NOTICE_AHEAD_MS),
+          // Истёкшие вне льготных дней не продлеваются — и письмо им незачем.
+          gt: new Date(now.getTime() - GRACE_DAYS * DAY_MS),
+        },
+        OR: [{ renewalNoticeFor: null }, { renewalNoticeFor: { lt: staleBefore } }],
+      },
+      include: { user: { select: { email: true, displayName: true, status: true } } },
+      orderBy: { currentPeriodEnd: 'asc' },
+      take: 50,
+    });
+
+    let sent = 0;
+    for (const subscription of candidates) {
+      const end = subscription.currentPeriodEnd!;
+      if (subscription.user.status !== 'ACTIVE') continue;
+
+      const claimed = await this.prisma.subscription.updateMany({
+        where: {
+          id: subscription.id,
+          OR: [{ renewalNoticeFor: null }, { renewalNoticeFor: { lt: staleBefore } }],
+        },
+        data: { renewalNoticeFor: end, renewalNoticeSentAt: now },
+      });
+      if (claimed.count === 0) continue;
+
+      const chargeNotBefore = new Date(
+        Math.max(end.getTime() - RENEW_AHEAD_MS, now.getTime() + NOTICE_LEAD_MS),
+      );
+      try {
+        await this.mailer.send(
+          renewalNoticeMessage({
+            email: subscription.user.email,
+            displayName: subscription.user.displayName,
+            amount: {
+              amountMinor: subscription.renewalAmountMinor,
+              currency: subscription.renewalCurrency as 'RUB',
+            },
+            period: toContractPeriod(subscription.period),
+            periodEnd: end,
+            chargeNotBefore,
+            paymentMethodTitle: subscription.paymentMethodTitle,
+            webBaseUrl: this.config.webBaseUrl,
+          }),
+        );
+        sent += 1;
+      } catch (error) {
+        this.logger.error(
+          { err: error, subscriptionId: subscription.id },
+          'Письмо о списании не ушло',
+        );
+        await this.prisma.subscription.updateMany({
+          where: { id: subscription.id, renewalNoticeFor: end, renewalNoticeSentAt: now },
+          data: { renewalNoticeFor: null, renewalNoticeSentAt: null },
+        });
+      }
+    }
+    return sent;
+  }
+
   /** Списать продления, срок которых подошёл. @returns сколько подписок обработано. */
   async renewDue(now = new Date()): Promise<number> {
     if (!this.configured) return 0;
@@ -388,6 +578,11 @@ export class BillingService {
         paymentMethodEncrypted: { not: null },
         currentPeriodEnd: { lte: new Date(now.getTime() + RENEW_AHEAD_MS) },
         OR: [{ nextRenewalAttemptAt: null }, { nextRenewalAttemptAt: { lte: now } }],
+        // Без письма о текущем конце периода, отправленного не меньше трёх
+        // дней назад, не списываем: так обещает оферта. Поздно ушедшее письмо
+        // сдвигает списание в льготные дни, а не сокращает срок предупреждения.
+        renewalNoticeFor: { gte: new Date(now.getTime() - STALE_NOTICE_MS) },
+        renewalNoticeSentAt: { lte: new Date(now.getTime() - NOTICE_LEAD_MS) },
       },
       orderBy: { currentPeriodEnd: 'asc' },
       take: 50,
@@ -443,7 +638,6 @@ export class BillingService {
     // Незакрытое продление уже есть — его доведёт уведомление или дочистка.
     if (pending) return;
 
-    const price = PLAN_PRICES[toContractPeriod(subscription.period)];
     let row: Payment;
     try {
       row = await this.prisma.payment.create({
@@ -452,8 +646,9 @@ export class BillingService {
           subscriptionId: subscription.id,
           kind: 'RENEWAL',
           period: subscription.period,
-          amountMinor: price.amountMinor,
-          currency: price.currency,
+          // Цена подписки, а не текущий прайс: её и называло письмо о списании.
+          amountMinor: subscription.renewalAmountMinor,
+          currency: subscription.renewalCurrency,
           renewalFor: subscription.currentPeriodEnd,
           attempt: subscription.renewalFailures + 1,
         },
@@ -635,5 +830,6 @@ function toPaymentView(row: Payment): PaymentView {
       row.status === 'SUCCEEDED' ? 'succeeded' : row.status === 'CANCELED' ? 'canceled' : 'pending',
     createdAt: row.createdAt.toISOString(),
     paidAt: row.paidAt?.toISOString() ?? null,
+    refundedAmountMinor: row.refundedAmountMinor,
   };
 }

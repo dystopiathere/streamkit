@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { AuditService } from '../../common/audit/audit.service';
 import { type AuthenticatedUser, CurrentUser, Public } from '../../common/auth/auth.decorators';
 import { zodBody } from '../../common/pipes/zod-validation.pipe';
-import { LEGAL_DOCUMENTS } from './legal-documents';
+import { publishedDocuments } from './legal-documents';
 import { type ConsentView, PrivacyService } from './privacy.service';
 
 const consentSchema = z.object({
@@ -16,6 +16,12 @@ const consentSchema = z.object({
 const deleteAccountSchema = z.object({
   /** Подтверждение осознанности: пользователь вводит слово вручную. */
   confirmation: z.literal('УДАЛИТЬ'),
+  /**
+   * Пароль — подтверждение того, что удаляет владелец. Необратимое действие
+   * иначе доставалось бы любому, у кого на пятнадцать минут оказался access-токен:
+   * чужой открытый ноутбук, XSS на соседней странице.
+   */
+  password: z.string().min(1).max(128),
 });
 
 // Жёсткий лимитер auth предназначен только для входа и регистрации;
@@ -32,7 +38,7 @@ export class PrivacyController {
   @Public()
   @Get('documents')
   documents() {
-    return Object.values(LEGAL_DOCUMENTS);
+    return publishedDocuments();
   }
 
   @Get('consents')
@@ -69,13 +75,19 @@ export class PrivacyController {
     return this.privacy.exportData(user.id, this.audit.contextFromRequest(request));
   }
 
+  // Пароль здесь перебирается так же, как на входе: и лимит тот же.
+  @SkipThrottle({ auth: false })
   @Delete('account')
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteAccount(
     @CurrentUser() user: AuthenticatedUser,
-    @Body(zodBody(deleteAccountSchema)) _body: { confirmation: 'УДАЛИТЬ' },
+    @Body(zodBody(deleteAccountSchema)) body: { confirmation: 'УДАЛИТЬ'; password: string },
     @Req() request: Request,
   ): Promise<void> {
-    await this.privacy.anonymize(user.id, this.audit.contextFromRequest(request));
+    await this.privacy.deleteAccount(
+      user.id,
+      body.password,
+      this.audit.contextFromRequest(request),
+    );
   }
 }

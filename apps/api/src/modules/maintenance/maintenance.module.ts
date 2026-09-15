@@ -16,6 +16,12 @@ const AUDIT_RETENTION_DAYS = 180;
  */
 const SNAPSHOT_RETENTION_DAYS = 90;
 
+/** Срок хранения истории платежей — пять лет, как заявлено в политике. */
+const PAYMENT_RETENTION_DAYS = 5 * 365;
+
+/** Журнал согласий — три года после прекращения обработки, как в политике. */
+const CONSENT_RETENTION_DAYS = 3 * 365;
+
 /** Ключ взаимного исключения между репликами воркера. */
 const MAINTENANCE_LOCK_KEY = 'streamkit:lock:maintenance:nightly';
 
@@ -48,6 +54,8 @@ export class MaintenanceScheduler {
         await this.maintenance.purgeOldAuditLogs(AUDIT_RETENTION_DAYS);
         await this.maintenance.purgeOldSnapshots(SNAPSHOT_RETENTION_DAYS);
         await this.maintenance.purgeOldGuestConsents(AUDIT_RETENTION_DAYS);
+        await this.maintenance.purgeOldPayments(PAYMENT_RETENTION_DAYS);
+        await this.maintenance.purgeExpiredConsents(CONSENT_RETENTION_DAYS);
       });
     } catch (error) {
       // Упавшая уборка не должна ронять воркер: живые коннекторы важнее.

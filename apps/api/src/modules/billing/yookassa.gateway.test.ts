@@ -146,6 +146,28 @@ describe('клиент ЮKassa', () => {
     const payment = await new YooKassaGateway(http, config).getPayment('yk-1');
     expect(payment).toMatchObject({ status: 'canceled', cancellationReason: 'permission_revoked' });
   });
+
+  it('сумма возвратов — итог успешных возвратов по всем страницам списка', async () => {
+    const refund = (id: string, status: string, value: string) => ({
+      id,
+      payment_id: 'yk-1',
+      status,
+      amount: { value, currency: 'RUB' },
+    });
+    const { http, requests } = recordingClient(
+      {
+        items: [refund('r1', 'succeeded', '100.50'), refund('r2', 'canceled', '50.00')],
+        next_cursor: 'c2',
+      },
+      { items: [refund('r3', 'succeeded', '30.00'), refund('r4', 'pending', '10.00')] },
+    );
+
+    const total = await new YooKassaGateway(http, config).refundedAmount('yk-1');
+
+    expect(total).toEqual({ amountMinor: 13_050, currency: 'RUB' });
+    expect(requests[0]!.url).toBe('https://yookassa.test/v3/refunds?payment_id=yk-1&limit=100');
+    expect(requests[1]!.url).toContain('cursor=c2');
+  });
 });
 
 describe('уведомления ЮKassa и лимиты запросов', () => {

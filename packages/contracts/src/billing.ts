@@ -66,6 +66,11 @@ export const subscriptionViewSchema = z.object({
   period: billingPeriodSchema.nullable(),
   currentPeriodEnd: isoDateSchema.nullable(),
   autoRenew: z.boolean(),
+  /**
+   * Сколько спишется при продлении. Цена подписки, а не текущий прайс: у
+   * оформивших раньше она сохраняется, пока их не предупредят о новой.
+   */
+  renewalAmount: moneySchema.nullable(),
   /** «Карта *4444». Сам способ оплаты наружу не отдаётся никогда. */
   paymentMethodTitle: z.string().nullable(),
   /** Открыты ли приватные комнаты — то, что покупается. */
@@ -85,6 +90,8 @@ export const paymentViewSchema = moneySchema.extend({
   status: z.enum(PAYMENT_STATUSES),
   createdAt: isoDateSchema,
   paidAt: isoDateSchema.nullable(),
+  /** Возвращено по платежу, в той же валюте. 0 — возвратов не было. */
+  refundedAmountMinor: z.number().int().min(0),
 });
 export type PaymentView = z.infer<typeof paymentViewSchema>;
 

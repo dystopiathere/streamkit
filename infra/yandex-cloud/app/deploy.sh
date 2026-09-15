@@ -54,6 +54,12 @@ OVERLAY_BASE_URL='https://overlay.${DOMAIN}'
 OAUTH_REDIRECT_BASE_URL='https://api.${DOMAIN}'
 LIVEKIT_URL='http://${LIVEKIT_PRIVATE_IP}:7880'
 LIVEKIT_PUBLIC_URL='wss://rtc.${DOMAIN}'
+# Postbox: логин и пароль SMTP — API-ключ сервисного аккаунта из секрета
+# приложения (SMTP_USER и SMTP_PASSWORD уже в файле). Домен отправителя
+# подтверждается в Postbox записью DKIM (terraform/dns.tf).
+SMTP_HOST='postbox.cloud.yandex.net'
+SMTP_PORT='587'
+MAIL_FROM='StreamKit <noreply@${DOMAIN}>'
 EOF
 mv .env.next .env
 

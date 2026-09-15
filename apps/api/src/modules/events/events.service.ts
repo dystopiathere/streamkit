@@ -131,7 +131,9 @@ export class EventsService {
   async list(userId: string, pagination: CursorPagination): Promise<Page<AlertEvent>> {
     const rows = await this.prisma.alertEvent.findMany({
       where: { userId },
-      orderBy: { createdAt: 'desc' },
+      // id — второй ключ: у событий, пришедших пачкой в одну миллисекунду,
+      // порядок иначе не определён, и курсор пропускал или повторял строки.
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: pagination.limit + 1,
       ...(pagination.cursor ? { cursor: { id: pagination.cursor }, skip: 1 } : {}),
     });

@@ -29,6 +29,19 @@ resource "yandex_dns_recordset" "app" {
   data    = [each.value]
 }
 
+# Подпись DKIM домена отправителя для Postbox. Адрес создаётся в консоли Postbox
+# (../README.md), и консоль показывает запись — её имя и значение переносятся в
+# terraform.tfvars. Без подтверждённого домена Postbox писем не отправляет.
+resource "yandex_dns_recordset" "postbox_dkim" {
+  count = var.postbox_dkim == null ? 0 : 1
+
+  zone_id = yandex_dns_zone.main.id
+  name    = var.postbox_dkim.name
+  type    = "TXT"
+  ttl     = 3600
+  data    = [var.postbox_dkim.value]
+}
+
 # TURN — на своём адресе: он занимает там порт 443.
 resource "yandex_dns_recordset" "turn" {
   zone_id = yandex_dns_zone.main.id

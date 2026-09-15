@@ -76,7 +76,6 @@ export const envSchema = z.object({
   /** Базовый публичный URL overlay-приложения: из него собираются ссылки для OBS. */
   OVERLAY_BASE_URL: z.string().url(),
 
-  /** Лимит запросов в минуту на IP для обычных ручек. */
   /** Куда возвращать пользователя после OAuth площадки. */
   WEB_BASE_URL: z.string().url().default('http://localhost:5173'),
 
@@ -177,6 +176,20 @@ export const envSchema = z.object({
   SELLER_EMAIL: optionalValue().pipe(z.string().email().optional()),
   SELLER_PHONE: optionalValue(),
 
+  /**
+   * Почта: SMTP-сервер, через который уходят служебные письма (предупреждение
+   * о списании за подписку). В проде — Yandex Cloud Postbox, в разработке —
+   * Mailpit из compose.dev.yml. Без хоста и отправителя почта не настроена, и
+   * продление подписки НЕ списывается: оферта обещает письмо за три дня.
+   */
+  SMTP_HOST: optionalValue(),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_USER: optionalValue(),
+  SMTP_PASSWORD: optionalValue(),
+  /** `StreamKit <noreply@stream-kit.ru>`. Домен должен быть подтверждён в Postbox. */
+  MAIL_FROM: optionalValue(),
+
+  /** Лимит запросов в минуту на IP для обычных ручек. */
   THROTTLE_LIMIT: z.coerce.number().int().min(1).default(120),
   /** Лимит попыток логина в минуту на IP. Жёстче общего. */
   THROTTLE_AUTH_LIMIT: z.coerce.number().int().min(1).default(10),

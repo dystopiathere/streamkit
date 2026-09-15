@@ -3,12 +3,14 @@ import type { ConsentDocument } from '@prisma/client';
 /**
  * Реестр юридических документов и их актуальных версий.
  *
- * Версия — это дата редакции. Когда текст документа меняется, здесь появляется
+ * Версия — это дата редакции; вторая редакция того же дня — с суффиксом `.2`
+ * (в шапке документа — «Редакция № 2»). Когда текст документа меняется, здесь появляется
  * новая версия, и пользователи, согласившиеся со старой, считаются НЕ принявшими
  * новую: их нужно попросить согласиться заново. Без этого реестра невозможно
  * доказать, на какую именно редакцию человек дал согласие.
  *
- * Сами тексты лежат в docs/legal и отдаются фронтом; здесь только метаданные.
+ * Сами тексты лежат в apps/web/public/legal и отдаются фронтом; здесь только
+ * метаданные.
  */
 export interface LegalDocument {
   document: ConsentDocument;
@@ -16,6 +18,12 @@ export interface LegalDocument {
   title: string;
   /** Путь на фронте, где опубликован текст. */
   path: string;
+  /**
+   * Опубликован ли документ. Неопубликованный не показывается в разделе
+   * «Приватность» и не принимается: согласие на текст, которого нет, — не
+   * согласие ни на что.
+   */
+  published: boolean;
   /** Обязателен ли документ для регистрации. */
   requiredOnRegister: boolean;
   /**
@@ -29,37 +37,42 @@ export interface LegalDocument {
 export const LEGAL_DOCUMENTS: Record<ConsentDocument, LegalDocument> = {
   TERMS: {
     document: 'TERMS',
-    // Раздел об оплате и оператор-самозанятый с реквизитами из окружения.
-    version: '2026-09-15',
+    // Вторая редакция того же дня: приватные комнаты и ответственность
+    // стримера за показ гостей, служебные письма, подсудность потребителя.
+    version: '2026-09-15.2',
     title: 'Пользовательское соглашение',
     path: '/legal/terms',
+    published: true,
     requiredOnRegister: true,
     acceptedAtCheckout: false,
   },
   PRIVACY: {
     document: 'PRIVACY',
-    // Добавлен срок хранения снимков метрик — новый раздел данных, новая
-    // редакция. Согласившиеся со старой увидят needsRenewal: это и есть смысл
-    // реестра версий.
-    version: '2026-09-15',
+    // Получатели данных (Yandex Cloud, ЮKassa, площадки), письма, гости комнат,
+    // сроки хранения платежей. Согласившиеся со старой увидят needsRenewal:
+    // это и есть смысл реестра версий.
+    version: '2026-09-15.2',
     title: 'Политика конфиденциальности',
     path: '/legal/privacy',
+    published: true,
     requiredOnRegister: true,
     acceptedAtCheckout: false,
   },
   PERSONAL_DATA: {
     document: 'PERSONAL_DATA',
-    version: '2026-09-15',
+    version: '2026-09-15.2',
     title: 'Согласие на обработку персональных данных',
     path: '/legal/personal-data',
+    published: true,
     requiredOnRegister: true,
     acceptedAtCheckout: false,
   },
   COOKIE_ANALYTICS: {
     document: 'COOKIE_ANALYTICS',
-    version: '2026-09-11',
+    version: '2026-09-15',
     title: 'Аналитические cookie',
     path: '/legal/cookies',
+    published: true,
     requiredOnRegister: false,
     acceptedAtCheckout: false,
   },
@@ -68,18 +81,27 @@ export const LEGAL_DOCUMENTS: Record<ConsentDocument, LegalDocument> = {
     version: '2026-09-11',
     title: 'Рекламные рассылки',
     path: '/legal/marketing',
+    // Рекламных рассылок нет, и текста согласия на них тоже нет.
+    published: false,
     requiredOnRegister: false,
     acceptedAtCheckout: false,
   },
   SUBSCRIPTION_OFFER: {
     document: 'SUBSCRIPTION_OFFER',
-    version: '2026-09-15',
+    // Письмо за три дня до списания, возврат пропорционально дням.
+    version: '2026-09-15.2',
     title: 'Оферта тарифа «Про» и автоматические списания',
     path: '/legal/subscription',
+    published: true,
     requiredOnRegister: false,
     acceptedAtCheckout: true,
   },
 };
+
+/** Документы, текст которых опубликован: только их показывают и принимают. */
+export function publishedDocuments(): LegalDocument[] {
+  return Object.values(LEGAL_DOCUMENTS).filter((document) => document.published);
+}
 
 export const REQUIRED_ON_REGISTER: ConsentDocument[] = Object.values(LEGAL_DOCUMENTS)
   .filter((document) => document.requiredOnRegister)
@@ -95,7 +117,7 @@ export const REQUIRED_ON_REGISTER: ConsentDocument[] = Object.values(LEGAL_DOCUM
  * принимал. Текст — `/legal/room-guest`; меняется он — меняется и эта дата.
  */
 export const ROOM_GUEST_TERMS = {
-  version: '2026-09-13',
+  version: '2026-09-15',
   title: 'Условия участия в комнате',
   path: '/legal/room-guest',
 } as const;

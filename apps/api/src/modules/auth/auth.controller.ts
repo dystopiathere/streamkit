@@ -40,12 +40,15 @@ import { TokenService } from './token.service';
 /**
  * Лимит запросов.
  *
- * К контроллеру применяется ТОЛЬКО именованный лимитер `auth` (жёсткий, из
- * конфигурации), а общий `default` пропускается. Значение не зашито в декоратор
- * намеренно: иначе его нельзя поменять ни в проде, ни в тестах.
+ * Жёсткий лимитер `auth` (из конфигурации, десять в минуту на IP) стоит ТОЛЬКО на
+ * ручках, где перебирают секрет: вход, регистрация, пароль и второй фактор.
+ * Раньше он висел на всём контроллере, включая обновление токена, `me` и список
+ * сессий. За общим IP — мобильный оператор с NAT на тысячи абонентов, офис,
+ * общежитие — одиннадцатое обновление токена в минуту получало 429, клиент
+ * считал сессию мёртвой и разлогинивал человека, который ничего не перебирал.
+ * Остальные ручки — под общим лимитом, как весь дашборд.
  */
-
-@SkipThrottle({ default: true })
+@SkipThrottle({ auth: true })
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -56,6 +59,7 @@ export class AuthController {
   ) {}
 
   @Public()
+  @SkipThrottle({ auth: false })
   @Post('register')
   async register(
     @Body(zodBody(registerSchema)) body: RegisterInput,
@@ -69,6 +73,7 @@ export class AuthController {
   }
 
   @Public()
+  @SkipThrottle({ auth: false })
   @HttpCode(HttpStatus.OK)
   @Post('login')
   async login(
@@ -163,6 +168,7 @@ export class AuthController {
     await this.tokens.revokeFamily(familyId);
   }
 
+  @SkipThrottle({ auth: false })
   @HttpCode(HttpStatus.NO_CONTENT)
   @Post('password')
   async changePassword(
@@ -187,6 +193,7 @@ export class AuthController {
     return this.auth.beginTotpSetup(user.id);
   }
 
+  @SkipThrottle({ auth: false })
   @HttpCode(HttpStatus.NO_CONTENT)
   @Post('totp/confirm')
   async confirmTotp(
@@ -197,6 +204,7 @@ export class AuthController {
     await this.auth.confirmTotpSetup(user.id, body.code, this.audit.contextFromRequest(request));
   }
 
+  @SkipThrottle({ auth: false })
   @HttpCode(HttpStatus.NO_CONTENT)
   @Post('totp/disable')
   async disableTotp(

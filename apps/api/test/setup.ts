@@ -45,6 +45,12 @@ for (const key of [
   'SELLER_INN',
   'SELLER_EMAIL',
   'SELLER_PHONE',
+  // Почта — чтобы прогон не слал писем через SMTP разработчика. Тесты, которым
+  // она нужна, подменяют отправку провайдером MAILER.
+  'SMTP_HOST',
+  'SMTP_USER',
+  'SMTP_PASSWORD',
+  'MAIL_FROM',
 ]) {
   delete process.env[key];
 }

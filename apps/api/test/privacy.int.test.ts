@@ -1,6 +1,8 @@
 import { createHmac } from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { MaintenanceModule } from '../src/modules/maintenance/maintenance.module';
+import { MaintenanceService } from '../src/modules/maintenance/maintenance.service';
 import { createHarness, registrationPayload, type TestHarness } from './harness';
 
 /**
@@ -15,7 +17,7 @@ describe('Приватность и удаление аккаунта (feature)'
   let accessToken: string;
 
   beforeAll(async () => {
-    harness = await createHarness();
+    harness = await createHarness([MaintenanceModule]);
   });
 
   afterAll(async () => {
@@ -42,9 +44,43 @@ describe('Приватность и удаление аккаунта (feature)'
     await request(server())
       .delete('/api/privacy/account')
       .set(auth())
-      .send({ confirmation: 'УДАЛИТЬ' })
+      .send({ confirmation: 'УДАЛИТЬ', password: registrationPayload().password })
       .expect(204);
   }
+
+  it('документ без опубликованного текста не показывается и не принимается', async () => {
+    const consents = await request(server()).get('/api/privacy/consents').set(auth()).expect(200);
+    expect(consents.body.map((consent: { document: string }) => consent.document)).not.toContain(
+      'MARKETING',
+    );
+    await request(server())
+      .post('/api/privacy/consents')
+      .set(auth())
+      .send({ document: 'MARKETING' })
+      .expect(400);
+  });
+
+  it('журнал согласий удаляется через три года после удаления аккаунта, но не раньше', async () => {
+    await deleteAccount();
+    const maintenance = harness.app.get(MaintenanceService);
+
+    expect(await maintenance.purgeExpiredConsents(3 * 365)).toBe(0);
+    await harness.prisma.user.updateMany({
+      data: { anonymizedAt: new Date(Date.now() - 4 * 365 * 24 * 60 * 60 * 1000) },
+    });
+    expect(await maintenance.purgeExpiredConsents(3 * 365)).toBeGreaterThan(0);
+    expect(await harness.prisma.consent.count()).toBe(0);
+  });
+
+  it('не удаляет аккаунт без верного пароля', async () => {
+    for (const body of [
+      { confirmation: 'УДАЛИТЬ' },
+      { confirmation: 'УДАЛИТЬ', password: 'не тот' },
+    ]) {
+      await request(server()).delete('/api/privacy/account').set(auth()).send(body).expect(400);
+    }
+    await request(server()).get('/api/auth/me').set(auth()).expect(200);
+  });
 
   it('после удаления аккаунта вебхук перестаёт принимать события', async () => {
     const source = await request(server())
