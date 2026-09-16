@@ -15,9 +15,92 @@ env:
   NODE_VERSION: '26'
 
 jobs:
+  # Слияние не гоняет проверки повторно, если ровно этот код их уже прошёл.
+  #
+  # В пулреквесте CI проверяет не голову ветки, а её слияние с main, и
+  # записывает дерево файлов этого слияния. На push в main ворота ищут
+  # зелёный прогон пулреквеста с тем же деревом: совпадение значит, что в main
+  # лёг байт в байт проверенный код, и остальные задания пропускаются —
+  # прогон при этом зелёный, и выпуск образов стартует сразу.
+  #
+  # Сравнивается дерево, а не sha: коммит слияния новый, а содержимое то же.
+  # Если main успел уйти вперёд после последнего прогона пулреквеста, деревья
+  # разойдутся, и CI пройдёт целиком — так и должно быть: эту комбинацию никто
+  # не проверял.
+  gate:
+    name: Проверено в пулреквесте
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      verified: ${{ steps.lookup.outputs.verified }}
+    steps:
+      - uses: actions/checkout@v7
+        if: github.event_name == 'pull_request'
+
+      - name: Дерево проверяемого слияния
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdir -p tested
+          git rev-parse 'HEAD^{tree}' > tested/tree
+
+      - uses: actions/upload-artifact@v7
+        if: github.event_name == 'pull_request'
+        with:
+          name: tested-tree
+          path: tested/tree
+          retention-days: 90
+
+      - name: Поиск зелёного прогона пулреквеста
+        id: lookup
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          tree=$(gh api "repos/$REPO/git/commits/$SHA" --jq .tree.sha)
+          # Только ветки этого репозитория: прогонам из форков не доверяем.
+          heads=$(gh api "repos/$REPO/commits/$SHA/pulls"             --jq ".[] | select(.merged_at != null and .head.repo.full_name == \"$REPO\") | .head.sha")
+          for head in $heads; do
+            runs=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?event=pull_request&status=success&head_sha=$head"               --jq '.workflow_runs[].id')
+            for run in $runs; do
+              dir="tested-$run"
+              if gh run download "$run" --repo "$REPO" --name tested-tree --dir "$dir" 2>/dev/null                 && [[ "$(cat "$dir/tree")" == "$tree" ]]; then
+                echo "Дерево $tree уже проверено прогоном $run — остальные задания пропускаются."
+                echo "verified=true" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            done
+          done
+          echo "Проверенного прогона с деревом $tree нет — CI идёт целиком."
+          echo "verified=false" >> "$GITHUB_OUTPUT"
+
+  # Кэш зависимостей для новых веток. Ветка читает кэш main, а main при
+  # пропуске проверок иначе ничего бы не сохранял: первая сборка каждой новой
+  # ветки ставила бы зависимости с нуля.
+  cache:
+    name: Кэш зависимостей
+    runs-on: ubuntu-latest
+    needs: gate
+    if: needs.gate.outputs.verified == 'true'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
   quality:
     name: Типы, линтер, формат, юнит-тесты
     runs-on: ubuntu-latest
+    needs: gate
+    if: needs.gate.outputs.verified != 'true'
     steps:
       - uses: actions/checkout@v7
 
@@ -42,6 +125,8 @@ jobs:
   integration:
     name: Интеграционные тесты
     runs-on: ubuntu-latest
+    needs: gate
+    if: needs.gate.outputs.verified != 'true'
     services:
       postgres:
         image: postgres:17-alpine
@@ -106,6 +191,7 @@ jobs:
   e2e:
     name: Сквозной сценарий
     runs-on: ubuntu-latest
+    # Пропущенный quality пропускает и это задание.
     needs: quality
     services:
       postgres:
@@ -188,6 +274,8 @@ jobs:
   security:
     name: Проверки безопасности
     runs-on: ubuntu-latest
+    needs: gate
+    if: needs.gate.outputs.verified != 'true'
 
     # Права выданы явно и по минимуму.
     #
@@ -231,6 +319,8 @@ jobs:
   infra:
     name: Инфраструктура прода
     runs-on: ubuntu-latest
+    needs: gate
+    if: needs.gate.outputs.verified != 'true'
     steps:
       - uses: actions/checkout@v7
 
@@ -308,7 +398,11 @@ jobs:
           tags: streamkit-${{ matrix.image }}:ci
           # mode=max, а не min: самый дорогой шаг — установка зависимостей — живёт
           # в промежуточной стадии, и min его бы не сохранил.
-          cache-from: type=gha,scope=${{ matrix.image }}
+          # Второй источник — кэш выпуска образов на main: ветка его читает, а
+          # свой кэш CI на main при пропуске проверок не обновляется.
+          cache-from: |
+            type=gha,scope=${{ matrix.image }}
+            type=gha,scope=release-${{ matrix.image }}
           cache-to: type=gha,scope=${{ matrix.image }},mode=max
 
       # Уязвимости в образе: базовый образ и системные пакеты pnpm audit не видит.
