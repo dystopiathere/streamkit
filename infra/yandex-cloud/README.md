@@ -176,8 +176,23 @@ failed». Администратор входит на ВМ как `ops`.
 
 - **ЮKassa**, настройки магазина: HTTP-уведомления на
   `https://api.stream-kit.ru/api/billing/yookassa/webhook` (события
-  `payment.succeeded`, `payment.canceled`); интеграция с «Мой налог»; адрес сайта
-  для модерации — `https://stream-kit.ru`.
+  `payment.succeeded`, `payment.canceled`, `refund.succeeded`); интеграция с «Мой
+  налог»; адрес сайта для модерации — `https://stream-kit.ru`.
+- **Статистика посещений (Umami)** — поднимается выкаткой, но считать начинает
+  только после этих шагов:
+  1. Пароль входа на `https://stats.stream-kit.ru` (пользователь `owner`):
+     ```bash
+     yc lockbox payload get --id $(terraform output -raw app_secret_id) --key STATS_PASSWORD
+     ```
+  2. За ним — форма входа Umami. **Сразу** войдите как `admin` с паролем `umami`
+     и смените пароль в настройках профиля: это пароль по умолчанию.
+  3. «Добавить сайт»: домен `stream-kit.ru`. Скопируйте идентификатор сайта.
+  4. Добавьте его в `streamkit-external` ключом `UMAMI_WEBSITE_ID` (раздел 4) и
+     запустите выкатку. Без него счётчик на сайте не грузится.
+
+  В Umami **не включайте запись сессий и тепловые карты**: сайт подключает
+  только `script.js`, но решение не записывать сессии должно быть видно и в
+  самом Umami. Статистика старше 13 месяцев удаляется воркером.
 - **Twitch** и **Google Cloud (YouTube)**: redirect URI
   `https://api.stream-kit.ru/api/integrations/twitch/callback` и
   `https://api.stream-kit.ru/api/integrations/youtube/callback`.

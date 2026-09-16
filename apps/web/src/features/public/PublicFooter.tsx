@@ -1,5 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
+import { resetVisitorCookieChoice } from '@/components/CookieBanner';
+import { useIsAuthenticated } from '@/lib/auth-store';
 import { MISSING, useSeller } from './seller';
 
 const DOCUMENTS = [
@@ -20,6 +23,13 @@ const DOCUMENTS = [
 export function PublicFooter(): React.JSX.Element {
   const { t } = useTranslation();
   const seller = useSeller();
+  const authenticated = useIsAuthenticated();
+
+  // Пересмотреть выбор cookie. У вошедшего это раздел «Приватность» с его
+  // журналом согласий, у посетителя — снова баннер, а данное согласие отзывается.
+  const resetChoice = (): void => {
+    resetVisitorCookieChoice().catch(() => toast.error(t('common.error')));
+  };
 
   return (
     <footer className="border-t border-border">
@@ -30,6 +40,15 @@ export function PublicFooter(): React.JSX.Element {
               {t(document.label)}
             </Link>
           ))}
+          {authenticated ? (
+            <Link to="/privacy" className="hover:text-fg">
+              {t('public.footer.cookieSettings')}
+            </Link>
+          ) : (
+            <button type="button" onClick={resetChoice} className="hover:text-fg">
+              {t('public.footer.cookieSettings')}
+            </button>
+          )}
         </nav>
         <p data-testid="seller-requisites" className="sm:text-right">
           {t('public.footer.seller', {

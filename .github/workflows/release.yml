@@ -120,3 +120,4 @@ jobs:
           copy caddy:2.10.0 caddy:2.10.0
           copy livekit/livekit-server:v1.13.6 livekit-server:v1.13.6
           copy goacme/lego:v4.21.0 lego:v4.21.0
+          copy ghcr.io/umami-software/umami:3.3.1 umami:3.3.1

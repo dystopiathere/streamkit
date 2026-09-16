@@ -1,6 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Client } from 'pg';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { AppConfig } from '../../config/app-config.service';
 import { TokenService } from '../auth/token.service';
+
+/** Таблицы событий Umami 3 с колонкой created_at. Сессии — отдельно, см. ниже. */
+const SITE_STATS_EVENT_TABLES = [
+  'website_event',
+  'event_data',
+  'session_data',
+  'revenue',
+  'session_replay',
+  'heatmap_event',
+] as const;
 
 /**
  * Регулярная уборка. Запускается в worker-процессе, а не в API: фоновая
@@ -13,6 +25,7 @@ export class MaintenanceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
+    private readonly config: AppConfig,
   ) {}
 
   /**
@@ -86,6 +99,72 @@ export class MaintenanceService {
       this.logger.log({ count: result.count, retentionDays }, 'Удалены истёкшие записи согласий');
     }
     return result.count;
+  }
+
+  /**
+   * Согласия анонимных посетителей на статистику. Баннер переспрашивает
+   * посетителя через год, запись журнала живёт дольше — как доказательство
+   * согласия на случай вопросов о прошлой статистике.
+   */
+  async purgeOldVisitorConsents(retentionDays: number): Promise<number> {
+    const threshold = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+    const result = await this.prisma.visitorConsent.deleteMany({
+      where: { grantedAt: { lt: threshold } },
+    });
+
+    if (result.count > 0) {
+      this.logger.log(
+        { count: result.count, retentionDays },
+        'Удалены старые согласия посетителей',
+      );
+    }
+    return result.count;
+  }
+
+  /**
+   * Статистика посещений в базе Umami старше срока хранения.
+   *
+   * У Umami удаления старых данных нет вовсе, а срок заявлен в политике. Таблицы
+   * называются так, как их создаёт Umami 3; таблица, которой в этой версии нет,
+   * пропускается — иначе обновление Umami роняло бы всю ночную уборку. Сессия
+   * удаляется, только когда у неё не осталось событий: без неё отчёты Umami
+   * показывали бы события без браузера и страны.
+   */
+  async purgeOldSiteStats(retentionDays: number): Promise<number> {
+    const url = this.config.umamiDatabaseUrl;
+    if (!url) return 0;
+
+    const threshold = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+    const client = new Client({ connectionString: url });
+    await client.connect();
+    let total = 0;
+    try {
+      for (const table of SITE_STATS_EVENT_TABLES) {
+        const exists = await client.query<{ name: string | null }>(
+          'SELECT to_regclass($1)::text AS name',
+          [table],
+        );
+        if (!exists.rows[0]?.name) continue;
+        // Имя таблицы — из константы выше, а не из ввода: параметром его не передать.
+        const result = await client.query(`DELETE FROM "${table}" WHERE created_at < $1`, [
+          threshold,
+        ]);
+        total += result.rowCount ?? 0;
+      }
+      const sessions = await client.query(
+        `DELETE FROM "session" s WHERE s.created_at < $1
+           AND NOT EXISTS (SELECT 1 FROM "website_event" e WHERE e.session_id = s.session_id)`,
+        [threshold],
+      );
+      total += sessions.rowCount ?? 0;
+    } finally {
+      await client.end();
+    }
+
+    if (total > 0) {
+      this.logger.log({ count: total, retentionDays }, 'Удалена старая статистика посещений');
+    }
+    return total;
   }
 
   /**

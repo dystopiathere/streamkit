@@ -18,6 +18,7 @@ import {
   useSubscription,
   useUpdateSubscription,
 } from '@/features/billing/queries';
+import { trackSiteEvent } from '@/features/public/site-stats';
 import { ApiError } from '@/lib/api';
 
 const formatDate = (iso: string): string =>
@@ -175,6 +176,7 @@ function Checkout({ expired }: { expired: boolean }): React.JSX.Element {
   const handlePay = async (): Promise<void> => {
     try {
       const result = await checkout.mutateAsync(period);
+      trackSiteEvent('checkout');
       // Уход со страницы: данные карты вводятся у ЮKassa, а не у нас.
       window.location.assign(result.confirmationUrl);
     } catch (error) {

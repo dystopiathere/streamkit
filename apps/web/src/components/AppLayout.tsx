@@ -2,7 +2,6 @@ import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { useAuthStore, useCurrentUser } from '@/lib/auth-store';
-import { CookieBanner } from './CookieBanner';
 import { Button, cn } from './ui';
 
 const NAV_ITEMS = [
@@ -64,8 +63,6 @@ export function AppLayout(): React.JSX.Element {
       <main className="mx-auto max-w-6xl px-4 py-6">
         <Outlet />
       </main>
-
-      <CookieBanner />
     </div>
   );
 }

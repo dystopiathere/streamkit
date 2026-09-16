@@ -54,6 +54,26 @@ resource "yandex_mdb_postgresql_database" "app" {
   owner      = yandex_mdb_postgresql_user.app.name
 }
 
+# Статистика посещений (Umami) — своя база и свой пользователь в том же
+# кластере. Отдельный пользователь не видит базу приложения: утечка ключей
+# Umami не даёт доступа к учётным записям и платежам.
+resource "random_password" "umami_db" {
+  length  = 40
+  special = false
+}
+
+resource "yandex_mdb_postgresql_user" "umami" {
+  cluster_id = yandex_mdb_postgresql_cluster.main.id
+  name       = "umami"
+  password   = random_password.umami_db.result
+}
+
+resource "yandex_mdb_postgresql_database" "umami" {
+  cluster_id = yandex_mdb_postgresql_cluster.main.id
+  name       = "umami"
+  owner      = yandex_mdb_postgresql_user.umami.name
+}
+
 # Valkey — управляемый Redis-совместимый кластер. Приложению нужны обычные
 # команды, pub/sub (шина реального времени) и блокировки; всё это Valkey держит.
 resource "yandex_mdb_redis_cluster" "main" {

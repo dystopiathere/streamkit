@@ -16,6 +16,8 @@ locals {
     "api.${var.domain}."     = local.app_public_ip
     "overlay.${var.domain}." = local.app_public_ip
     "rtc.${var.domain}."     = local.app_public_ip
+    # Интерфейс статистики посещений (Umami) за паролем Caddy.
+    "stats.${var.domain}." = local.app_public_ip
   }
 }
 

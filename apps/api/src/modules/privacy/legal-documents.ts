@@ -3,8 +3,8 @@ import type { ConsentDocument } from '@prisma/client';
 /**
  * Реестр юридических документов и их актуальных версий.
  *
- * Версия — это дата редакции; вторая редакция того же дня — с суффиксом `.2`
- * (в шапке документа — «Редакция № 2»). Когда текст документа меняется, здесь появляется
+ * Версия — это дата редакции; следующая редакция того же дня — с суффиксом `.2`,
+ * `.3` (в шапке документа — «Редакция № 2», «№ 3»). Когда текст документа меняется, здесь появляется
  * новая версия, и пользователи, согласившиеся со старой, считаются НЕ принявшими
  * новую: их нужно попросить согласиться заново. Без этого реестра невозможно
  * доказать, на какую именно редакцию человек дал согласие.
@@ -37,9 +37,9 @@ export interface LegalDocument {
 export const LEGAL_DOCUMENTS: Record<ConsentDocument, LegalDocument> = {
   TERMS: {
     document: 'TERMS',
-    // Вторая редакция того же дня: приватные комнаты и ответственность
-    // стримера за показ гостей, служебные письма, подсудность потребителя.
-    version: '2026-09-15.2',
+    // Третья редакция: поручение стримера на обработку данных участников
+    // событий, зрителей чата и гостей (раздел 13) — он их оператор, мы обработчик.
+    version: '2026-09-15.3',
     title: 'Пользовательское соглашение',
     path: '/legal/terms',
     published: true,
@@ -48,10 +48,10 @@ export const LEGAL_DOCUMENTS: Record<ConsentDocument, LegalDocument> = {
   },
   PRIVACY: {
     document: 'PRIVACY',
-    // Получатели данных (Yandex Cloud, ЮKassa, площадки), письма, гости комнат,
-    // сроки хранения платежей. Согласившиеся со старой увидят needsRenewal:
-    // это и есть смысл реестра версий.
-    version: '2026-09-15.2',
+    // Четвёртая редакция: данные зрителей и гостей обрабатываются по поручению
+    // стримера. Согласившиеся со старой увидят needsRenewal: это и есть смысл
+    // реестра версий.
+    version: '2026-09-15.4',
     title: 'Политика конфиденциальности',
     path: '/legal/privacy',
     published: true,
@@ -60,7 +60,8 @@ export const LEGAL_DOCUMENTS: Record<ConsentDocument, LegalDocument> = {
   },
   PERSONAL_DATA: {
     document: 'PERSONAL_DATA',
-    version: '2026-09-15.2',
+    // Данные третьих лиц — не в этом согласии, а в поручении из соглашения.
+    version: '2026-09-15.3',
     title: 'Согласие на обработку персональных данных',
     path: '/legal/personal-data',
     published: true,
@@ -69,8 +70,9 @@ export const LEGAL_DOCUMENTS: Record<ConsentDocument, LegalDocument> = {
   },
   COOKIE_ANALYTICS: {
     document: 'COOKIE_ANALYTICS',
-    version: '2026-09-15',
-    title: 'Аналитические cookie',
+    // Статистика посещений появилась: что именно считается, где и сколько хранится.
+    version: '2026-09-15.2',
+    title: 'Статистика посещений (cookie)',
     path: '/legal/cookies',
     published: true,
     requiredOnRegister: false,
@@ -117,7 +119,8 @@ export const REQUIRED_ON_REGISTER: ConsentDocument[] = Object.values(LEGAL_DOCUM
  * принимал. Текст — `/legal/room-guest`; меняется он — меняется и эта дата.
  */
 export const ROOM_GUEST_TERMS = {
-  version: '2026-09-15',
+  // Вторая редакция: имя, изображение и голос — по поручению стримера.
+  version: '2026-09-15.2',
   title: 'Условия участия в комнате',
   path: '/legal/room-guest',
 } as const;
