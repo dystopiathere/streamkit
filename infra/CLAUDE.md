@@ -39,7 +39,9 @@
 - **Umami с основного домена — только `/u/script.js` и `/u/api/send`.** Весь
   Umami по префиксу открыл бы его вход и API в обход пароля `stats.<домен>`.
   Интерфейс — на `stats` за `basic_auth`; ключи Umami из секрета приложения
-  deploy.sh в окружение API не пускает.
+  deploy.sh в окружение API не пускает. После пароля пропуск — httpOnly-cookie
+  `stats_gate`: заголовок `Authorization` занят токеном самого Umami.
+  Выдача cookie — внутри `route`, строго после `basic_auth`.
 - **Расширения PostgreSQL — только блоком `extension` в Terraform.** Владелец базы
   в управляемом кластере их не включает: Umami на `CREATE EXTENSION pgcrypto`
   падал при старте.

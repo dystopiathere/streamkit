@@ -132,11 +132,18 @@ registry_login
 # новый хэш на каждой выкатке пересоздавал бы Caddy и рвал соединения оверлеев.
 # Значение в одинарных кавычках: в bcrypt-хэше знаки $, и compose иначе принял
 # бы их за подстановку переменных.
+#
+# Рядом — значение cookie-пропуска, который Caddy выдаёт после пароля (см.
+# Caddyfile). Оно выводится из пароля: смена пароля гасит выданные пропуски, а
+# сам пароль из cookie не восстановить.
 STATS_FINGERPRINT=$(printf '%s' "$STATS_PASSWORD" | sha256sum | cut -d' ' -f1)
-if [[ ! -f stats.env ]] || ! grep -qx "# ${STATS_FINGERPRINT}" stats.env; then
+if [[ ! -f stats.env ]] || ! grep -qx "# ${STATS_FINGERPRINT}" stats.env ||
+  ! grep -q '^STATS_GATE_TOKEN=' stats.env; then
   STATS_BASIC_HASH=$(docker run --rm "${REGISTRY}/mirror/caddy:${CADDY_VERSION}" \
     caddy hash-password --plaintext "$STATS_PASSWORD")
-  printf "# %s\nSTATS_BASIC_HASH='%s'\n" "$STATS_FINGERPRINT" "$STATS_BASIC_HASH" >stats.env
+  STATS_GATE_TOKEN=$(printf 'stats-gate:%s' "$STATS_PASSWORD" | sha256sum | cut -d' ' -f1)
+  printf "# %s\nSTATS_BASIC_HASH='%s'\nSTATS_GATE_TOKEN='%s'\n" \
+    "$STATS_FINGERPRINT" "$STATS_BASIC_HASH" "$STATS_GATE_TOKEN" >stats.env
 fi
 compose --profile migrate pull --quiet
 
