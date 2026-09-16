@@ -2,7 +2,8 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Button, Card, Input, Label } from '@/components/ui';
+import { usePageTitle } from '@/components/header';
+import { Button, Card, Input, Label, NewTabHint } from '@/components/ui';
 import { useConsents, useGrantConsent, useRevokeConsent } from '@/features/privacy/queries';
 import { ApiError, api } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
@@ -23,6 +24,7 @@ export function PrivacyPage(): React.JSX.Element {
   const consents = useConsents();
   const grant = useGrantConsent();
   const revoke = useRevokeConsent();
+  usePageTitle(t('privacy.title'));
 
   const deleteAccount = useMutation({
     mutationFn: () => api.delete<void>('/privacy/account', { confirmation: 'УДАЛИТЬ', password }),
@@ -57,10 +59,14 @@ export function PrivacyPage(): React.JSX.Element {
 
         <ul className="space-y-3">
           {consents.data?.map((consent) => (
-            <li key={consent.document} className="flex items-start justify-between gap-4 text-sm">
+            <li
+              key={consent.document}
+              className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 text-sm"
+            >
               <div>
                 <a href={consent.path} target="_blank" rel="noreferrer" className="underline">
                   {consent.title}
+                  <NewTabHint />
                 </a>
                 <p className="text-xs text-muted">
                   {consent.acceptedAt
@@ -78,6 +84,7 @@ export function PrivacyPage(): React.JSX.Element {
                 consent.required ? null : (
                   <Button
                     variant="ghost"
+                    aria-label={t('privacy.revokeNamed', { name: consent.title })}
                     onClick={() =>
                       revoke.mutate(consent.document, {
                         onError: (error) =>
@@ -91,7 +98,16 @@ export function PrivacyPage(): React.JSX.Element {
                   </Button>
                 )
               ) : consent.acceptedAtCheckout ? null : (
-                <Button variant="secondary" onClick={() => grant.mutate(consent.document)}>
+                <Button
+                  variant="secondary"
+                  aria-label={t(
+                    consent.needsRenewal ? 'privacy.renewNamed' : 'privacy.grantNamed',
+                    {
+                      name: consent.title,
+                    },
+                  )}
+                  onClick={() => grant.mutate(consent.document)}
+                >
                   {consent.needsRenewal ? t('privacy.renew') : t('privacy.grant')}
                 </Button>
               )}
@@ -116,6 +132,7 @@ export function PrivacyPage(): React.JSX.Element {
           <Label htmlFor="confirmation">{t('privacy.deleteConfirmLabel')}</Label>
           <Input
             id="confirmation"
+            autoComplete="off"
             value={confirmation}
             onChange={(event) => setConfirmation(event.target.value)}
           />

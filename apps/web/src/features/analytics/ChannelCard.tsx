@@ -27,7 +27,7 @@ export function ChannelCard({ channel, range }: ChannelCardProps): React.JSX.Ele
         ) : null}
 
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 font-medium">
+          <h2 className="flex items-center gap-2 font-medium">
             <span className="truncate">{channel.displayName}</span>
             {summary.data?.current?.isLive ? (
               // Состояние передаётся формой и текстом, а не только цветом.
@@ -35,7 +35,7 @@ export function ChannelCard({ channel, range }: ChannelCardProps): React.JSX.Ele
                 {t('analytics.live')}
               </span>
             ) : null}
-          </p>
+          </h2>
           <p className="truncate text-xs text-muted">
             {t(`analytics.platform.${channel.platform}`)} · {channel.login}
           </p>
@@ -43,6 +43,7 @@ export function ChannelCard({ channel, range }: ChannelCardProps): React.JSX.Ele
 
         <Button
           variant="ghost"
+          aria-label={t('analytics.disconnectNamed', { name: channel.displayName })}
           onClick={() => disconnect.mutate(channel.id)}
           isLoading={disconnect.isPending}
         >
@@ -109,6 +110,7 @@ function SyncNotice({ channel }: { channel: Channel }): React.JSX.Element | null
   const isAuth = channel.syncState === 'auth-expired';
   return (
     <p
+      role={isAuth ? 'alert' : undefined}
       className={
         isAuth
           ? 'rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm'
@@ -133,11 +135,14 @@ function Stat({ label, value, delta, suffix }: StatProps): React.JSX.Element {
   return (
     <div className="rounded-lg border border-border px-3 py-2">
       <p className="text-xs text-muted">{label}</p>
-      <p className="mt-0.5 text-xl font-semibold tabular-nums">
+      <p className="mt-0.5 text-lg font-semibold tabular-nums sm:text-xl">
         {value === null ? (
           // Прочерк, а не ноль: «неизвестно» и «ноль» — разные утверждения, и
           // площадки регулярно не отдают часть счётчиков.
-          <span className="text-muted">{t('analytics.noValue')}</span>
+          <span className="text-muted">
+            <span aria-hidden="true">{t('analytics.noValue')}</span>
+            <span className="sr-only">{t('common.noData')}</span>
+          </span>
         ) : (
           <>
             {new Intl.NumberFormat('ru-RU').format(value)}

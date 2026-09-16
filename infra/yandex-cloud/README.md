@@ -193,6 +193,22 @@ failed». Администратор входит на ВМ как `ops`.
   В Umami **не включайте запись сессий и тепловые карты**: сайт подключает
   только `script.js`, но решение не записывать сессии должно быть видно и в
   самом Umami. Статистика старше 13 месяцев удаляется воркером.
+
+  **502 на `stats` и на `/u/script.js`** — значит, контейнер Umami не
+  запустился. Причина в его журнале (`docker logs streamkit-umami-1` на ВМ
+  приложений). Umami сам создаёт таблицы своей базы при старте, и первая же его
+  миграция включает расширение `pgcrypto`. Владелец базы в управляемом кластере
+  не суперпользователь, поэтому расширение включает Terraform (`extension` у
+  базы `umami`). Если миграция уже упала, Prisma не повторяет её сама
+  (`P3009`): после `terraform apply` отметьте её откатанной, и Umami поднимется
+  при следующем перезапуске:
+
+  ```bash
+  cd /opt/streamkit
+  docker compose --env-file infra.env --env-file release.env --env-file stats.env \
+    run --rm --no-deps --entrypoint node_modules/.bin/prisma umami \
+    migrate resolve --rolled-back 01_init
+  ```
 - **Twitch** и **Google Cloud (YouTube)**: redirect URI
   `https://api.stream-kit.ru/api/integrations/twitch/callback` и
   `https://api.stream-kit.ru/api/integrations/youtube/callback`.

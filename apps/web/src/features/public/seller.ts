@@ -27,7 +27,11 @@ export const MISSING = '‹не указано›';
  * окружении сервера. Цены — метками `{{PRICE_MONTH}}` и `{{PRICE_YEAR}}` из
  * `PLAN_PRICES`: вписанные в оферту руками, они разошлись бы с ценой на кнопке.
  */
-export function fillDocumentDetails(text: string, seller: SellerInfo | undefined): string {
+export function fillDocumentDetails(
+  text: string,
+  seller: SellerInfo | undefined,
+  escape: (value: string) => string = (value) => value,
+): string {
   const values: Record<string, string | null | undefined> = {
     SELLER_NAME: seller?.name,
     SELLER_INN: seller?.inn,
@@ -37,6 +41,17 @@ export function fillDocumentDetails(text: string, seller: SellerInfo | undefined
     PRICE_YEAR: formatMoney(PLAN_PRICES.year),
   };
   return text.replace(/\{\{((?:SELLER|PRICE)_[A-Z]+)\}\}/g, (token, key: string) =>
-    key in values ? (values[key] ?? MISSING) : token,
+    key in values ? escape(values[key] ?? MISSING) : token,
   );
+}
+
+/**
+ * Экранирование значения, подставляемого в Markdown.
+ *
+ * Реквизиты приходят из окружения сервера, а не от пользователей, но звёздочка
+ * или подчёркивание в названии продавца иначе превратились бы в курсив
+ * посреди оферты.
+ */
+export function escapeMarkdown(value: string): string {
+  return value.replace(/[\\`*_[\]<>#|~]/g, '\\$&');
 }

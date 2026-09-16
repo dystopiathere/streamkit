@@ -5,6 +5,7 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { usePageTitle } from '@/components/header';
 import { Button, Card } from '@/components/ui';
 import { RoomsPaywall, useRoomsAccess } from '@/features/billing/RoomsPaywall';
 import { MicrophoneSettings } from '@/features/rooms/MicrophoneSettings';
@@ -41,6 +42,7 @@ export function RoomPage(): React.JSX.Element {
   const [access, setAccess] = useState<RoomAccess | null>(null);
   const [withCamera, setWithCamera] = useState(false);
   const roomsAccess = useRoomsAccess();
+  usePageTitle(room.data?.name);
 
   // Обработчики стабильны не ради порядка: у `LiveKitRoom` они в зависимостях
   // эффекта подключения, и новая стрелка на каждый рендер повторяла бы вход.
@@ -70,10 +72,13 @@ export function RoomPage(): React.JSX.Element {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <Link to="/rooms" className="text-sm text-muted hover:text-fg">
-          ← {t('common.back')}
+        <Link to="/rooms" className="py-1 text-sm text-muted hover:text-fg">
+          <span aria-hidden="true">← </span>
+          {t('common.back')}
         </Link>
-        <h1 className="text-2xl font-semibold">{room.data?.name ?? t('common.loading')}</h1>
+        <h1 className="min-w-0 text-2xl font-semibold break-words">
+          {room.data?.name ?? t('common.loading')}
+        </h1>
       </div>
 
       <RoomsPaywall />
@@ -100,7 +105,13 @@ export function RoomPage(): React.JSX.Element {
                 const inviteId = parseParticipantIdentity(participant.identity)?.id;
                 const blocked = invites.data?.find((invite) => invite.id === inviteId)?.micBlocked;
                 return (
-                  <div className="flex flex-wrap gap-1">
+                  <div
+                    className="flex flex-wrap gap-1"
+                    role="group"
+                    aria-label={t('rooms.stage.guestActions', {
+                      name: participant.name || participant.identity,
+                    })}
+                  >
                     <Button
                       variant="ghost"
                       className="px-2 py-1 text-xs"

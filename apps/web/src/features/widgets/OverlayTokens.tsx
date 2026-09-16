@@ -42,7 +42,7 @@ export function OverlayTokens({ widgetId }: { widgetId: string }): React.JSX.Ele
 
   return (
     <Card className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-medium">{t('widgets.tokens.title')}</h2>
         <Button variant="secondary" onClick={handleCreate} isLoading={createToken.isPending}>
           {t('widgets.tokens.create')}
@@ -51,9 +51,17 @@ export function OverlayTokens({ widgetId }: { widgetId: string }): React.JSX.Ele
 
       {freshUrl ? (
         <div className="space-y-2 rounded-lg border border-accent/40 bg-accent/10 p-3">
-          <p className="text-xs text-muted">{t('widgets.tokens.oneTimeWarning')}</p>
-          <div className="flex gap-2">
-            <Input readOnly value={freshUrl} onFocus={(event) => event.target.select()} />
+          <p id="overlay-url-hint" className="text-xs text-muted">
+            {t('widgets.tokens.oneTimeWarning')}
+          </p>
+          <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+            <Input
+              readOnly
+              value={freshUrl}
+              aria-label={t('widgets.tokens.urlLabel')}
+              aria-describedby="overlay-url-hint"
+              onFocus={(event) => event.target.select()}
+            />
             <Button variant="secondary" onClick={() => void handleCopy(freshUrl)}>
               {t('common.copy')}
             </Button>
@@ -80,7 +88,13 @@ export function OverlayTokens({ widgetId }: { widgetId: string }): React.JSX.Ele
                   : t('widgets.tokens.never')}
               </p>
             </div>
-            <Button variant="ghost" onClick={() => void handleRevoke(token.id)}>
+            <Button
+              variant="ghost"
+              aria-label={t('widgets.tokens.revokeNamed', {
+                name: token.label ?? token.id.slice(0, 8),
+              })}
+              onClick={() => void handleRevoke(token.id)}
+            >
               {t('widgets.tokens.revoke')}
             </Button>
           </li>

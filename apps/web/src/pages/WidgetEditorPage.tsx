@@ -5,6 +5,7 @@ import { type FieldValues, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { usePageTitle } from '@/components/header';
 import { Button, Card } from '@/components/ui';
 import { OverlayTokens } from '@/features/widgets/OverlayTokens';
 import { useUpdateWidget, useWidget, useWidgetState } from '@/features/widgets/queries';
@@ -44,6 +45,7 @@ export function WidgetEditorPage(): React.JSX.Element {
   // Предпросмотр обновляется на каждое изменение поля: подбирать размер шрифта
   // и цвет обводки вслепую, сохраняя и переключаясь в OBS, невозможно.
   const previewConfig = form.watch();
+  usePageTitle(widget.data?.name);
 
   const onSubmit = form.handleSubmit(async (values) => {
     try {
@@ -55,16 +57,21 @@ export function WidgetEditorPage(): React.JSX.Element {
   });
 
   if (widget.isLoading || !widget.data) {
-    return <p className="text-muted">{t('common.loading')}</p>;
+    return (
+      <p role="status" className="text-muted">
+        {t('common.loading')}
+      </p>
+    );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link to="/widgets" className="text-sm text-muted hover:text-fg">
-          ← {t('common.back')}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <Link to="/widgets" className="py-1 text-sm text-muted hover:text-fg">
+          <span aria-hidden="true">← </span>
+          {t('common.back')}
         </Link>
-        <h1 className="text-2xl font-semibold">{widget.data.name}</h1>
+        <h1 className="min-w-0 text-2xl font-semibold break-words">{widget.data.name}</h1>
         <span className="rounded bg-surface-hover px-2 py-0.5 text-xs text-muted">
           {t(`widgets.type.${type}`)}
         </span>

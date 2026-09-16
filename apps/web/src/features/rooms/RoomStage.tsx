@@ -70,14 +70,17 @@ export function RoomStage({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <ul
+        className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+        aria-label={t('rooms.stage.participants')}
+      >
         {cameras.map((ref) => {
           const participant = ref.participant;
           const role = parseParticipantIdentity(participant.identity)?.role;
           const hasVideo = isTrackReference(ref) && !ref.publication.isMuted;
 
           return (
-            <div
+            <li
               key={participant.identity}
               data-testid="room-tile"
               className="overflow-hidden rounded-lg border border-border bg-bg"
@@ -92,7 +95,10 @@ export function RoomStage({
                     style={participant.isLocal ? { transform: 'scaleX(-1)' } : undefined}
                   />
                 ) : (
-                  <div className="grid h-full place-items-center text-lg text-muted">
+                  <div
+                    aria-hidden="true"
+                    className="grid h-full place-items-center text-lg text-muted"
+                  >
                     {participant.name || participant.identity}
                   </div>
                 )}
@@ -108,18 +114,23 @@ export function RoomStage({
                 </span>
                 {!participant.isLocal && role === 'guest' ? actions?.(participant) : null}
               </div>
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ul>
 
-      {others.length === 0 ? <p className="text-sm text-muted">{t('rooms.stage.empty')}</p> : null}
+      {others.length === 0 ? (
+        <p role="status" className="text-sm text-muted">
+          {t('rooms.stage.empty')}
+        </p>
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         {microphoneAllowed ? (
           <Button
+            // Состояние — в тексте кнопки («Микрофон: вкл»). aria-pressed
+            // поверх него заставлял скринридер произносить его дважды.
             variant={microphone.enabled ? 'secondary' : 'ghost'}
-            aria-pressed={microphone.enabled}
             onClick={microphone.toggle}
           >
             {t('rooms.stage.mic')}:{' '}
@@ -132,7 +143,6 @@ export function RoomStage({
         )}
         <Button
           variant={camera.enabled ? 'secondary' : 'ghost'}
-          aria-pressed={camera.enabled}
           disabled={camera.pending}
           onClick={() => void camera.toggle()}
         >
@@ -141,6 +151,7 @@ export function RoomStage({
         <Button
           variant="ghost"
           aria-expanded={settingsOpen}
+          aria-controls="microphone-settings"
           onClick={() => setSettingsOpen((open) => !open)}
         >
           {t('rooms.microphone.title')}
@@ -151,16 +162,20 @@ export function RoomStage({
       </div>
 
       {settingsOpen ? (
-        <div className="rounded-lg border border-border p-3">
+        <div id="microphone-settings" className="rounded-lg border border-border p-3">
           <MicrophoneSettings />
         </div>
       ) : null}
 
       {microphone.failed ? (
-        <p className="text-sm text-danger">{t('rooms.stage.microphoneFailed')}</p>
+        <p role="alert" className="text-sm text-danger">
+          {t('rooms.stage.microphoneFailed')}
+        </p>
       ) : null}
       {camera.failed ? (
-        <p className="text-sm text-danger">{t('rooms.stage.cameraFailed')}</p>
+        <p role="alert" className="text-sm text-danger">
+          {t('rooms.stage.cameraFailed')}
+        </p>
       ) : null}
 
       {/* Звук остальных участников. Только подписанные дорожки, то есть чужие:

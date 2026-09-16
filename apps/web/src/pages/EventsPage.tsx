@@ -7,6 +7,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { usePageTitle } from '@/components/header';
 import { Card } from '@/components/ui';
 import { useRecentEvents } from '@/features/widgets/queries';
 import { useDashboardSocket } from '@/lib/useDashboardSocket';
@@ -23,6 +24,7 @@ export function EventsPage(): React.JSX.Element {
   const history = useRecentEvents();
   const queryClient = useQueryClient();
   const [live, setLive] = useState<AlertEvent[]>([]);
+  usePageTitle(t('events.title'));
 
   useDashboardSocket(
     SOCKET_EVENTS.eventCreated,
@@ -58,7 +60,14 @@ export function EventsPage(): React.JSX.Element {
         </Card>
       ) : null}
 
-      <ul className="space-y-2">
+      {/* Новые события появляются сверху сами: скринридер объявляет их, не
+          перечитывая всю ленту. */}
+      <ul
+        className="space-y-2"
+        aria-label={t('events.feedLabel')}
+        aria-live="polite"
+        aria-relevant="additions"
+      >
         {events.map((event) => (
           <li key={event.id}>
             <Card className="flex items-center justify-between gap-4 py-3">

@@ -1,7 +1,7 @@
 import { formatMinorForInput, parseMajorToMinor } from '@streamkit/contracts';
 import { useState } from 'react';
 import { Controller, type FieldValues, type UseFormReturn } from 'react-hook-form';
-import { FieldError, Input, Label } from '@/components/ui';
+import { describeField, FieldError, FieldHint, Input, Label, selectClasses } from '@/components/ui';
 
 /**
  * Поля формы настроек виджета.
@@ -44,12 +44,13 @@ export function NumberField({
         id={name}
         type="number"
         step={step}
+        {...describeField(name, { hint: Boolean(hint), error: errorAt(form, name) })}
         // valueAsNumber обязателен: без него в схему уедет строка, и Zod
         // отвергнет форму с невнятной ошибкой про тип.
         {...form.register(name, { valueAsNumber: true })}
       />
-      {hint ? <p className="mt-1 text-xs text-muted">{hint}</p> : null}
-      <FieldError message={errorAt(form, name)} />
+      {hint ? <FieldHint id={name}>{hint}</FieldHint> : null}
+      <FieldError id={name} message={errorAt(form, name)} />
     </div>
   );
 }
@@ -58,9 +59,13 @@ export function TextField({ form, name, label, hint }: BaseProps & { hint?: stri
   return (
     <div>
       <Label htmlFor={name}>{label}</Label>
-      <Input id={name} {...form.register(name)} />
-      {hint ? <p className="mt-1 text-xs text-muted">{hint}</p> : null}
-      <FieldError message={errorAt(form, name)} />
+      <Input
+        id={name}
+        {...describeField(name, { hint: Boolean(hint), error: errorAt(form, name) })}
+        {...form.register(name)}
+      />
+      {hint ? <FieldHint id={name}>{hint}</FieldHint> : null}
+      <FieldError id={name} message={errorAt(form, name)} />
     </div>
   );
 }
@@ -73,12 +78,18 @@ export function ColorField({ form, name, label }: BaseProps): React.JSX.Element 
         <input
           id={name}
           type="color"
-          className="h-9 w-12 rounded border border-border bg-bg"
+          className="h-9 w-12 shrink-0 rounded border border-border-strong bg-bg"
           {...form.register(name)}
         />
-        <Input {...form.register(name)} />
+        {/* То же значение текстом: палитра браузера не даёт вписать точный код. */}
+        <Input
+          aria-label={`${label}, HEX`}
+          spellCheck={false}
+          {...describeField(`${name}-hex`, { error: errorAt(form, name) })}
+          {...form.register(name)}
+        />
       </div>
-      <FieldError message={errorAt(form, name)} />
+      <FieldError id={`${name}-hex`} message={errorAt(form, name)} />
     </div>
   );
 }
@@ -94,7 +105,8 @@ export function SelectField({
       <Label htmlFor={name}>{label}</Label>
       <select
         id={name}
-        className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm"
+        className={selectClasses}
+        {...describeField(name, { error: errorAt(form, name) })}
         {...form.register(name)}
       >
         {options.map((option) => (
@@ -103,7 +115,7 @@ export function SelectField({
           </option>
         ))}
       </select>
-      <FieldError message={errorAt(form, name)} />
+      <FieldError id={name} message={errorAt(form, name)} />
     </div>
   );
 }
@@ -237,6 +249,7 @@ function MoneyInput({
         id={name}
         type="text"
         inputMode="decimal"
+        {...describeField(name, { hint: Boolean(hint), error })}
         value={text}
         onChange={(event) => {
           const next = event.target.value;
@@ -248,8 +261,8 @@ function MoneyInput({
         }}
         onBlur={onBlur}
       />
-      {hint ? <p className="mt-1 text-xs text-muted">{hint}</p> : null}
-      <FieldError message={error} />
+      {hint ? <FieldHint id={name}>{hint}</FieldHint> : null}
+      <FieldError id={name} message={error} />
     </div>
   );
 }
@@ -292,7 +305,13 @@ export function CheckboxGroupField({
         const selected: string[] = Array.isArray(field.value) ? (field.value as string[]) : [];
 
         return (
-          <fieldset>
+          <fieldset
+            aria-describedby={
+              [hint ? `${name}-hint` : null, errorAt(form, name) ? `${name}-error` : null]
+                .filter(Boolean)
+                .join(' ') || undefined
+            }
+          >
             <legend className="mb-1 text-sm text-muted">{label}</legend>
             <div className="flex flex-wrap gap-x-4 gap-y-2">
               {options.map((option) => {
@@ -320,8 +339,8 @@ export function CheckboxGroupField({
                 );
               })}
             </div>
-            {hint ? <p className="mt-1 text-xs text-muted">{hint}</p> : null}
-            <FieldError message={errorAt(form, name)} />
+            {hint ? <FieldHint id={name}>{hint}</FieldHint> : null}
+            <FieldError id={name} message={errorAt(form, name)} />
           </fieldset>
         );
       }}
@@ -396,6 +415,7 @@ function TagsInput({
       <Label htmlFor={name}>{label}</Label>
       <Input
         id={name}
+        {...describeField(name, { hint: Boolean(hint), error })}
         value={text}
         onChange={(event) => {
           setText(event.target.value);
@@ -403,8 +423,8 @@ function TagsInput({
         }}
         onBlur={onBlur}
       />
-      {hint ? <p className="mt-1 text-xs text-muted">{hint}</p> : null}
-      <FieldError message={error} />
+      {hint ? <FieldHint id={name}>{hint}</FieldHint> : null}
+      <FieldError id={name} message={error} />
     </div>
   );
 }

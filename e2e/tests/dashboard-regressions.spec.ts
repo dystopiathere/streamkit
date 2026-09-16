@@ -156,3 +156,23 @@ test('согласие на cookie не переходит к следующем
   await fillRegistration(page, 'e2e-consent-b');
   await expect(page.getByRole('button', { name: 'Принять все' })).toBeVisible({ timeout: 5_000 });
 });
+
+test('на телефоне меню дашборда свёрнуто и закрывается переходом', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 740 });
+  await registerStreamer(page, 'e2e-mobile');
+  await dismissBanner(page);
+
+  const nav = page.getByRole('navigation', { name: 'Разделы' });
+  await expect(nav).toBeHidden();
+
+  await page.getByRole('button', { name: 'Открыть меню' }).click();
+  await expect(nav).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Виджеты' })).toHaveAttribute('aria-current', 'page');
+
+  await nav.getByRole('link', { name: 'События' }).click();
+  await expect(page).toHaveURL(/\/events$/);
+  await expect(nav).toBeHidden();
+  await expect(page).toHaveTitle('Последние события — StreamKit');
+  // После перехода фокус на содержимом, а не на исчезнувшем пункте меню.
+  await expect(page.locator('main')).toBeFocused();
+});

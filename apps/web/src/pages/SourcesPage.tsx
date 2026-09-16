@@ -2,7 +2,8 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Button, Card, Input } from '@/components/ui';
+import { usePageTitle } from '@/components/header';
+import { Button, Card, Input, Label } from '@/components/ui';
 import { api } from '@/lib/api';
 import { API_BASE } from '@/lib/config';
 
@@ -17,6 +18,7 @@ export function SourcesPage(): React.JSX.Element {
   const { t } = useTranslation();
   const [secret, setSecret] = useState<string | null>(null);
   const [sourceId, setSourceId] = useState<string | null>(null);
+  usePageTitle(t('sources.title'));
 
   const rotate = useMutation({
     mutationFn: () => api.post<{ sourceId: string; secret: string }>('/events/webhook/secret'),
@@ -39,28 +41,47 @@ export function SourcesPage(): React.JSX.Element {
 
         {sourceId ? (
           <div>
-            <p className="text-xs text-muted">URL</p>
-            <Input readOnly value={`${API_BASE}/webhooks/${sourceId}`} />
+            <Label htmlFor="webhook-url">{t('sources.urlLabel')}</Label>
+            <Input id="webhook-url" readOnly value={`${API_BASE}/webhooks/${sourceId}`} />
           </div>
         ) : null}
 
         {secret ? (
           <div className="space-y-2 rounded-lg border border-accent/40 bg-accent/10 p-3">
-            <p className="text-xs text-muted">{t('sources.secretShownOnce')}</p>
-            <Input readOnly value={secret} onFocus={(event) => event.target.select()} />
+            <Label htmlFor="webhook-secret">{t('sources.secretLabel')}</Label>
+            <p id="webhook-secret-hint" className="text-xs text-muted">
+              {t('sources.secretShownOnce')}
+            </p>
+            <Input
+              id="webhook-secret"
+              readOnly
+              value={secret}
+              aria-describedby="webhook-secret-hint"
+              onFocus={(event) => event.target.select()}
+            />
           </div>
         ) : null}
 
         <div>
-          <Button variant="secondary" onClick={() => rotate.mutate()} isLoading={rotate.isPending}>
+          <Button
+            variant="secondary"
+            onClick={() => rotate.mutate()}
+            isLoading={rotate.isPending}
+            aria-describedby="rotate-warning"
+          >
             {t('sources.rotate')}
           </Button>
-          <p className="mt-2 text-xs text-muted">{t('sources.rotateWarning')}</p>
+          <p id="rotate-warning" className="mt-2 text-xs text-muted">
+            {t('sources.rotateWarning')}
+          </p>
         </div>
 
         {/* Формат подписи вынесен на экран сознательно: без него интеграцию
             невозможно сделать, не открывая исходники сервера. */}
-        <pre className="overflow-x-auto rounded-lg border border-border bg-bg p-3 text-xs text-muted">
+        <pre
+          tabIndex={0}
+          className="overflow-x-auto rounded-lg border border-border bg-bg p-3 text-xs text-muted"
+        >
           {`POST /api/webhooks/<sourceId>
 x-streamkit-timestamp: <unix seconds>
 x-streamkit-signature: hex(hmac_sha256(secret, timestamp + "." + body))

@@ -1,4 +1,5 @@
 import type { AnalyticsPoint, AnalyticsRange } from '@streamkit/contracts';
+import { useTranslation } from 'react-i18next';
 import {
   Area,
   AreaChart,
@@ -61,13 +62,16 @@ export function MetricChart({
 }: MetricChartProps): React.JSX.Element {
   const color = SERIES_COLORS[kind];
   const hasData = points.some((point) => point[kind] !== null);
+  const summary = useChartSummary(points, kind, title);
 
   return (
     <figure className="m-0">
       <figcaption className="mb-3 text-sm font-medium">{title}</figcaption>
 
       {hasData ? (
-        <div className="h-48 w-full">
+        // Сам график — картинка для мыши: подсказка появляется только при
+        // наведении. Скринридер получает те же выводы текстом.
+        <div className="h-48 w-full" aria-hidden="true">
           <ResponsiveContainer width="100%" height="100%">
             {kind === 'viewers' ? (
               <AreaChart data={points} margin={CHART_MARGIN}>
@@ -114,6 +118,7 @@ export function MetricChart({
       ) : (
         <p className="flex h-48 items-center justify-center text-sm text-muted">{emptyLabel}</p>
       )}
+      {hasData ? <p className="sr-only">{summary}</p> : null}
     </figure>
   );
 }
@@ -226,4 +231,25 @@ function formatCompact(value: number): string {
   return new Intl.NumberFormat('ru-RU', { notation: 'compact', maximumFractionDigits: 1 }).format(
     value,
   );
+}
+
+/**
+ * Выводы графика одной фразой — для тех, кто его не видит.
+ *
+ * Разброс и последнее значение — то, что зрячий считывает с линии за секунду;
+ * перечислять все точки было бы честно, но слушать невозможно.
+ */
+function useChartSummary(points: AnalyticsPoint[], kind: MetricKind, title: string): string {
+  const { t } = useTranslation();
+  const values = points
+    .map((point) => point[kind])
+    .filter((value): value is number => typeof value === 'number');
+  if (values.length === 0) return '';
+  const format = (value: number): string => new Intl.NumberFormat('ru-RU').format(value);
+  return t('analytics.chartSummary', {
+    title,
+    min: format(Math.min(...values)),
+    max: format(Math.max(...values)),
+    last: format(values[values.length - 1]!),
+  });
 }

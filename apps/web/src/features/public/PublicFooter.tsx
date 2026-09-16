@@ -33,30 +33,38 @@ export function PublicFooter(): React.JSX.Element {
 
   return (
     <footer className="border-t border-border">
-      <div className="mx-auto flex max-w-5xl flex-col gap-4 px-4 py-6 text-xs text-muted sm:flex-row sm:justify-between">
-        <nav className="flex flex-wrap gap-x-4 gap-y-2" aria-label={t('public.footer.documents')}>
-          {DOCUMENTS.map((document) => (
-            <Link key={document.to} to={document.to} className="hover:text-fg">
-              {t(document.label)}
-            </Link>
-          ))}
-          {authenticated ? (
-            <Link to="/privacy" className="hover:text-fg">
-              {t('public.footer.cookieSettings')}
-            </Link>
-          ) : (
-            <button type="button" onClick={resetChoice} className="hover:text-fg">
-              {t('public.footer.cookieSettings')}
-            </button>
-          )}
+      {/* Документы — своей строкой во всю ширину. Рядом с реквизитами им не
+          хватало места, и последние пункты переносились на вторую строку. */}
+      <div className="mx-auto max-w-5xl space-y-3 px-4 py-6 text-xs text-muted">
+        <nav aria-label={t('public.footer.documents')}>
+          <ul className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {DOCUMENTS.map((document) => (
+              <li key={document.to}>
+                <Link to={document.to} className="hover:text-fg">
+                  {t(document.label)}
+                </Link>
+              </li>
+            ))}
+            <li>
+              {authenticated ? (
+                <Link to="/privacy" className="hover:text-fg">
+                  {t('public.footer.cookieSettings')}
+                </Link>
+              ) : (
+                <button type="button" onClick={resetChoice} className="hover:text-fg">
+                  {t('public.footer.cookieSettings')}
+                </button>
+              )}
+            </li>
+          </ul>
         </nav>
-        <p data-testid="seller-requisites" className="sm:text-right">
+        <p data-testid="seller-requisites">
           {t('public.footer.seller', {
             name: seller.data?.name ?? MISSING,
             inn: seller.data?.inn ?? MISSING,
           })}
-          <br />
-          {seller.data?.email ?? MISSING}
+          <span aria-hidden="true"> · </span>
+          <span className="whitespace-nowrap">{seller.data?.email ?? MISSING}</span>
         </p>
       </div>
     </footer>
