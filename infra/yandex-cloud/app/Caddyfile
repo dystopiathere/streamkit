@@ -34,12 +34,37 @@
 
 # Интерфейс Umami. Пароль Caddy — раньше формы входа Umami, у которой после
 # установки пароль по умолчанию.
+#
+# Одного basic_auth мало: интерфейс Umami шлёт каждый запрос к своему API с
+# собственным «Authorization: Bearer …», и этот заголовок вытесняет пароль,
+# который браузер подставил бы сам. Caddy отвечал 401, браузер снова спрашивал
+# пароль — по кругу. Поэтому пароль проверяется один раз, а дальше пропуском
+# служит httpOnly-cookie с производным от него значением (deploy.sh).
 stats.{$DOMAIN} {
 	import common
-	basic_auth {
-		owner {$STATS_BASIC_HASH}
+
+	# Пустое значение не должно совпадать с отсутствующей cookie.
+	@pass expression `{cookie.stats_gate} != "" && {cookie.stats_gate} == "{$STATS_GATE_TOKEN}"`
+	handle @pass {
+		# Продление пропуска, пока интерфейсом пользуются.
+		header +Set-Cookie "stats_gate={$STATS_GATE_TOKEN}; Path=/; Max-Age=604800; Secure; HttpOnly; SameSite=Strict"
+		reverse_proxy umami:3000
 	}
-	reverse_proxy umami:3000
+
+	handle {
+		# route — чтобы порядок был ровно записанным: cookie выдаётся только
+		# после проверенного пароля. Без route Caddy ставит header раньше
+		# basic_auth, и пропуск уходил бы вместе с ответом 401.
+		route {
+			basic_auth {
+				owner {$STATS_BASIC_HASH}
+			}
+			header +Set-Cookie "stats_gate={$STATS_GATE_TOKEN}; Path=/; Max-Age=604800; Secure; HttpOnly; SameSite=Strict"
+			# Пароль Caddy — не токен Umami: дальше он не уходит.
+			request_header -Authorization
+			reverse_proxy umami:3000
+		}
+	}
 }
 
 www.{$DOMAIN} {

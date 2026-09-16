@@ -89,6 +89,8 @@ services:
       LIVEKIT_PRIVATE_IP: ${LIVEKIT_PRIVATE_IP}
       # bcrypt-хэш пароля stats.<домен>; сам пароль в Caddy не попадает.
       STATS_BASIC_HASH: ${STATS_BASIC_HASH}
+      # Значение cookie-пропуска stats.<домен> после пароля — см. Caddyfile.
+      STATS_GATE_TOKEN: ${STATS_GATE_TOKEN}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # Сертификаты переживают пересоздание контейнера: иначе каждая выкатка
