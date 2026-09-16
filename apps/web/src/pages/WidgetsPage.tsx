@@ -1,9 +1,9 @@
 import { WIDGET_TYPES, type CreateWidgetInput, type WidgetType } from '@streamkit/contracts';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Button, Card, Input } from '@/components/ui';
+import { usePageTitle } from '@/components/header';
+import { Button, ButtonLink, Card, Input, selectClasses } from '@/components/ui';
 import {
   useCreateWidget,
   useDeleteWidget,
@@ -20,6 +20,7 @@ export function WidgetsPage(): React.JSX.Element {
   const createWidget = useCreateWidget();
   const deleteWidget = useDeleteWidget();
   const testAlert = useSendTestAlert();
+  usePageTitle(t('widgets.title'));
 
   const handleCreate = async (): Promise<void> => {
     const trimmed = name.trim();
@@ -60,6 +61,7 @@ export function WidgetsPage(): React.JSX.Element {
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder={t('widgets.namePlaceholder')}
+            aria-label={t('widgets.namePlaceholder')}
             className="max-w-xs"
             onKeyDown={(event) => {
               if (event.key === 'Enter') void handleCreate();
@@ -70,7 +72,7 @@ export function WidgetsPage(): React.JSX.Element {
               все настройки. Отдельный виджет честнее. */}
           <select
             aria-label={t('widgets.field.type')}
-            className="rounded-lg border border-border bg-bg px-3 py-2 text-sm"
+            className={`${selectClasses} w-auto`}
             value={type}
             onChange={(event) => setType(event.target.value as WidgetType)}
           >
@@ -90,7 +92,11 @@ export function WidgetsPage(): React.JSX.Element {
         </div>
       </Card>
 
-      {widgets.isLoading ? <p className="text-muted">{t('common.loading')}</p> : null}
+      {widgets.isLoading ? (
+        <p role="status" className="text-muted">
+          {t('common.loading')}
+        </p>
+      ) : null}
 
       {widgets.data?.length === 0 ? (
         <Card>
@@ -98,27 +104,37 @@ export function WidgetsPage(): React.JSX.Element {
         </Card>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <ul className="grid gap-3 sm:grid-cols-2">
         {widgets.data?.map((widget) => (
-          <Card key={widget.id} className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="truncate font-medium">{widget.name}</p>
-              <p className="text-xs text-muted">
-                {t(`widgets.type.${widget.type}`)} ·{' '}
-                {widget.isEnabled ? t('widgets.enabled') : t('widgets.disabled')}
-              </p>
-            </div>
-            <div className="flex shrink-0 gap-2">
-              <Link to={`/widgets/${widget.id}`}>
-                <Button variant="secondary">{t('widgets.edit')}</Button>
-              </Link>
-              <Button variant="ghost" onClick={() => void handleDelete(widget.id)}>
-                {t('common.delete')}
-              </Button>
-            </div>
-          </Card>
+          <li key={widget.id}>
+            <Card className="flex flex-wrap items-center justify-between gap-4">
+              <div className="min-w-0">
+                <h2 className="truncate font-medium">{widget.name}</h2>
+                <p className="text-xs text-muted">
+                  {t(`widgets.type.${widget.type}`)} ·{' '}
+                  {widget.isEnabled ? t('widgets.enabled') : t('widgets.disabled')}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <ButtonLink
+                  to={`/widgets/${widget.id}`}
+                  variant="secondary"
+                  aria-label={t('common.editNamed', { name: widget.name })}
+                >
+                  {t('widgets.edit')}
+                </ButtonLink>
+                <Button
+                  variant="ghost"
+                  aria-label={t('common.deleteNamed', { name: widget.name })}
+                  onClick={() => void handleDelete(widget.id)}
+                >
+                  {t('common.delete')}
+                </Button>
+              </div>
+            </Card>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }

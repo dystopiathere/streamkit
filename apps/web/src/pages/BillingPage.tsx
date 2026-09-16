@@ -10,7 +10,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Button, Card, cn } from '@/components/ui';
+import { usePageTitle } from '@/components/header';
+import { Button, Card, cn, NewTabHint } from '@/components/ui';
 import {
   useCheckout,
   usePayments,
@@ -35,6 +36,7 @@ export function BillingPage(): React.JSX.Element {
   const [params] = useSearchParams();
   const subscription = useSubscription();
   const returned = useReturnedPayment(params.get('payment'));
+  usePageTitle(t('billing.title'));
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -59,7 +61,11 @@ export function BillingPage(): React.JSX.Element {
         </p>
       ) : null}
 
-      {subscription.isLoading ? <p className="text-muted">{t('common.loading')}</p> : null}
+      {subscription.isLoading ? (
+        <p role="status" className="text-muted">
+          {t('common.loading')}
+        </p>
+      ) : null}
       {subscription.data && !subscription.data.billingConfigured ? (
         <Card>
           <p className="text-sm text-muted">{t('billing.notConfigured')}</p>
@@ -198,7 +204,7 @@ function Checkout({ expired }: { expired: boolean }): React.JSX.Element {
         {BILLING_PERIODS.map((option) => (
           <label
             key={option}
-            className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-4 has-[:checked]:border-accent"
+            className="flex items-start gap-3 rounded-lg border border-border-strong p-4 has-[:checked]:border-accent has-[:checked]:bg-accent/10 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent"
           >
             <input
               type="radio"
@@ -257,6 +263,7 @@ function OfferConsent({
         {t('billing.offer.accept')}{' '}
         <Link to="/legal/subscription" target="_blank" className="underline">
           {t('billing.offer.link')}
+          <NewTabHint />
         </Link>
         <span className="mt-1 block text-xs text-muted">
           {t(`billing.offer.recurring.${period}`, { amount: formatMoney(amount) })}
@@ -276,12 +283,21 @@ function PaymentHistory(): React.JSX.Element | null {
       <h2 className="font-medium">{t('billing.history.title')}</h2>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
+          <caption className="sr-only">{t('billing.history.title')}</caption>
           <thead className="text-left text-xs text-muted">
             <tr>
-              <th className="py-2 pr-4 font-normal">{t('billing.history.date')}</th>
-              <th className="py-2 pr-4 font-normal">{t('billing.history.what')}</th>
-              <th className="py-2 pr-4 text-right font-normal">{t('billing.history.amount')}</th>
-              <th className="py-2 font-normal">{t('billing.history.status')}</th>
+              <th scope="col" className="py-2 pr-4 font-normal">
+                {t('billing.history.date')}
+              </th>
+              <th scope="col" className="py-2 pr-4 font-normal">
+                {t('billing.history.what')}
+              </th>
+              <th scope="col" className="py-2 pr-4 text-right font-normal">
+                {t('billing.history.amount')}
+              </th>
+              <th scope="col" className="py-2 font-normal">
+                {t('billing.history.status')}
+              </th>
             </tr>
           </thead>
           <tbody>

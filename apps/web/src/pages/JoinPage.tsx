@@ -4,7 +4,8 @@ import { DisconnectReason, type LocalVideoTrack, Track } from 'livekit-client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { Button, Card, Input, Label } from '@/components/ui';
+import { MainContent, usePageTitle } from '@/components/header';
+import { Button, Card, Input, Label, NewTabHint, selectClasses } from '@/components/ui';
 import { MicrophoneSettings } from '@/features/rooms/MicrophoneSettings';
 import { RoomStage } from '@/features/rooms/RoomStage';
 import { ROOM_OPTIONS } from '@/features/rooms/room-options';
@@ -32,6 +33,7 @@ export function JoinPage(): React.JSX.Element {
   // Согласие, наоборот, отмечается при каждом входе — каждый вход пишет свою
   // запись в журнал.
   const [name, setName] = useState('');
+  usePageTitle(session ? session.roomName : t('join.title'));
 
   // Стабильный обработчик: `LiveKitRoom` держит его в зависимостях эффектов.
   const handleDisconnected = useCallback((reason?: DisconnectReason) => {
@@ -46,7 +48,7 @@ export function JoinPage(): React.JSX.Element {
   }, []);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
+    <MainContent className="mx-auto max-w-4xl space-y-6 px-4 py-6 sm:py-8">
       <h1 className="text-2xl font-semibold">
         {session ? t('join.inRoom', { room: session.roomName }) : t('join.title')}
       </h1>
@@ -90,7 +92,7 @@ export function JoinPage(): React.JSX.Element {
           }}
         />
       )}
-    </div>
+    </MainContent>
   );
 }
 
@@ -160,7 +162,9 @@ function JoinForm({
   return (
     <Card className="space-y-5">
       {ended ? (
-        <p className="rounded-lg border border-border bg-bg p-3 text-sm">{t(`join.${ended}`)}</p>
+        <p role="status" className="rounded-lg border border-border bg-bg p-3 text-sm">
+          {t(`join.${ended}`)}
+        </p>
       ) : (
         <p className="text-sm text-muted">{t('join.lead')}</p>
       )}
@@ -176,7 +180,11 @@ function JoinForm({
               </div>
             )}
           </div>
-          {mediaDenied ? <p className="text-xs text-danger">{t('join.cameraDenied')}</p> : null}
+          {mediaDenied ? (
+            <p role="alert" className="text-xs text-danger">
+              {t('join.cameraDenied')}
+            </p>
+          ) : null}
         </div>
 
         <div className="space-y-4">
@@ -223,12 +231,17 @@ function JoinForm({
               {t('join.terms')}{' '}
               <Link to="/legal/room-guest" target="_blank" className="underline">
                 {t('join.termsLink')}
+                <NewTabHint />
               </Link>
               <span className="mt-1 block text-xs text-muted">{t('join.termsHint')}</span>
             </span>
           </label>
 
-          {errorText ? <p className="text-sm text-danger">{errorText}</p> : null}
+          {errorText ? (
+            <p role="alert" className="text-sm text-danger">
+              {errorText}
+            </p>
+          ) : null}
 
           <Button
             onClick={() => void handleSubmit().catch(() => undefined)}
@@ -259,7 +272,7 @@ function DeviceSelect({
       <Label htmlFor={id}>{label}</Label>
       <select
         id={id}
-        className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm"
+        className={selectClasses}
         value={select.activeDeviceId}
         onChange={(event) => void select.setActiveMediaDevice(event.target.value)}
       >
@@ -276,6 +289,7 @@ function DeviceSelect({
 
 /** Своё превью зеркально — как в любом созвоне. */
 function PreviewVideo({ track }: { track: LocalVideoTrack }): React.JSX.Element {
+  const { t } = useTranslation();
   const ref = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -290,6 +304,7 @@ function PreviewVideo({ track }: { track: LocalVideoTrack }): React.JSX.Element 
   return (
     <video
       ref={ref}
+      aria-label={t('join.preview')}
       muted
       playsInline
       className="h-full w-full object-cover"

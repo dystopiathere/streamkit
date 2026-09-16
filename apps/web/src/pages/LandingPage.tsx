@@ -1,12 +1,21 @@
 import { formatMoney, MAX_GUESTS_PER_ROOM, PLAN_PRICES } from '@streamkit/contracts';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { Button, Card } from '@/components/ui';
+import {
+  MainContent,
+  MenuButton,
+  SkipLink,
+  useCollapsibleMenu,
+  usePageTitle,
+} from '@/components/header';
+import { ButtonLink, buttonClasses, Card, cn } from '@/components/ui';
 import { PublicFooter } from '@/features/public/PublicFooter';
 import { MISSING, useSeller } from '@/features/public/seller';
 import { useAuthStore } from '@/lib/auth-store';
 
 const FEATURES = ['alerts', 'widgets', 'chat', 'analytics', 'rooms', 'obs'] as const;
+const ANCHORS = ['pricing', 'delivery', 'contacts'] as const;
+const MENU_ID = 'landing-menu';
 
 /**
  * Главная: что это за сервис, сколько стоит, как его получить и кто продаёт.
@@ -20,48 +29,69 @@ export function LandingPage(): React.JSX.Element {
   const { t } = useTranslation();
   const signedIn = useAuthStore((state) => Boolean(state.accessToken));
   const seller = useSeller();
+  const menu = useCollapsibleMenu(MENU_ID);
+  usePageTitle(undefined);
 
   return (
     <div className="flex min-h-screen flex-col">
+      <SkipLink />
       <header className="border-b border-border bg-surface">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <span className="font-semibold tracking-tight">StreamKit</span>
-          <nav className="flex flex-wrap items-center gap-1 text-sm">
-            <a href="#pricing" className="rounded-lg px-3 py-1.5 text-muted hover:text-fg">
-              {t('public.nav.pricing')}
-            </a>
-            <a href="#delivery" className="rounded-lg px-3 py-1.5 text-muted hover:text-fg">
-              {t('public.nav.delivery')}
-            </a>
-            <a href="#contacts" className="rounded-lg px-3 py-1.5 text-muted hover:text-fg">
-              {t('public.nav.contacts')}
-            </a>
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
+          <Link
+            to="/"
+            aria-label={t('nav.home')}
+            className="mr-auto py-2 font-semibold tracking-tight"
+          >
+            StreamKit
+          </Link>
+          {/* Вход и панель видны всегда: это главное действие на странице, и
+              прятать его в меню ради трёх якорей — плохой обмен. */}
+          <div className="order-2 sm:order-3">
             {signedIn ? (
-              <Link to="/widgets">
-                <Button>{t('public.openDashboard')}</Button>
-              </Link>
+              <ButtonLink to="/widgets">{t('public.openDashboard')}</ButtonLink>
             ) : (
-              <Link to="/login">
-                <Button variant="secondary">{t('auth.submitLogin')}</Button>
-              </Link>
+              <ButtonLink to="/login" variant="secondary">
+                {t('auth.submitLogin')}
+              </ButtonLink>
             )}
+          </div>
+          <MenuButton menu={menu} className="order-3 sm:hidden" />
+          <nav
+            id={MENU_ID}
+            aria-label={t('public.nav.label')}
+            className={cn(
+              menu.open ? 'block' : 'hidden',
+              'order-4 w-full pb-2 sm:order-2 sm:block sm:w-auto sm:pb-0',
+            )}
+          >
+            <ul className="flex flex-col gap-1 text-base sm:flex-row sm:text-sm">
+              {ANCHORS.map((anchor) => (
+                <li key={anchor}>
+                  <a
+                    href={`#${anchor}`}
+                    onClick={menu.close}
+                    className="block rounded-lg px-3 py-2.5 text-muted hover:bg-surface-hover hover:text-fg sm:py-1.5"
+                  >
+                    {t(`public.nav.${anchor}`)}
+                  </a>
+                </li>
+              ))}
+            </ul>
           </nav>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 space-y-16 px-4 py-12">
-        <section className="max-w-3xl space-y-4">
-          <h1 className="text-3xl font-semibold text-balance sm:text-4xl">
+      <MainContent className="mx-auto w-full max-w-5xl flex-1 space-y-12 px-4 py-8 sm:space-y-16 sm:py-12">
+        <section aria-labelledby="hero-title" className="max-w-3xl space-y-4">
+          <h1 id="hero-title" className="text-2xl font-semibold text-balance sm:text-4xl">
             {t('public.hero.title')}
           </h1>
-          <p className="text-lg text-muted">{t('public.hero.lead')}</p>
+          <p className="text-base text-muted sm:text-lg">{t('public.hero.lead')}</p>
           {signedIn ? null : (
             <div className="flex flex-wrap gap-3">
-              <Link to="/register">
-                <Button>{t('public.hero.register')}</Button>
-              </Link>
-              <a href="#pricing">
-                <Button variant="ghost">{t('public.hero.pricing')}</Button>
+              <ButtonLink to="/register">{t('public.hero.register')}</ButtonLink>
+              <a href="#pricing" className={buttonClasses('ghost')}>
+                {t('public.hero.pricing')}
               </a>
             </div>
           )}
@@ -74,7 +104,7 @@ export function LandingPage(): React.JSX.Element {
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {FEATURES.map((feature) => (
               <li key={feature} className="rounded-lg border border-border p-4">
-                <p className="font-medium">{t(`public.features.${feature}.title`)}</p>
+                <h3 className="font-medium">{t(`public.features.${feature}.title`)}</h3>
                 <p className="mt-1 text-sm text-muted">{t(`public.features.${feature}.text`)}</p>
               </li>
             ))}
@@ -87,14 +117,14 @@ export function LandingPage(): React.JSX.Element {
           </h2>
           <div className="grid gap-4 md:grid-cols-2">
             <Card className="space-y-3">
-              <p className="font-medium">{t('public.pricing.free.name')}</p>
+              <h3 className="font-medium">{t('public.pricing.free.name')}</h3>
               <p className="text-3xl tabular-nums">
                 {formatMoney({ amountMinor: 0, currency: 'RUB' })}
               </p>
               <p className="text-sm text-muted">{t('public.pricing.free.text')}</p>
             </Card>
             <Card className="space-y-3 border-accent/60">
-              <p className="font-medium">{t('public.pricing.pro.name')}</p>
+              <h3 className="font-medium">{t('public.pricing.pro.name')}</h3>
               <p className="text-3xl tabular-nums">
                 {t('public.pricing.pro.month', { amount: formatMoney(PLAN_PRICES.month) })}
               </p>
@@ -165,7 +195,7 @@ export function LandingPage(): React.JSX.Element {
             ) : null}
           </dl>
         </section>
-      </main>
+      </MainContent>
 
       <PublicFooter />
     </div>

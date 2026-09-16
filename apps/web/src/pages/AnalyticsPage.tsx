@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { usePageTitle } from '@/components/header';
 import { Button, Card, cn } from '@/components/ui';
 import { ChannelCard } from '@/features/analytics/ChannelCard';
 import {
@@ -31,6 +32,7 @@ export function AnalyticsPage(): React.JSX.Element {
   const channels = useChannels();
   const platforms = usePlatforms();
   const donations = useDonationTotals(range);
+  usePageTitle(t('analytics.title'));
 
   useConnectionResult();
   useLiveChannelStats();
@@ -85,7 +87,11 @@ function RangePicker({
   const { t } = useTranslation();
 
   return (
-    <div className="flex gap-1 rounded-lg border border-border p-1" role="group">
+    <div
+      className="flex gap-1 rounded-lg border border-border-strong p-1"
+      role="group"
+      aria-label={t('analytics.rangeLabel')}
+    >
       {ANALYTICS_RANGES.map((range) => (
         <button
           key={range}
@@ -127,13 +133,18 @@ function ConnectPanel({ platforms }: { platforms: AvailablePlatform[] }): React.
             <Button
               variant="secondary"
               disabled={!platform.isConfigured}
+              aria-describedby={
+                platform.isConfigured ? undefined : `platform-${platform.platform}-hint`
+              }
               isLoading={connect.isPending && connect.variables === platform.platform}
               onClick={() => connect.mutate(platform.platform)}
             >
               {t('analytics.connect', { platform: platform.title })}
             </Button>
             {!platform.isConfigured ? (
-              <span className="text-xs text-muted">{t('analytics.notConfigured')}</span>
+              <span id={`platform-${platform.platform}-hint`} className="text-xs text-muted">
+                {t('analytics.notConfigured')}
+              </span>
             ) : null}
           </div>
         ))}

@@ -5,7 +5,8 @@ import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Button, Card, FieldError, Input, Label } from '@/components/ui';
+import { MainContent, SkipLink, usePageTitle } from '@/components/header';
+import { Button, Card, describeField, FieldError, FieldHint, Input, Label } from '@/components/ui';
 import { PublicFooter } from '@/features/public/PublicFooter';
 import { ApiError, api } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
@@ -22,6 +23,9 @@ export function LoginPage(): React.JSX.Element {
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
   });
+
+  const errors = form.formState.errors;
+  usePageTitle(t('auth.loginTitle'));
 
   const onSubmit = form.handleSubmit(async (values) => {
     try {
@@ -41,15 +45,22 @@ export function LoginPage(): React.JSX.Element {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <div className="flex flex-1 items-center justify-center p-4">
+      <SkipLink />
+      <MainContent className="flex flex-1 items-center justify-center p-4">
         <Card className="w-full max-w-sm">
           <h1 className="mb-6 text-xl font-semibold">{t('auth.loginTitle')}</h1>
 
-          <form onSubmit={onSubmit} className="space-y-4">
+          <form onSubmit={onSubmit} className="space-y-4" noValidate>
             <div>
               <Label htmlFor="email">{t('auth.email')}</Label>
-              <Input id="email" type="email" autoComplete="email" {...form.register('email')} />
-              <FieldError message={form.formState.errors.email?.message} />
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                {...describeField('email', { error: errors.email?.message })}
+                {...form.register('email')}
+              />
+              <FieldError id="email" message={errors.email?.message} />
             </div>
 
             <div>
@@ -58,9 +69,10 @@ export function LoginPage(): React.JSX.Element {
                 id="password"
                 type="password"
                 autoComplete="current-password"
+                {...describeField('password', { error: errors.password?.message })}
                 {...form.register('password')}
               />
-              <FieldError message={form.formState.errors.password?.message} />
+              <FieldError id="password" message={errors.password?.message} />
             </div>
 
             {needsTotp ? (
@@ -71,10 +83,11 @@ export function LoginPage(): React.JSX.Element {
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   autoFocus
+                  {...describeField('totpCode', { hint: true, error: errors.totpCode?.message })}
                   {...form.register('totpCode')}
                 />
-                <FieldError message={form.formState.errors.totpCode?.message} />
-                <p className="mt-1 text-xs text-muted">{t('auth.totpRequired')}</p>
+                <FieldError id="totpCode" message={errors.totpCode?.message} />
+                <FieldHint id="totpCode">{t('auth.totpRequired')}</FieldHint>
               </div>
             ) : null}
 
@@ -87,7 +100,7 @@ export function LoginPage(): React.JSX.Element {
             {t('auth.toRegister')}
           </Link>
         </Card>
-      </div>
+      </MainContent>
       <PublicFooter />
     </div>
   );

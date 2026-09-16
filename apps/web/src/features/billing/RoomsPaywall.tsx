@@ -1,6 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
-import { Button } from '@/components/ui';
+import { ButtonLink } from '@/components/ui';
 import { useSubscription } from './queries';
 
 /**
@@ -32,9 +31,7 @@ export function RoomsPaywall(): React.JSX.Element | null {
         </p>
         <p className="max-w-2xl text-sm text-muted">{t('billing.paywall.hint')}</p>
       </div>
-      <Link to="/billing">
-        <Button>{t('billing.paywall.action')}</Button>
-      </Link>
+      <ButtonLink to="/billing">{t('billing.paywall.action')}</ButtonLink>
     </div>
   );
 }

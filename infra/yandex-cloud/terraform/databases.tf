@@ -72,6 +72,13 @@ resource "yandex_mdb_postgresql_database" "umami" {
   cluster_id = yandex_mdb_postgresql_cluster.main.id
   name       = "umami"
   owner      = yandex_mdb_postgresql_user.umami.name
+
+  # Первая миграция Umami — CREATE EXTENSION pgcrypto, а владелец базы в
+  # управляемом кластере не суперпользователь: расширения включаются только
+  # здесь. Без этого блока Umami падал на старте и /u/script.js отвечал 502.
+  extension {
+    name = "pgcrypto"
+  }
 }
 
 # Valkey — управляемый Redis-совместимый кластер. Приложению нужны обычные

@@ -40,10 +40,40 @@ test('главная без входа показывает цены, получ
   // Оферта открывается из подвала, с подставленными реквизитами и ценой.
   await page.getByRole('link', { name: 'Оферта тарифа «Про»' }).click();
   await expect(page).toHaveURL(/\/legal\/subscription$/);
-  const offer = page.locator('pre');
+  const offer = page.getByRole('article');
   await expect(offer).toContainText(seller.inn!);
   await expect(offer).toContainText(/490\s₽ за один календарный месяц/);
   await expect(offer).not.toContainText('{{');
+  // Markdown отрисован разметкой, а не выведен как есть.
+  await expect(offer.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(offer.getByRole('heading', { level: 2 }).first()).toBeVisible();
+  await expect(offer).not.toContainText('## ');
+  await expect(offer).not.toContainText('**');
+  await expect(page).toHaveTitle(/Оферта.* — StreamKit/);
+});
+
+test('на телефоне разделы главной свёрнуты в меню, а вход виден всегда', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 740 });
+  await page.goto('/');
+
+  const menuButton = page.getByRole('button', { name: 'Открыть меню' });
+  const pricing = page.getByRole('link', { name: 'Тарифы', exact: true });
+  await expect(page.getByRole('link', { name: 'Войти' })).toBeVisible();
+  await expect(pricing).toBeHidden();
+
+  await menuButton.click();
+  await expect(page.getByRole('button', { name: 'Закрыть меню' })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  await pricing.click();
+  await expect(pricing).toBeHidden();
+
+  // Escape закрывает меню и возвращает фокус на кнопку.
+  await menuButton.click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('link', { name: 'Контакты', exact: true })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Открыть меню' })).toBeFocused();
 });
 
 test('посетитель без аккаунта отвечает на баннер, и согласие уходит в журнал', async ({ page }) => {

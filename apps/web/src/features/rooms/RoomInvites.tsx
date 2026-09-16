@@ -52,6 +52,7 @@ export function RoomInvites({ roomId }: { roomId: string }): React.JSX.Element {
           value={label}
           onChange={(event) => setLabel(event.target.value)}
           placeholder={t('rooms.invites.labelPlaceholder')}
+          aria-label={t('rooms.invites.labelPlaceholder')}
           maxLength={80}
           className="max-w-xs"
           onKeyDown={(event) => {
@@ -70,11 +71,14 @@ export function RoomInvites({ roomId }: { roomId: string }): React.JSX.Element {
 
       {freshUrl ? (
         <div className="space-y-2 rounded-lg border border-accent/40 bg-accent/10 p-3">
-          <p className="text-xs text-muted">{t('rooms.invites.oneTimeWarning')}</p>
-          <div className="flex gap-2">
+          <p id="invite-url-hint" className="text-xs text-muted">
+            {t('rooms.invites.oneTimeWarning')}
+          </p>
+          <div className="flex flex-wrap gap-2 sm:flex-nowrap">
             <Input
               readOnly
               aria-label={t('rooms.invites.title')}
+              aria-describedby="invite-url-hint"
               value={freshUrl}
               onFocus={(event) => event.target.select()}
             />
@@ -93,7 +97,7 @@ export function RoomInvites({ roomId }: { roomId: string }): React.JSX.Element {
         {invites.data?.map((invite) => (
           <li
             key={invite.id}
-            className="flex items-center justify-between gap-3 rounded-lg border border-border p-2 text-sm"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-2 text-sm"
           >
             <div className="min-w-0">
               <p className="truncate">{invite.label}</p>
@@ -104,7 +108,11 @@ export function RoomInvites({ roomId }: { roomId: string }): React.JSX.Element {
                   : t('rooms.invites.never')}
               </p>
             </div>
-            <Button variant="ghost" onClick={() => void handleRevoke(invite.id)}>
+            <Button
+              variant="ghost"
+              aria-label={t('rooms.invites.revokeNamed', { name: invite.label })}
+              onClick={() => void handleRevoke(invite.id)}
+            >
               {t('rooms.invites.revoke')}
             </Button>
           </li>

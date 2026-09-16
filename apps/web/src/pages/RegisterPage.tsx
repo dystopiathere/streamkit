@@ -4,7 +4,17 @@ import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Button, Card, FieldError, Input, Label } from '@/components/ui';
+import { MainContent, SkipLink, usePageTitle } from '@/components/header';
+import {
+  Button,
+  Card,
+  describeField,
+  FieldError,
+  FieldHint,
+  Input,
+  Label,
+  NewTabHint,
+} from '@/components/ui';
 import { PublicFooter } from '@/features/public/PublicFooter';
 import { trackSiteEvent } from '@/features/public/site-stats';
 import { ApiError, api } from '@/lib/api';
@@ -42,6 +52,9 @@ export function RegisterPage(): React.JSX.Element {
     },
   });
 
+  const errors = form.formState.errors;
+  usePageTitle(t('auth.registerTitle'));
+
   const onSubmit = form.handleSubmit(async (values) => {
     try {
       const result = await api.post<AuthResult>('/auth/register', values);
@@ -57,21 +70,33 @@ export function RegisterPage(): React.JSX.Element {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <div className="flex flex-1 items-center justify-center p-4">
+      <SkipLink />
+      <MainContent className="flex flex-1 items-center justify-center p-4">
         <Card className="w-full max-w-sm">
           <h1 className="mb-6 text-xl font-semibold">{t('auth.registerTitle')}</h1>
 
-          <form onSubmit={onSubmit} className="space-y-4">
+          <form onSubmit={onSubmit} className="space-y-4" noValidate>
             <div>
               <Label htmlFor="displayName">{t('auth.displayName')}</Label>
-              <Input id="displayName" autoComplete="nickname" {...form.register('displayName')} />
-              <FieldError message={form.formState.errors.displayName?.message} />
+              <Input
+                id="displayName"
+                autoComplete="nickname"
+                {...describeField('displayName', { error: errors.displayName?.message })}
+                {...form.register('displayName')}
+              />
+              <FieldError id="displayName" message={errors.displayName?.message} />
             </div>
 
             <div>
               <Label htmlFor="email">{t('auth.email')}</Label>
-              <Input id="email" type="email" autoComplete="email" {...form.register('email')} />
-              <FieldError message={form.formState.errors.email?.message} />
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                {...describeField('email', { error: errors.email?.message })}
+                {...form.register('email')}
+              />
+              <FieldError id="email" message={errors.email?.message} />
             </div>
 
             <div>
@@ -80,13 +105,18 @@ export function RegisterPage(): React.JSX.Element {
                 id="password"
                 type="password"
                 autoComplete="new-password"
+                {...describeField('password', { hint: true, error: errors.password?.message })}
                 {...form.register('password')}
               />
-              <p className="mt-1 text-xs text-muted">{t('auth.passwordHint')}</p>
-              <FieldError message={form.formState.errors.password?.message} />
+              <FieldHint id="password">{t('auth.passwordHint')}</FieldHint>
+              <FieldError id="password" message={errors.password?.message} />
             </div>
 
-            <div className="space-y-2 border-t border-border pt-4">
+            <fieldset
+              className="space-y-2 border-t border-border pt-4"
+              aria-describedby={consentsInvalid ? 'consents-error' : undefined}
+            >
+              <legend className="sr-only">{t('auth.consentsLegend')}</legend>
               {CONSENT_FIELDS.map((field) => (
                 <label key={field.name} className="flex items-start gap-2 text-xs text-muted">
                   <input
@@ -97,12 +127,15 @@ export function RegisterPage(): React.JSX.Element {
                   <span>
                     <Link to={field.href} target="_blank" className="underline hover:text-fg">
                       {t(field.label)}
+                      <NewTabHint />
                     </Link>
                   </span>
                 </label>
               ))}
-              {consentsInvalid ? <FieldError message={t('auth.consentRequired')} /> : null}
-            </div>
+              {consentsInvalid ? (
+                <FieldError id="consents" message={t('auth.consentRequired')} />
+              ) : null}
+            </fieldset>
 
             <Button type="submit" className="w-full" isLoading={form.formState.isSubmitting}>
               {t('auth.submitRegister')}
@@ -113,7 +146,7 @@ export function RegisterPage(): React.JSX.Element {
             {t('auth.toLogin')}
           </Link>
         </Card>
-      </div>
+      </MainContent>
       <PublicFooter />
     </div>
   );

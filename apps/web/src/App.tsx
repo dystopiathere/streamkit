@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AppLayout } from './components/AppLayout';
@@ -10,7 +11,6 @@ import { useAuthStore } from './lib/auth-store';
 import { queryClient } from './lib/query-client';
 import { EventsPage } from './pages/EventsPage';
 import { LandingPage } from './pages/LandingPage';
-import { LegalPage } from './pages/LegalPage';
 import { LoginPage } from './pages/LoginPage';
 import { BillingPage } from './pages/BillingPage';
 import { PrivacyPage } from './pages/PrivacyPage';
@@ -40,12 +40,28 @@ const AnalyticsPage = lazy(async () => ({
 const RoomPage = lazy(async () => ({
   default: (await import('./pages/RoomPage')).RoomPage,
 }));
+/**
+ * Документы — отдельным чанком: рендер Markdown нужен только здесь, и
+ * стример, открывший дашборд, за него не платит.
+ */
+const LegalPage = lazy(async () => ({
+  default: (await import('./pages/LegalPage')).LegalPage,
+}));
 const JoinPage = lazy(async () => ({
   default: (await import('./pages/JoinPage')).JoinPage,
 }));
 
+function Loading(): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <p role="status" className="p-8 text-muted">
+      {t('common.loading')}
+    </p>
+  );
+}
+
 function Lazy({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return <Suspense fallback={<div className="p-8 text-muted">Загрузка…</div>}>{children}</Suspense>;
+  return <Suspense fallback={<Loading />}>{children}</Suspense>;
 }
 
 /**
@@ -60,7 +76,7 @@ function RequireAuth(): React.JSX.Element {
   const { accessToken, isRestoring } = useAuthStore();
 
   if (isRestoring) {
-    return <div className="p-8 text-muted">Загрузка…</div>;
+    return <Loading />;
   }
 
   return accessToken ? <Outlet /> : <Navigate to="/login" replace />;
@@ -81,7 +97,14 @@ export function App(): React.JSX.Element {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route path="/legal/:slug" element={<LegalPage />} />
+          <Route
+            path="/legal/:slug"
+            element={
+              <Lazy>
+                <LegalPage />
+              </Lazy>
+            }
+          />
           {/* Вне RequireAuth: гость не зарегистрирован, у него есть только ссылка. */}
           <Route
             path="/join"
@@ -100,7 +123,7 @@ export function App(): React.JSX.Element {
               <Route
                 path="/analytics"
                 element={
-                  <Suspense fallback={<div className="p-8 text-muted">Загрузка…</div>}>
+                  <Suspense fallback={<Loading />}>
                     <AnalyticsPage />
                   </Suspense>
                 }

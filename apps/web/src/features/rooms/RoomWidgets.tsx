@@ -1,7 +1,7 @@
 import type { CreateWidgetInput } from '@streamkit/contracts';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
-import { Button, Card } from '@/components/ui';
+import { useNavigate } from 'react-router-dom';
+import { Button, ButtonLink, Card } from '@/components/ui';
 import { useCreateWidget, useWidgets } from '@/features/widgets/queries';
 
 /**
@@ -47,9 +47,13 @@ export function RoomWidgets({ roomId, roomName }: { roomId: string; roomName: st
             className="flex items-center justify-between gap-3 rounded-lg border border-border p-2 text-sm"
           >
             <span className="min-w-0 truncate">{widget.name}</span>
-            <Link to={`/widgets/${widget.id}`}>
-              <Button variant="ghost">{t('rooms.obs.open')}</Button>
-            </Link>
+            <ButtonLink
+              to={`/widgets/${widget.id}`}
+              variant="ghost"
+              aria-label={t('common.openNamed', { name: widget.name })}
+            >
+              {t('rooms.obs.open')}
+            </ButtonLink>
           </li>
         ))}
       </ul>

@@ -153,15 +153,24 @@ function BannerPanel({
 }): React.JSX.Element {
   const { t } = useTranslation();
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-surface p-4">
+    // Не диалог: баннер не держит фокус и не мешает пользоваться страницей, а
+    // отдельная область находится скринридером по списку ориентиров.
+    <section
+      aria-label={t('cookies.label')}
+      className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-surface p-4"
+    >
       <div className="mx-auto flex max-w-4xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted">
           {t('cookies.message')}{' '}
-          <Link to="/legal/cookies" className="underline hover:text-fg">
+          <Link
+            to="/legal/cookies"
+            aria-label={t('cookies.moreAbout')}
+            className="underline hover:text-fg"
+          >
             {t('cookies.more')}
           </Link>
         </p>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 flex-wrap gap-2">
           <Button variant="secondary" onClick={onDecline} disabled={pending}>
             {t('cookies.onlyNecessary')}
           </Button>
@@ -170,6 +179,6 @@ function BannerPanel({
           </Button>
         </div>
       </div>
-    </div>
+    </section>
   );
 }

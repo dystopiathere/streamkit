@@ -8,16 +8,28 @@
  * Палитра тёмная по умолчанию: дашборд открыт рядом с OBS во время стрима,
  * и светлая тема в этом сценарии слепит.
  */
+/*
+ * Контраст проверен расчётом по WCAG 2.2 (текст — не ниже 4.5:1, границы
+ * элементов управления — не ниже 3:1):
+ * - accent-fg на accent — 5.0 (при 0.62 было 3.7, и текст основной кнопки
+ *   не проходил); accent как обводка фокуса на bg — 3.6;
+ * - danger — цвет ТЕКСТА: 5.9 на surface. Фон опасной кнопки — danger-strong,
+ *   белый на нём 5.6. Один токен на оба случая не проходил ни там, ни там;
+ * - border-strong — рамка полей ввода: 3.5 на surface. Обычный border (1.3)
+ *   годится только для разделителей: поле с такой рамкой на карточке не видно.
+ */
 @theme {
   --color-bg: oklch(0.18 0.015 280);
   --color-surface: oklch(0.23 0.018 280);
   --color-surface-hover: oklch(0.27 0.02 280);
   --color-border: oklch(0.32 0.02 280);
+  --color-border-strong: oklch(0.55 0.02 280);
   --color-fg: oklch(0.96 0.005 280);
   --color-muted: oklch(0.68 0.015 280);
-  --color-accent: oklch(0.62 0.19 295);
+  --color-accent: oklch(0.55 0.19 295);
   --color-accent-fg: oklch(0.98 0.01 295);
-  --color-danger: oklch(0.62 0.21 25);
+  --color-danger: oklch(0.7 0.17 25);
+  --color-danger-strong: oklch(0.54 0.2 25);
   --color-success: oklch(0.68 0.15 155);
 
   --radius-card: 0.75rem;
@@ -26,6 +38,13 @@
 @layer base {
   * {
     border-color: var(--color-border);
+  }
+
+  html {
+    /* Нативные флажки, списки и полосы прокрутки — в тёмном варианте, а не
+       белыми пятнами на тёмной странице. */
+    color-scheme: dark;
+    accent-color: var(--color-accent);
   }
 
   body {
@@ -45,5 +64,49 @@
   :focus-visible {
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;
+  }
+
+  /* Tailwind 4 вернул кнопкам системный курсор-стрелку. Всё, что по нажатию
+     что-то делает, показывает руку, выключенное — запрет. */
+  button,
+  summary,
+  select,
+  [role='button'],
+  input:is([type='checkbox'], [type='radio'], [type='color'], [type='file']),
+  label:has(> input:is([type='checkbox'], [type='radio'])) {
+    cursor: pointer;
+  }
+
+  :is(button, select, input):disabled,
+  [aria-disabled='true'],
+  label:has(> input:disabled) {
+    cursor: not-allowed;
+  }
+
+  /* Кто попросил систему не двигать интерфейс, тот не получает ни пульсации
+     «загрузки», ни плавной прокрутки к якорям. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@utility sr-only-focusable {
+  /* Ссылка «к содержимому»: невидима, пока на неё не пришли с клавиатуры. */
+  &:not(:focus) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
