@@ -1,7 +1,14 @@
 import { formatMinorForInput, parseMajorToMinor } from '@streamkit/contracts';
 import { useState } from 'react';
 import { Controller, type FieldValues, type UseFormReturn } from 'react-hook-form';
-import { describeField, FieldError, FieldHint, Input, Label, selectClasses } from '@/components/ui';
+import {
+  describeField,
+  FieldError,
+  FieldHint,
+  Input,
+  Label,
+  selectClasses,
+} from '@streamkit/app-kit';
 
 /**
  * Поля формы настроек виджета.

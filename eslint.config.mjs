@@ -50,7 +50,13 @@ export default tseslint.config(
 
   // Фронтенд: браузерные глобальные объекты и правила хуков React.
   {
-    files: ['apps/web/**/*.{ts,tsx}', 'apps/overlay/**/*.{ts,tsx}', 'packages/ui/**/*.{ts,tsx}'],
+    files: [
+      'apps/web/**/*.{ts,tsx}',
+      'apps/admin/**/*.{ts,tsx}',
+      'apps/overlay/**/*.{ts,tsx}',
+      'packages/ui/**/*.{ts,tsx}',
+      'packages/app-kit/**/*.{ts,tsx}',
+    ],
     plugins: { 'react-hooks': reactHooks },
     languageOptions: {
       globals: { ...globals.browser },

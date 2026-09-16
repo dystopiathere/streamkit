@@ -9,7 +9,7 @@ import { parseParticipantIdentity } from '@streamkit/contracts';
 import { type Participant, Track } from 'livekit-client';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@/components/ui';
+import { Button } from '@streamkit/app-kit';
 import { MicrophoneSettings } from './MicrophoneSettings';
 import { useCamera } from './useCamera';
 import { useMicrophone } from './useMicrophone';

@@ -1,7 +1,7 @@
 import type { CreateWidgetInput } from '@streamkit/contracts';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Button, ButtonLink, Card } from '@/components/ui';
+import { Button, ButtonLink, Card } from '@streamkit/app-kit';
 import { useCreateWidget, useWidgets } from '@/features/widgets/queries';
 
 /**

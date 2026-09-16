@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { ButtonLink } from '@/components/ui';
+import { ButtonLink } from '@streamkit/app-kit';
 import { useSubscription } from './queries';
 
 /**

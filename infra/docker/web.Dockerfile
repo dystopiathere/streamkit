@@ -38,6 +38,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/config/package.json packages/config/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/ui/package.json packages/ui/
+COPY packages/app-kit/package.json packages/app-kit/
 COPY apps/web/package.json apps/web/
 COPY apps/overlay/package.json apps/overlay/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \

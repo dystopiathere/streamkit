@@ -13,9 +13,9 @@ socket.io-client, sonner, react-markdown + remark-gfm (юридические д
 
 | Каталог | Что внутри |
 |---|---|
-| `src/lib` | `api.ts` (fetch + обновление токена), `auth-store.ts`, `query-client.ts`, `config.ts`, `i18n.ts` |
-| `src/components/ui` | Примитивы интерфейса в стиле shadcn/ui |
-| `src/components` | Каркас приложения, шапка и мобильное меню (`header.tsx`), cookie-баннер |
+| `src/lib` | `api.ts` (клиент из app-kit с путём обновления дашборда), `auth-store.ts`, `query-client.ts`, `config.ts`, `i18n.ts` |
+| `@streamkit/app-kit` | Примитивы, каркас страницы, таблицы, диалог и клиент API — общие с админкой (`packages/app-kit`) |
+| `src/components` | Каркас приложения и cookie-баннер |
 | `src/features/widgets` | Запросы, форма настроек под тип, предпросмотр, ссылки |
 | `src/features/analytics` | Метрики каналов: карточка, графики, подключение площадок |
 | `src/features/privacy` | Журнал согласий: общий для раздела «Приватность» и баннера cookie |
@@ -127,7 +127,7 @@ shadcn/ui. Структура совместима с `npx shadcn@latest add <co
 
 - **Ссылка, похожая на кнопку, — `ButtonLink`**, а не `<Button>` внутри
   `<Link>`: кнопка внутри ссылки — недопустимая разметка и две остановки Tab.
-- **Курсор задан в `index.css` для всего кликабельного.** Tailwind 4 вернул
+- **Курсор задан в теме `app-kit` для всего кликабельного.** Tailwind 4 вернул
   кнопкам стрелку; утилиту `cursor-pointer` по элементам не раскладывать.
 - **У каждого поля есть подпись**: `<Label htmlFor>`, а если подписи на экране
   нет — `aria-label`. Placeholder подписью не считается. Подсказка и ошибка
@@ -144,7 +144,7 @@ shadcn/ui. Структура совместима с `npx shadcn@latest add <co
 - **Графики продублированы текстом** (`useChartSummary`): подсказка графика
   появляется только при наведении мыши.
 - **Цвета — только из токенов темы**, контраст которых посчитан (комментарий в
-  `index.css`). `danger` — для текста, `danger-strong` — для фона кнопки;
+  `packages/app-kit/src/theme.css`). `danger` — для текста, `danger-strong` — для фона кнопки;
   рамка полей — `border-strong`, обычный `border` — только разделители.
 - Ссылка в новую вкладку несёт `<NewTabHint />`.
 

@@ -9,7 +9,7 @@ JSON-пресеты, от которых наследуются `tsconfig.json` 
 |---|---|
 | `tsconfig/node.json` | NestJS-приложения (`apps/api`, `apps/worker`): CommonJS, декораторы, `types: ["node"]` |
 | `tsconfig/react.json` | Vite-приложения (`apps/web`, `apps/overlay`): JSX, DOM-библиотеки, `noEmit` |
-| `tsconfig/lib.json` | Публикуемые пакеты (`packages/contracts`, `packages/ui`): ESM, эмит в `dist` |
+| `tsconfig/lib.json` | Публикуемые пакеты (`packages/contracts`, `packages/ui`, `packages/app-kit`): ESM, эмит в `dist` |
 
 Все три наследуются от `tsconfig/base.json` в этом же пакете, где включён `strict`,
 `noUncheckedIndexedAccess` и `noImplicitOverride`.

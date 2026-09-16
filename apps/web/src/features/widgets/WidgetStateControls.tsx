@@ -10,7 +10,7 @@ import {
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Button, Card, Input, Label } from '@/components/ui';
+import { Button, Card, Input, Label } from '@streamkit/app-kit';
 import { ApiError } from '@/lib/api';
 import { useWidgetCommand, useWidgetState } from './queries';
 

@@ -5,8 +5,18 @@ import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { MainContent, SkipLink, usePageTitle } from '@/components/header';
-import { Button, Card, describeField, FieldError, FieldHint, Input, Label } from '@/components/ui';
+import {
+  Button,
+  Card,
+  describeField,
+  FieldError,
+  FieldHint,
+  Input,
+  Label,
+  MainContent,
+  SkipLink,
+  usePageTitle,
+} from '@streamkit/app-kit';
 import { PublicFooter } from '@/features/public/PublicFooter';
 import { ApiError, api } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';

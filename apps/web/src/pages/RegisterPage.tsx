@@ -4,7 +4,6 @@ import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { MainContent, SkipLink, usePageTitle } from '@/components/header';
 import {
   Button,
   Card,
@@ -13,8 +12,11 @@ import {
   FieldHint,
   Input,
   Label,
+  MainContent,
   NewTabHint,
-} from '@/components/ui';
+  SkipLink,
+  usePageTitle,
+} from '@streamkit/app-kit';
 import { PublicFooter } from '@/features/public/PublicFooter';
 import { trackSiteEvent } from '@/features/public/site-stats';
 import { ApiError, api } from '@/lib/api';

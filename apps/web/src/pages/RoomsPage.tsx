@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { usePageTitle } from '@/components/header';
-import { Button, ButtonLink, Card, Input } from '@/components/ui';
+import { Button, ButtonLink, Card, Input, usePageTitle } from '@streamkit/app-kit';
 import { RoomsPaywall, useRoomsAccess } from '@/features/billing/RoomsPaywall';
 import { useCreateRoom, useDeleteRoom, useRooms } from '@/features/rooms/queries';
 

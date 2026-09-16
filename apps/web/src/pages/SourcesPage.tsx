@@ -2,8 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { usePageTitle } from '@/components/header';
-import { Button, Card, Input, Label } from '@/components/ui';
+import { Button, Card, Input, Label, usePageTitle } from '@streamkit/app-kit';
 import { api } from '@/lib/api';
 import { API_BASE } from '@/lib/config';
 

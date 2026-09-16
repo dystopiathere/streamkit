@@ -2,7 +2,7 @@ import { Menu, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
-import { cn } from './ui';
+import { cn } from './primitives';
 
 /** Идентификатор основного содержимого — цель ссылки «к содержимому». */
 export const MAIN_ID = 'main';
@@ -100,10 +100,10 @@ export function MenuButton({
  * перехода не сообщает, где человек оказался, а в истории браузера все
  * страницы называются одинаково.
  */
-export function usePageTitle(title: string | undefined): void {
+export function usePageTitle(title: string | undefined, appName = 'StreamKit'): void {
   useEffect(() => {
-    document.title = title ? `${title} — StreamKit` : 'StreamKit';
-  }, [title]);
+    document.title = title ? `${title} — ${appName}` : appName;
+  }, [title, appName]);
 }
 
 /**

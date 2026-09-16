@@ -8,8 +8,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { usePageTitle } from '@/components/header';
-import { Button, Card, cn } from '@/components/ui';
+import { Button, Card, cn, usePageTitle } from '@streamkit/app-kit';
 import { ChannelCard } from '@/features/analytics/ChannelCard';
 import {
   useChannels,

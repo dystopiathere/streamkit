@@ -13,7 +13,7 @@ import {
   visitorId,
   writeCookieChoice,
 } from '@/lib/cookie-consent';
-import { Button } from './ui';
+import { Button } from '@streamkit/app-kit';
 
 /**
  * Баннер cookie с реальным выбором.

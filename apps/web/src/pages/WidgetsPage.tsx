@@ -2,8 +2,7 @@ import { WIDGET_TYPES, type CreateWidgetInput, type WidgetType } from '@streamki
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { usePageTitle } from '@/components/header';
-import { Button, ButtonLink, Card, Input, selectClasses } from '@/components/ui';
+import { Button, ButtonLink, Card, Input, selectClasses, usePageTitle } from '@streamkit/app-kit';
 import {
   useCreateWidget,
   useDeleteWidget,

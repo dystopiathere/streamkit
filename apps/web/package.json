@@ -13,6 +13,7 @@
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
     "@livekit/components-react": "2.9.24",
+    "@streamkit/app-kit": "workspace:*",
     "@streamkit/contracts": "workspace:*",
     "@streamkit/ui": "workspace:*",
     "@tanstack/react-query": "^5.102.8",

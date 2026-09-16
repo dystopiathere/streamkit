@@ -3,8 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Markdown, { type Components } from 'react-markdown';
 import { Link, useParams } from 'react-router-dom';
 import remarkGfm from 'remark-gfm';
-import { MainContent, SkipLink, usePageTitle } from '@/components/header';
-import { NewTabHint } from '@/components/ui';
+import { MainContent, NewTabHint, SkipLink, usePageTitle } from '@streamkit/app-kit';
 import { PublicFooter } from '@/features/public/PublicFooter';
 import { escapeMarkdown, fillDocumentDetails, useSeller } from '@/features/public/seller';
 

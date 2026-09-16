@@ -10,8 +10,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { usePageTitle } from '@/components/header';
-import { Button, Card, cn, NewTabHint } from '@/components/ui';
+import { Button, Card, cn, NewTabHint, usePageTitle } from '@streamkit/app-kit';
 import {
   useCheckout,
   usePayments,
