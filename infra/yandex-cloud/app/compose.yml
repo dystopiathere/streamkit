@@ -63,6 +63,17 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  # Статистика посещений публичных страниц. Наружу — только через Caddy: скрипт
+  # и приём событий на основном домене по префиксу /u, интерфейс — на
+  # stats.<домен> за паролем. Своя база в управляемом PostgreSQL (Terraform).
+  umami:
+    image: ${REGISTRY}/mirror/umami:${UMAMI_VERSION}
+    restart: unless-stopped
+    env_file: umami.env
+    volumes:
+      - ./yandex-ca.pem:/etc/streamkit/yandex-ca.pem:ro
+    logging: *logging
+
   caddy:
     # Сторонние образы берутся из своего реестра, куда их зеркалирует выпуск:
     # ВМ не зависит от доступности Docker Hub.
@@ -76,6 +87,8 @@ services:
       DOMAIN: ${DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL}
       LIVEKIT_PRIVATE_IP: ${LIVEKIT_PRIVATE_IP}
+      # bcrypt-хэш пароля stats.<домен>; сам пароль в Caddy не попадает.
+      STATS_BASIC_HASH: ${STATS_BASIC_HASH}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # Сертификаты переживают пересоздание контейнера: иначе каждая выкатка
@@ -86,6 +99,7 @@ services:
       - api
       - web
       - overlay
+      - umami
     logging: *logging
 
 volumes:

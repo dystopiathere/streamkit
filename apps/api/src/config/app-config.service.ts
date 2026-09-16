@@ -170,6 +170,16 @@ export class AppConfig {
     };
   }
 
+  /** Идентификатор сайта в Umami, либо null — статистика не настроена. */
+  get umamiWebsiteId(): string | null {
+    return this.config.get<string>('UMAMI_WEBSITE_ID') ?? null;
+  }
+
+  /** База Umami для уборки старой статистики, либо null — убирать нечего. */
+  get umamiDatabaseUrl(): string | null {
+    return this.config.get<string>('UMAMI_DATABASE_URL') ?? null;
+  }
+
   /** Реквизиты продавца. Незаполненное — null: страница покажет, что его нет. */
   get seller(): {
     name: string | null;

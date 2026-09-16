@@ -45,3 +45,25 @@ test('главная без входа показывает цены, получ
   await expect(offer).toContainText(/490\s₽ за один календарный месяц/);
   await expect(offer).not.toContainText('{{');
 });
+
+test('посетитель без аккаунта отвечает на баннер, и согласие уходит в журнал', async ({ page }) => {
+  await page.goto('/');
+
+  // Согласие посетителя — запись в журнал на сервере, а не только в браузере.
+  const consent = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/public/site-stats/consent') &&
+      response.request().method() === 'POST',
+  );
+  await page.getByRole('button', { name: 'Принять все' }).click();
+  expect((await consent).status()).toBe(204);
+  await expect(page.getByRole('button', { name: 'Принять все' })).toHaveCount(0);
+
+  // «Настройки cookie» в подвале отзывают согласие и снова показывают баннер.
+  const revoke = page.waitForResponse((response) =>
+    response.url().endsWith('/api/public/site-stats/consent/revoke'),
+  );
+  await page.getByRole('button', { name: 'Настройки cookie' }).click();
+  expect((await revoke).status()).toBe(204);
+  await expect(page.getByRole('button', { name: 'Принять все' })).toBeVisible();
+});

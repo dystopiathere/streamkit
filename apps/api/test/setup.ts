@@ -51,6 +51,8 @@ for (const key of [
   'SMTP_USER',
   'SMTP_PASSWORD',
   'MAIL_FROM',
+  'UMAMI_WEBSITE_ID',
+  'UMAMI_DATABASE_URL',
 ]) {
   delete process.env[key];
 }

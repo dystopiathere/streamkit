@@ -23,10 +23,13 @@ export const consentKeys = { all: ['privacy', 'consents'] as const };
  * баннер журнал не читал вовсе, и «Принять все» в нём не оставляло в журнале
  * никакого следа.
  */
-export function useConsents() {
+export function useConsents(enabled = true) {
   return useQuery({
     queryKey: consentKeys.all,
     queryFn: () => api.get<ConsentView[]>('/privacy/consents'),
+    // Баннер стоит и на публичных страницах: без входа журнала пользователя нет,
+    // и запрос ушёл бы в 401 с попыткой обновить несуществующую сессию.
+    enabled,
   });
 }
 

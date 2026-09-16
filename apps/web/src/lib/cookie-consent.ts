@@ -1,6 +1,11 @@
+import { VISITOR_CONSENT_TTL_DAYS } from '@streamkit/contracts';
 import { useSyncExternalStore } from 'react';
 
 const STORAGE_KEY = 'streamkit.cookie-choice';
+/** Когда сделан выбор: через год баннер спрашивает снова. */
+const CHOSEN_AT_KEY = 'streamkit.cookie-choice-at';
+const VISITOR_ID_KEY = 'streamkit.visitor-id';
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type CookieChoice = 'all' | 'necessary';
 
@@ -19,15 +24,48 @@ export const ANALYTICS_CONSENT = 'COOKIE_ANALYTICS';
  */
 const listeners = new Set<() => void>();
 
-export function readCookieChoice(): CookieChoice | null {
+/**
+ * Выбор старше года считается отсутствующим — баннер спросит снова.
+ *
+ * У посетителя без учётной записи нет раздела «Приватность», где он увидел бы
+ * своё давнее согласие, и молча продлевать его бессрочно нельзя. У вошедшего
+ * пользователя повторный вопрос не задаётся: сверка с журналом тут же вернёт
+ * «Принять все», если согласие в журнале действует. Выбор без даты сделан до её
+ * появления и считается действующим.
+ */
+export function readCookieChoice(now: number = Date.now()): CookieChoice | null {
   const stored = window.localStorage.getItem(STORAGE_KEY);
-  return stored === 'all' || stored === 'necessary' ? stored : null;
+  if (stored !== 'all' && stored !== 'necessary') return null;
+  const chosenAt = Date.parse(window.localStorage.getItem(CHOSEN_AT_KEY) ?? '');
+  if (Number.isFinite(chosenAt) && now - chosenAt > VISITOR_CONSENT_TTL_DAYS * DAY_MS) return null;
+  return stored;
 }
 
 export function writeCookieChoice(value: CookieChoice | null): void {
-  if (value === null) window.localStorage.removeItem(STORAGE_KEY);
-  else window.localStorage.setItem(STORAGE_KEY, value);
+  if (value === null) {
+    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(CHOSEN_AT_KEY);
+  } else if (value !== readCookieChoice()) {
+    // Дата — только при смене действующего выбора: сверка с журналом пишет то
+    // же значение при каждой загрузке и иначе продлевала бы срок бесконечно.
+    // Истёкший выбор действующим не считается, и новый ответ дату обновит.
+    window.localStorage.setItem(STORAGE_KEY, value);
+    window.localStorage.setItem(CHOSEN_AT_KEY, new Date().toISOString());
+  }
   for (const listener of listeners) listener();
+}
+
+/**
+ * Случайный идентификатор этого браузера для журнала согласий посетителей.
+ * Ни с учётной записью, ни со статистикой Umami он не связан.
+ */
+export function visitorId(): string {
+  let id = window.localStorage.getItem(VISITOR_ID_KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    window.localStorage.setItem(VISITOR_ID_KEY, id);
+  }
+  return id;
 }
 
 function subscribe(listener: () => void): () => void {
@@ -37,7 +75,11 @@ function subscribe(listener: () => void): () => void {
 
 /** Текущий выбор; компонент перерисуется, когда его поменяют где угодно. */
 export function useCookieChoice(): CookieChoice | null {
-  return useSyncExternalStore(subscribe, readCookieChoice, () => null);
+  return useSyncExternalStore(
+    subscribe,
+    () => readCookieChoice(),
+    () => null,
+  );
 }
 
 /**

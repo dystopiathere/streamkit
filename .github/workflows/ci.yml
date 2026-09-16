@@ -250,7 +250,10 @@ jobs:
 
       - name: Caddyfile
         run: |
+          # Хэш пароля stats.<домен> — настоящий bcrypt от пароля «ci»: пустой
+          # basic_auth не проходит проверку.
           docker run --rm -e DOMAIN=stream-kit.ru -e ACME_EMAIL=ci@stream-kit.ru -e LIVEKIT_PRIVATE_IP=10.10.0.20 \
+            -e 'STATS_BASIC_HASH=$2a$14$sJ1VWOJyolWws4klKNbf8uZtpC/Uh02TsKquLsS05A1p2rJJdg796' \
             -v "$PWD/infra/yandex-cloud/app/Caddyfile:/etc/caddy/Caddyfile:ro" \
             caddy:2.10.0 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 

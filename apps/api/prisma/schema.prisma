@@ -276,6 +276,24 @@ model GuestConsent {
   @@index([grantedAt])
 }
 
+/// Согласие анонимного посетителя публичных страниц на статистику посещений.
+///
+/// Отдельно от Consent по той же причине, что и GuestConsent: учётной записи
+/// нет. visitorId — случайный идентификатор, выпущенный браузером; он не
+/// связан ни с аккаунтом, ни с записями статистики в Umami.
+model VisitorConsent {
+  id              String    @id @default(uuid()) @db.Uuid
+  visitorId       String    @db.Uuid
+  documentVersion String
+  grantedAt       DateTime  @default(now())
+  revokedAt       DateTime?
+  ipHash          String?
+  userAgent       String?   @db.VarChar(512)
+
+  @@index([visitorId])
+  @@index([grantedAt])
+}
+
 /**
  * ------------------------------------------------------------------
  */

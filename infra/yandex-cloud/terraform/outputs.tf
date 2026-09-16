@@ -23,6 +23,11 @@ output "external_secret_id" {
   value       = yandex_lockbox_secret.external.id
 }
 
+output "app_secret_id" {
+  description = "Сгенерированные секреты приложения, в том числе пароль stats.<домен> (STATS_PASSWORD)"
+  value       = yandex_lockbox_secret.app.id
+}
+
 output "dns_name_servers" {
   description = "NS-серверы, которые нужно указать у регистратора домена"
   value       = ["ns1.yandexcloud.net.", "ns2.yandexcloud.net."]

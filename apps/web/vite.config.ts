@@ -20,6 +20,17 @@ export default defineConfig({
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
+      // Статистика посещений: в проде Umami отдаёт Caddy по префиксу /u. Для
+      // проверки счётчика в разработке — адрес локального Umami в UMAMI_DEV_URL.
+      ...(process.env.UMAMI_DEV_URL
+        ? {
+            '/u': {
+              target: process.env.UMAMI_DEV_URL,
+              changeOrigin: true,
+              rewrite: (path: string) => path.replace(/^\/u/, ''),
+            },
+          }
+        : {}),
     },
   },
 });
