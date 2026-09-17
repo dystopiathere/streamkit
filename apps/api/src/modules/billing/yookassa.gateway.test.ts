@@ -14,7 +14,7 @@ const config = {
   },
 } as AppConfig;
 
-/** Самозанятый: чек формирует ЮKassa через «Мой налог», а не касса по `receipt`. */
+/** Самозанятый: чек формирует ЮKassa, а не касса по `receipt`. */
 const selfEmployed = { billing: { ...config.billing!, receipts: 'none' } } as AppConfig;
 
 const PAYMENT = {
@@ -87,7 +87,7 @@ describe('клиент ЮKassa', () => {
 
   it('у самозанятого чек 54-ФЗ не передаётся', async () => {
     // Без подключённых «Чеков от ЮKassa» платёж с `receipt` отклоняется, а
-    // у самозанятого кассы нет — чек формирует интеграция ЮKassa с «Мой налог».
+    // у самозанятого кассы нет — чек формирует интеграция ЮKassa.
     const { http, requests } = recordingClient(PAYMENT);
     await new YooKassaGateway(http, selfEmployed).createPayment({
       ...base,
