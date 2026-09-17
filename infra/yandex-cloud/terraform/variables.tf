@@ -116,7 +116,7 @@ variable "valkey" {
 }
 
 variable "postbox_dkim" {
-  description = "Запись DKIM из консоли Postbox для домена отправителя: имя (с точкой в конце) и значение TXT. null — запись ещё не заведена"
+  description = "Запись DKIM из консоли Postbox для домена отправителя: полное имя (точку в конце dns.tf добавит сам) и значение TXT. null — запись ещё не заведена"
   type = object({
     name  = string
     value = string

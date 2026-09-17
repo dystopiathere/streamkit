@@ -41,11 +41,16 @@ resource "yandex_dns_recordset" "app" {
 # разбирает его как текст зоны, где `;` начинает комментарий: опубликовано было
 # одно «v=DKIM1», ключ отброшен, и Postbox двое суток не подтверждал домен. А
 # одна строка TXT длиннее 255 символов быть не может, ключ RSA 2048 — около 400.
+#
+# Имя — всегда полное, с точкой. Консоль Postbox показывает его без точки, а
+# Cloud DNS считает такое имя относительным и дописывает зону: запись с верным
+# ключом ушла на postbox._domainkey.stream-kit.ru.stream-kit.ru, а по нужному
+# адресу Postbox ничего не нашёл.
 resource "yandex_dns_recordset" "postbox_dkim" {
   count = var.postbox_dkim == null ? 0 : 1
 
   zone_id = yandex_dns_zone.main.id
-  name    = var.postbox_dkim.name
+  name    = "${trimsuffix(var.postbox_dkim.name, ".")}."
   type    = "TXT"
   ttl     = 3600
   data = [
@@ -53,6 +58,15 @@ resource "yandex_dns_recordset" "postbox_dkim" {
       for chunk in regexall(".{1,255}", var.postbox_dkim.value) : "\"${chunk}\""
     ])
   ]
+
+  lifecycle {
+    # Короткое имя вида «postbox._domainkey» после добавления точки стало бы
+    # записью в корне DNS, вне зоны.
+    precondition {
+      condition     = endswith(trimsuffix(var.postbox_dkim.name, "."), ".${var.domain}")
+      error_message = "postbox_dkim.name — полное имя из консоли Postbox, например postbox._domainkey.${var.domain}"
+    }
+  }
 }
 
 # TURN — на своём адресе: он занимает там порт 443.
