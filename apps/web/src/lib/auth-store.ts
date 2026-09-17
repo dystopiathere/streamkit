@@ -17,6 +17,8 @@ interface AuthState {
   isRestoring: boolean;
 
   setSession: (accessToken: string, user: PublicUser) => void;
+  /** Изменение профиля без новой сессии: токен тот же, меняются поля пользователя. */
+  patchUser: (patch: Partial<Omit<PublicUser, 'id'>>) => void;
   clearSession: () => void;
   setRestoring: (value: boolean) => void;
 }
@@ -32,6 +34,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const previous = get().user;
     if (previous && previous.id !== user.id) queryClient.clear();
     set({ accessToken, user, isRestoring: false });
+  },
+  patchUser: (patch) => {
+    const user = get().user;
+    if (user) set({ user: { ...user, ...patch } });
   },
   clearSession: () => {
     // Кэш запросов принадлежит пользователю: без очистки следующий вошедший в
