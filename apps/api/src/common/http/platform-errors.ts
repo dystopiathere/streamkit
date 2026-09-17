@@ -6,6 +6,12 @@
  * разным реакциям опроса и к трём разным сообщениям в дашборде.
  */
 export class PlatformError extends Error {
+  /**
+   * Причина отказа из тела ответа — только для площадок, которые умеют её
+   * безопасно извлечь (`PlatformRequest.describeError`). Попадает в журнал.
+   */
+  providerError?: Record<string, string>;
+
   constructor(
     readonly platform: string,
     readonly status: number,

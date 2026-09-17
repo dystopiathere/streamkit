@@ -52,6 +52,31 @@ const refundListSchema = z.object({
 
 const MAX_REFUND_PAGES = 10;
 
+/**
+ * Тело отказа ЮKassa: `{ type: "error", code, description, parameter }`.
+ *
+ * В журнал идут только эти три поля. Без них боевой отказ выглядел бы одним
+ * «ответила 403», а у ЮKassa за этим кодом разные вещи: неверный ключ, не
+ * подключённые автоплатежи (`save_payment_method`), чек без подключённой кассы.
+ */
+const yookassaErrorSchema = z.object({
+  type: z.literal('error'),
+  code: z.string().max(64).optional(),
+  description: z.string().optional(),
+  parameter: z.string().max(128).optional(),
+});
+
+export function describeYooKassaError(body: string): Record<string, string> | undefined {
+  const parsed = yookassaErrorSchema.safeParse(JSON.parse(body));
+  if (!parsed.success) return undefined;
+  const { code, description, parameter } = parsed.data;
+  return {
+    ...(code ? { code } : {}),
+    ...(description ? { description: description.slice(0, 300) } : {}),
+    ...(parameter ? { parameter } : {}),
+  };
+}
+
 /** Ответ «запрос с этим ключом ещё обрабатывается» — HTTP 202. */
 const processingSchema = z.object({ type: z.literal('processing'), retry_after: z.number() });
 
@@ -95,6 +120,7 @@ export class YooKassaGateway implements PaymentGateway {
     const settings = this.settings();
     const raw = await this.http.json<unknown>({
       platform: 'yookassa',
+      describeError: describeYooKassaError,
       url: `${settings.apiUrl}/payments/${encodeURIComponent(providerPaymentId)}`,
       basicAuth: { username: settings.shopId, password: settings.secretKey },
     });
@@ -120,6 +146,7 @@ export class YooKassaGateway implements PaymentGateway {
       const list = refundListSchema.parse(
         await this.http.json<unknown>({
           platform: 'yookassa',
+          describeError: describeYooKassaError,
           url: url.toString(),
           basicAuth: { username: settings.shopId, password: settings.secretKey },
         }),
@@ -178,6 +205,7 @@ export class YooKassaGateway implements PaymentGateway {
     for (let poll = 0; ; poll += 1) {
       const raw = await this.http.json<unknown>({
         platform: 'yookassa',
+        describeError: describeYooKassaError,
         url: `${settings.apiUrl}/payments`,
         method: 'POST',
         basicAuth: { username: settings.shopId, password: settings.secretKey },

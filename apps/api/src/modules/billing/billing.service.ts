@@ -256,12 +256,31 @@ export class BillingService {
         returnUrl: `${this.config.webBaseUrl.replace(/\/+$/, '')}/billing?payment=${payment.id}`,
       });
     } catch (error) {
-      this.logger.error({ err: error, paymentId: payment.id }, 'ЮKassa не создала платёж');
+      const rejected = error instanceof PlatformError && error.status >= 400 && error.status < 500;
+      this.logger.error(
+        {
+          err: error,
+          paymentId: payment.id,
+          ...(error instanceof PlatformError
+            ? { status: error.status, provider: error.providerError }
+            : {}),
+        },
+        'ЮKassa не создала платёж',
+      );
       await this.prisma.payment.updateMany({
         where: { id: payment.id, status: 'PENDING', providerPaymentId: null },
-        data: { status: 'CANCELED', cancellationReason: 'gateway_error' },
+        data: {
+          status: 'CANCELED',
+          cancellationReason: rejected ? 'gateway_rejected' : 'gateway_error',
+        },
       });
-      throw new ServiceUnavailableException('Платёжный сервис не ответил. Попробуйте ещё раз.');
+      // Отказ ЮKassa — не «не ответил»: повтор получит тот же отказ, и совет
+      // «попробуйте ещё раз» только гоняет человека по кругу.
+      throw new ServiceUnavailableException(
+        rejected
+          ? 'Оплата сейчас недоступна: платёжный сервис отклонил запрос. Мы уже разбираемся — попробуйте позже.'
+          : 'Платёжный сервис не ответил. Попробуйте ещё раз.',
+      );
     }
 
     await this.prisma.payment.update({
@@ -752,6 +771,10 @@ export class BillingService {
       // получит тот же отказ. Сеть и 5xx оставляют запись висеть: дочистка
       // повторит с тем же ключом.
       if (error instanceof PlatformError && error.status >= 400 && error.status < 500) {
+        this.logger.error(
+          { paymentId: row.id, status: error.status, provider: error.providerError },
+          'ЮKassa отклонила продление',
+        );
         const claimed = await this.prisma.payment.updateMany({
           where: { id: row.id, status: 'PENDING' },
           data: { status: 'CANCELED', cancellationReason: 'gateway_rejected' },
