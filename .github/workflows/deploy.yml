@@ -73,8 +73,11 @@ jobs:
         run: |
           set -euo pipefail
           echo "$REGISTRY_KEY" | docker login --username json_key --password-stdin cr.yandex
-          for image in api migrate web overlay; do
-            docker manifest inspect "${REGISTRY}/streamkit-${image}:${TAG}" >/dev/null ||
+          # imagetools, а не `docker manifest inspect`: тот не читает манифесты
+          # OCI и объявлял отсутствующим образ, который в реестре есть, — выкатка
+          # падала на пустом месте.
+          for image in api migrate web overlay admin; do
+            docker buildx imagetools inspect "${REGISTRY}/streamkit-${image}:${TAG}" >/dev/null ||
               { echo "Нет образа streamkit-${image}:${TAG} — выпуск ещё не собран?" >&2; exit 1; }
           done
 
@@ -128,3 +131,8 @@ jobs:
           curl -fsSI "https://${DOMAIN}/widgets" | grep -i '^content-security-policy:' >/dev/null
           # Реквизиты продавца заполнены — без них модерация ЮKassa и оферта не пройдут.
           curl -fsS "https://api.${DOMAIN}/api/public/seller" | jq -e '.name and .inn and .email' >/dev/null
+          # Админка снаружи закрыта: без пароля Caddy — 401, админское API без
+          # пропуска — 404. Сертификат для admin выпускается при первом
+          # обращении, поэтому запрос повторяется.
+          test "$(curl -s -o /dev/null -w '%{http_code}' --retry 5 --retry-all-errors --retry-delay 3 "https://admin.${DOMAIN}/")" = 401
+          test "$(curl -s -o /dev/null -w '%{http_code}' "https://api.${DOMAIN}/api/admin/auth/me")" = 404
