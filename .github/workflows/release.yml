@@ -54,6 +54,16 @@ jobs:
               APP=overlay
               VITE_API_URL=${{ vars.PUBLIC_API_URL }}
               CSP_CONNECT_EXTRA=
+          # Ссылка на статистику посещений — необязательная переменная
+          # репозитория; без неё в обзоре админки ссылки просто нет.
+          - image: admin
+            file: infra/docker/web.Dockerfile
+            target: runtime
+            build-args: |
+              APP=admin
+              VITE_API_URL=${{ vars.PUBLIC_API_URL }}
+              VITE_STATS_URL=${{ vars.PUBLIC_STATS_URL }}
+              CSP_CONNECT_EXTRA=
     steps:
       - uses: actions/checkout@v7
         with:

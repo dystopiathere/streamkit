@@ -132,6 +132,7 @@ yc lockbox secret add-version --id <external_secret_id> --payload '[
 | Secret | `YC_REGISTRY_KEY` | содержимое файла из `yc iam key create --service-account-id $(terraform output -raw ci_pusher_service_account_id) -o registry-key.json` |
 | Variable | `YC_REGISTRY` | `terraform output -raw registry` |
 | Variable | `PUBLIC_API_URL` | `https://api.stream-kit.ru` |
+| Variable | `PUBLIC_STATS_URL` | `https://stats.stream-kit.ru` — необязательно: ссылка из админки на статистику посещений |
 
 **Settings → Environments → `production`** (там же — обязательное подтверждение
 выкатки, если нужно):
@@ -159,7 +160,7 @@ failed». Администратор входит на ВМ как `ops`.
 ## 6. Выпуск и выкатка
 
 1. Слияние в `main` → CI → workflow **«Выпуск образов»** публикует
-   `streamkit-api`, `-migrate`, `-web`, `-overlay` с тегом sha коммита и копирует
+   `streamkit-api`, `-migrate`, `-web`, `-overlay`, `-admin` с тегом sha коммита и копирует
    Caddy, LiveKit и lego в `mirror/`.
 2. **Actions → «Выкатка» → Run workflow**: `tag` — полный sha, `target` — `all`
    на первой выкатке, дальше обычно `app`.
@@ -206,9 +207,30 @@ failed». Администратор входит на ВМ как `ops`.
   ```bash
   cd /opt/streamkit
   docker compose --env-file infra.env --env-file release.env --env-file stats.env \
-    run --rm --no-deps --entrypoint node_modules/.bin/prisma umami \
+    --env-file admin.env run --rm --no-deps --entrypoint node_modules/.bin/prisma umami \
     migrate resolve --rolled-back 01_init
   ```
+- **Админка** — `https://admin.stream-kit.ru`. Два рубежа: пароль Caddy и вход
+  сотрудника с кодом из приложения-аутентификатора.
+  1. Пароль Caddy (пользователь `owner`). Пока он не введён, админское API на
+     `api.` отвечает 404:
+     ```bash
+     yc lockbox payload get --id $(terraform output -raw app_secret_id) --key ADMIN_PASSWORD
+     ```
+  2. Зарегистрируйтесь в дашборде и включите двухфакторный вход в разделе
+     «Приватность».
+  3. Назначьте себя админом на ВМ приложений. Через интерфейс это сделать
+     некому, пока админа нет:
+     ```bash
+     cd /opt/streamkit
+     docker compose --env-file infra.env --env-file release.env --env-file stats.env \
+       --env-file admin.env run --rm --no-deps api node dist/scripts/grant-role.js <почта> admin
+     ```
+  4. Войдите на `admin.stream-kit.ru` почтой, паролем и кодом. Остальным
+     сотрудникам роль выдаётся уже в админке, и назначение попадает в журнал.
+
+  Пароль Caddy меняется так: `terraform apply -replace=random_password.admin_password`,
+  затем выкатка. Выданные пропуски при этом гаснут.
 - **Twitch** и **Google Cloud (YouTube)**: redirect URI
   `https://api.stream-kit.ru/api/integrations/twitch/callback` и
   `https://api.stream-kit.ru/api/integrations/youtube/callback`.
@@ -224,6 +246,9 @@ failed». Администратор входит на ВМ как `ops`.
 - Тестовая оплата в тестовом магазине ЮKassa; в логах воркера
   (`docker compose logs worker` на ВМ) нет ошибок продления.
 - Чат Twitch в виджете идёт — значит, воркер жив и держит соединение.
+- Админка закрыта снаружи: `curl -I https://admin.stream-kit.ru` отвечает 401,
+  а `curl -s -o /dev/null -w '%{http_code}' https://api.stream-kit.ru/api/admin/auth/me`
+  без пропуска — 404.
 
 ## Что проверить на первой выкатке — написано по документации
 

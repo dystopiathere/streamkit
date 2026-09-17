@@ -42,6 +42,13 @@ resource "random_password" "stats_password" {
   special = false
 }
 
+# Пароль Caddy перед admin.<домен>: админка и её API не видны снаружи, пока
+# он не введён. Вход сотрудника (пароль и код) — поверх него, в самом API.
+resource "random_password" "admin_password" {
+  length  = 24
+  special = false
+}
+
 resource "random_password" "livekit_api_key" {
   length  = 16
   special = false
@@ -107,6 +114,10 @@ resource "yandex_lockbox_secret_version" "app" {
   entries {
     key        = "STATS_PASSWORD"
     text_value = random_password.stats_password.result
+  }
+  entries {
+    key        = "ADMIN_PASSWORD"
+    text_value = random_password.admin_password.result
   }
 }
 

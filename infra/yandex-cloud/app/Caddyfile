@@ -67,6 +67,33 @@ stats.{$DOMAIN} {
 	}
 }
 
+# Административная панель. Схема та же, что у stats: пароль один раз, дальше
+# пропуск — cookie. Отличие одно: cookie ставится на весь домен, потому что
+# проверяет её и блок api ниже — админское API без пропуска снаружи не видно.
+# Вход сотрудника (пароль и код) — поверх, в самом API.
+#
+# Своего Authorization статика админки не шлёт, так что окно пароля по кругу,
+# как у Umami, здесь не возникает; route — ради порядка cookie после пароля.
+admin.{$DOMAIN} {
+	import common
+
+	@admin_pass expression `{cookie.admin_gate} != "" && {cookie.admin_gate} == "{$ADMIN_GATE_TOKEN}"`
+	handle @admin_pass {
+		header +Set-Cookie "admin_gate={$ADMIN_GATE_TOKEN}; Domain={$DOMAIN}; Path=/; Max-Age=43200; Secure; HttpOnly; SameSite=Strict"
+		reverse_proxy admin:80
+	}
+
+	handle {
+		route {
+			basic_auth {
+				owner {$ADMIN_BASIC_HASH}
+			}
+			header +Set-Cookie "admin_gate={$ADMIN_GATE_TOKEN}; Domain={$DOMAIN}; Path=/; Max-Age=43200; Secure; HttpOnly; SameSite=Strict"
+			reverse_proxy admin:80
+		}
+	}
+}
+
 www.{$DOMAIN} {
 	redir https://{$DOMAIN}{uri} permanent
 }
@@ -86,6 +113,18 @@ api.{$DOMAIN} {
 	# каждая поддельная подпись — строка в журнале аудита: таблицу можно было
 	# раздувать бесконечно с любого адреса.
 	respond /api/livekit/webhook 404
+
+	# Админское API — только с пропуском admin.<домен>. Без него 404, как
+	# будто ручек нет: перебирать пароли сотрудников снаружи не на чем.
+	# Предварительный запрос CORS cookie не несёт по правилам браузера, поэтому
+	# OPTIONS пропускается — он ничего не делает, кроме ответа заголовками.
+	@admin_api_closed {
+		path /api/admin/*
+		not method OPTIONS
+		not expression `{cookie.admin_gate} != "" && {cookie.admin_gate} == "{$ADMIN_GATE_TOKEN}"`
+	}
+	respond @admin_api_closed 404
+
 	reverse_proxy api:3000
 }
 

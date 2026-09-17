@@ -10,10 +10,10 @@
 | `docker/compose.dev.yml` | PostgreSQL, Redis, LiveKit (`--dev`) и Mailpit (письма на :8025) для локальной разработки |
 | `docker/compose.yml` | Полный стек: то же, что поедет в прод |
 | `docker/api.Dockerfile` | Образ API и воркера — один код, разные команды |
-| `docker/web.Dockerfile` | Статика дашборда и оверлея, выбор через `--build-arg APP` |
+| `docker/web.Dockerfile` | Статика дашборда, оверлея и админки, выбор через `--build-arg APP` |
 | `docker/nginx.conf` | Отдача статики |
 | `docker/security-headers.conf` | Заголовки безопасности и CSP — подключаются в КАЖДЫЙ `location` со своим `add_header` |
-| `docker/permissions-*.conf` | Permissions-Policy по приложению: дашборду камера и микрофон, оверлею — нет |
+| `docker/permissions-*.conf` | Permissions-Policy по приложению: дашборду камера и микрофон, оверлею и админке — нет |
 | `livekit/README.md` | Медиасервер комнат: конфигурация в `LIVEKIT_CONFIG` внутри compose |
 | `yandex-cloud/terraform` | Облако прода: сеть, ВМ, управляемые PostgreSQL и Valkey, реестр, Lockbox, DNS |
 | `yandex-cloud/app` | Compose, Caddyfile и скрипт выкатки ВМ приложений |
@@ -42,6 +42,11 @@
   deploy.sh в окружение API не пускает. После пароля пропуск — httpOnly-cookie
   `stats_gate`: заголовок `Authorization` занят токеном самого Umami.
   Выдача cookie — внутри `route`, строго после `basic_auth`.
+- **Админка — два рубежа.** `admin.<домен>` за `basic_auth` с пропуском
+  `admin_gate` на весь домен, и блок `api.<домен>` без этого пропуска отвечает
+  404 на `/api/admin/*` — кроме `OPTIONS`: предварительный запрос CORS cookie не
+  несёт. Пароль — `ADMIN_PASSWORD` в секрете приложения; deploy.sh считает хэш
+  и пропуск той же функцией, что для `stats`, и в окружение API пароль не пускает.
 - **Расширения PostgreSQL — только блоком `extension` в Terraform.** Владелец базы
   в управляемом кластере их не включает: Umami на `CREATE EXTENSION pgcrypto`
   падал при старте.

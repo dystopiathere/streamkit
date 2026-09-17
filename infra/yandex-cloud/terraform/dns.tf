@@ -18,6 +18,8 @@ locals {
     "rtc.${var.domain}."     = local.app_public_ip
     # Интерфейс статистики посещений (Umami) за паролем Caddy.
     "stats.${var.domain}." = local.app_public_ip
+    # Административная панель, тоже за паролем Caddy.
+    "admin.${var.domain}." = local.app_public_ip
   }
 }
 
