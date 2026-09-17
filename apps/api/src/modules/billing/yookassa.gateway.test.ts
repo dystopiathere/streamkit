@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { HttpClient, PlatformRequest } from '../../common/http/http-client.service';
 import type { AppConfig } from '../../config/app-config.service';
-import { YooKassaGateway } from './yookassa.gateway';
+import { describeYooKassaError, YooKassaGateway } from './yookassa.gateway';
 
 const config = {
   billing: {
@@ -180,5 +180,27 @@ describe('уведомления ЮKassa и лимиты запросов', () =
         true,
       );
     }
+  });
+});
+
+describe('отказ ЮKassa в журнале', () => {
+  it('берёт из тела только код, описание и параметр', () => {
+    const body = JSON.stringify({
+      type: 'error',
+      id: 'err-1',
+      code: 'forbidden',
+      description: 'Saving payment methods is not allowed for this shop',
+      parameter: 'save_payment_method',
+      request: { authorization: 'Basic c2VjcmV0' },
+    });
+    expect(describeYooKassaError(body)).toEqual({
+      code: 'forbidden',
+      description: 'Saving payment methods is not allowed for this shop',
+      parameter: 'save_payment_method',
+    });
+  });
+
+  it('чужой формат не разбирает', () => {
+    expect(describeYooKassaError(JSON.stringify({ error: 'x' }))).toBeUndefined();
   });
 });

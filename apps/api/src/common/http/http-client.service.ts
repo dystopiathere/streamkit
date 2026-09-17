@@ -27,6 +27,15 @@ export interface PlatformRequest {
    * магазина и секретный ключ). В логи не попадает, как и `accessToken`.
    */
   basicAuth?: { username: string; password: string };
+  /**
+   * Извлечь из тела ошибки поля, которые можно писать в журнал.
+   *
+   * Тело целиком в журнал не идёт (эхо запроса), и без этого отказ платёжного
+   * API оставлял в проде одно «ответила 403»: причина была только на уровне
+   * debug. Извлекатель знает формат своей площадки и берёт из него код и
+   * описание — без заголовков и данных запроса.
+   */
+  describeError?: (body: string) => Record<string, string> | undefined;
 }
 
 /**
@@ -118,12 +127,16 @@ export class HttpClient {
       'Площадка ответила ошибкой',
     );
 
+    throw withProviderError(this.errorFor(request, response, detail), request, detail);
+  }
+
+  private errorFor(request: PlatformRequest, response: Response, detail: string): PlatformError {
     // Причина разбирается ДО проверки на 401/403: Google отвечает 403 и на
     // отозванный доступ, и на исчерпанную квоту, а это противоположные реакции —
     // «переподключите площадку» против «вернёмся завтра».
     const quota = quotaReason(response.status, detail);
     if (quota) {
-      throw new PlatformQuotaError(
+      return new PlatformQuotaError(
         request.platform,
         response.status,
         'Квота площадки исчерпана',
@@ -132,22 +145,37 @@ export class HttpClient {
     }
 
     if (response.status === 401 || response.status === 403) {
-      throw new PlatformAuthError(request.platform, response.status, 'Площадка отвергла токен');
+      return new PlatformAuthError(request.platform, response.status, 'Площадка отвергла токен');
     }
     if (response.status === 429) {
-      throw new PlatformRateLimitError(
+      return new PlatformRateLimitError(
         request.platform,
         429,
         'Лимит запросов площадки исчерпан',
         retryAfterMs(response.headers.get('retry-after')),
       );
     }
-    throw new PlatformError(
+    return new PlatformError(
       request.platform,
       response.status,
       `Площадка ответила ${response.status}`,
     );
   }
+}
+
+function withProviderError(
+  error: PlatformError,
+  request: PlatformRequest,
+  detail: string,
+): PlatformError {
+  if (request.describeError) {
+    try {
+      error.providerError = request.describeError(detail);
+    } catch {
+      // Неразборчивое тело не должно подменять собой настоящую ошибку.
+    }
+  }
+  return error;
 }
 
 /** Причины, которыми Google помечает исчерпание квоты и лимита частоты. */

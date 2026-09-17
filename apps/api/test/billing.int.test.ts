@@ -14,6 +14,7 @@ import {
 } from '@streamkit/contracts';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { PlatformAuthError } from '../src/common/http/platform-errors';
 import { MAILER, type MailMessage, type Mailer } from '../src/common/mail/mailer';
 import { BillingService } from '../src/modules/billing/billing.service';
 import { MaintenanceModule } from '../src/modules/maintenance/maintenance.module';
@@ -41,6 +42,8 @@ class FakeGateway implements PaymentGateway {
   gets = 0;
   failGet = false;
   failCreate = false;
+  /** Отказ ЮKassa (4xx), а не сбой связи: так отвечает боевой магазин без автоплатежей. */
+  rejectCreate = false;
   /** Чем ответит следующее списание по сохранённому способу. */
   chargeOutcome: { status: 'succeeded' } | { status: 'canceled'; reason: string } = {
     status: 'succeeded',
@@ -53,6 +56,7 @@ class FakeGateway implements PaymentGateway {
 
   async createPayment(request: CreatePaymentRequest): Promise<ProviderPayment> {
     if (this.failCreate) throw new Error('ЮKassa недоступна');
+    if (this.rejectCreate) throw new PlatformAuthError('yookassa', 403, 'Площадка отвергла токен');
     this.created.push(request);
     const existing = this.byIdempotenceKey(request.paymentId);
     if (existing) return { ...existing };
@@ -134,6 +138,7 @@ class FakeGateway implements PaymentGateway {
     this.gets = 0;
     this.failGet = false;
     this.failCreate = false;
+    this.rejectCreate = false;
     this.chargeOutcome = { status: 'succeeded' };
   }
 }
@@ -304,6 +309,21 @@ describe('Подписка на платформу (feature)', () => {
       where: { userId: owner.userId },
     });
     expect(payment).toMatchObject({ status: 'CANCELED', cancellationReason: 'gateway_error' });
+  });
+
+  it('отказ ЮKassa при оформлении не выдаётся за «не ответил»', async () => {
+    const owner = await streamer();
+    gateway.rejectCreate = true;
+    const response = await request(server())
+      .post('/api/billing/checkout')
+      .set(auth(owner.token))
+      .send({ period: 'month', acceptOffer: true })
+      .expect(503);
+    expect(response.body.message).toMatch(/отклонил/);
+    const payment = await harness.prisma.payment.findFirstOrThrow({
+      where: { userId: owner.userId },
+    });
+    expect(payment).toMatchObject({ status: 'CANCELED', cancellationReason: 'gateway_rejected' });
   });
 
   /* ---------------------------------------------------------------- */

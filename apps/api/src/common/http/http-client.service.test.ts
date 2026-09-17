@@ -1,5 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { backoffMs, isRetryable, quotaReason, retryAfterMs } from './http-client.service';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  backoffMs,
+  HttpClient,
+  isRetryable,
+  quotaReason,
+  retryAfterMs,
+} from './http-client.service';
+import { PlatformAuthError, PlatformError } from './platform-errors';
 
 describe('повтор запросов к площадке', () => {
   it('повторяет серверные ошибки', () => {
@@ -105,5 +112,45 @@ describe('причина отказа 403', () => {
     // 429 и так означает лимит частоты, и у него есть Retry-After —
     // эта ветка его потеряла бы.
     expect(quotaReason(429, quotaBody)).toBeNull();
+  });
+});
+
+describe('причина отказа в ошибке', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('прикрепляет к ошибке то, что извлекла площадка, и не повторяет 4xx', async () => {
+    const fetchMock = vi.fn(async () => new Response('{"code":"forbidden"}', { status: 403 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const error = await new HttpClient()
+      .json({
+        platform: 'yookassa',
+        url: 'https://yookassa.test/v3/payments',
+        describeError: (body) => ({ code: (JSON.parse(body) as { code: string }).code }),
+      })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(PlatformAuthError);
+    expect((error as PlatformError).providerError).toEqual({ code: 'forbidden' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('неразборчивое тело не подменяет собой ошибку площадки', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('<html>', { status: 400 })),
+    );
+
+    const error = await new HttpClient()
+      .json({
+        platform: 'yookassa',
+        url: 'https://yookassa.test/v3/payments',
+        describeError: (body) => JSON.parse(body) as Record<string, string>,
+      })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(PlatformError);
+    expect((error as PlatformError).status).toBe(400);
+    expect((error as PlatformError).providerError).toBeUndefined();
   });
 });
