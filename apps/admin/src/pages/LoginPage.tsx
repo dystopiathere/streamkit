@@ -2,7 +2,6 @@ import {
   Button,
   Card,
   describeField,
-  FieldError,
   FieldHint,
   Input,
   Label,
@@ -85,14 +84,17 @@ export function LoginPage(): React.JSX.Element {
               pattern="\s*(\d\s*){6}"
               required
               className="mt-1 tracking-widest tabular-nums"
-              {...describeField('totpCode', { hint: true, error: error ?? undefined })}
+              {...describeField('totpCode', { hint: true })}
             />
             <FieldHint id="totpCode">{t('login.totpHint')}</FieldHint>
           </div>
+          {/* Ошибка — всей форме, а не полю кода: сервер одним ответом отказывает
+              и за пароль, и за код, и за отсутствие роли. Под полем кода она
+              выглядела как «код не подошёл». */}
           {error ? (
-            <div role="alert">
-              <FieldError id="totpCode" message={error} />
-            </div>
+            <p role="alert" className="text-sm text-danger">
+              {error}
+            </p>
           ) : null}
           <Button type="submit" isLoading={pending}>
             {t('login.submit')}

@@ -34,7 +34,7 @@ NestJS 11 (Express), Prisma 7 + PostgreSQL, ioredis, Socket.IO + redis-adapter,
 | `src/modules/privacy` | Согласия, выгрузка и удаление данных |
 | `src/modules/maintenance` | Регулярная уборка по расписанию |
 | `src/modules/admin` | Админка: вход сотрудника, блокировка и роли, списки объектов, статистика платформы |
-| `src/scripts` | Скрипты для ВМ: `grant-role` назначает первого админа |
+| `src/scripts` | Скрипты для ВМ: `grant-role` назначает первого админа, `admin-status` показывает, почему сотрудник не входит |
 
 ## Ключевые решения
 
