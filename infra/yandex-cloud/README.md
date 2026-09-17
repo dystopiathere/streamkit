@@ -119,7 +119,13 @@ yc lockbox secret add-version --id <external_secret_id> --payload '[
 2. Консоль покажет TXT-запись. Перенесите имя и значение в `terraform.tfvars`
    (`postbox_dkim`, пример — в `terraform.tfvars.example`) и выполните
    `terraform apply`.
-3. Дождитесь статуса «подтверждён» у адреса в Postbox.
+3. Дождитесь статуса «подтверждён» у адреса в Postbox. Значение в
+   `terraform.tfvars` — одной строкой, как в консоли, без кавычек: кавычки и
+   разбиение по 255 символов добавит Terraform. Проверка, что ключ опубликован
+   целиком, а не только `v=DKIM1`:
+   ```bash
+   nslookup -type=TXT postbox._domainkey.stream-kit.ru ns1.yandexcloud.net
+   ```
 
 До подтверждения письма не уходят, и воркер пишет об этом в лог.
 

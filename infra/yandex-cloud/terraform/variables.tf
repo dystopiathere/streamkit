@@ -122,4 +122,11 @@ variable "postbox_dkim" {
     value = string
   })
   default = null
+
+  # Значение — как показывает консоль, одной строкой и без кавычек: кавычки и
+  # разбиение на части добавляет dns.tf.
+  validation {
+    condition     = var.postbox_dkim == null || (!strcontains(var.postbox_dkim.value, "\"") && startswith(var.postbox_dkim.value, "v=DKIM1"))
+    error_message = "postbox_dkim.value — строка из консоли Postbox вида v=DKIM1;...;p=..., без кавычек."
+  }
 }

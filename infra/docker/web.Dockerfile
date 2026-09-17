@@ -54,8 +54,11 @@ COPY apps/web/ apps/web/
 COPY apps/overlay/ apps/overlay/
 COPY apps/admin/ apps/admin/
 
-RUN pnpm --filter @streamkit/contracts build \
-    && pnpm --filter @streamkit/ui build \
+# Сначала все пакеты, от которых зависит приложение (`^...` — зависимости без
+# самого приложения, в порядке зависимостей), потом оно само. Перечисление
+# пакетов руками уже подвело: новый app-kit в список не попал, и дашборд с
+# админкой не собрались.
+RUN pnpm --filter "@streamkit/${APP}^..." build \
     && pnpm --filter @streamkit/${APP} build
 
 # Кладём результат в фиксированный путь, чтобы финальный слой не зависел от APP.
