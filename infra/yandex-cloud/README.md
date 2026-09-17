@@ -165,6 +165,11 @@ ssh-keyscan -t ed25519 <app_ip> <livekit_ip>   # сверить с выводо�
 секрет собирается заново, иначе выкатка остановится на «Host key verification
 failed». Администратор входит на ВМ как `ops`.
 
+Файлы окружения в `/opt/streamkit` выкатка пишет с правами `600` от имени
+`deploy`: в них секреты. Поэтому команды `docker compose` на ВМ запускаются
+от его имени — `sudo -u deploy docker compose ...`. Без `sudo -u deploy`
+команда упадёт на «open /opt/streamkit/release.env: permission denied».
+
 ## 6. Выпуск и выкатка
 
 1. Слияние в `main` → CI → workflow **«Выпуск образов»** публикует
@@ -217,7 +222,7 @@ failed». Администратор входит на ВМ как `ops`.
 
   ```bash
   cd /opt/streamkit
-  docker compose --env-file infra.env --env-file release.env --env-file stats.env \
+  sudo -u deploy docker compose --env-file infra.env --env-file release.env --env-file stats.env \
     --env-file admin.env run --rm --no-deps --entrypoint node_modules/.bin/prisma umami \
     migrate resolve --rolled-back 01_init
   ```
@@ -234,11 +239,20 @@ failed». Администратор входит на ВМ как `ops`.
      некому, пока админа нет:
      ```bash
      cd /opt/streamkit
-     docker compose --env-file infra.env --env-file release.env --env-file stats.env \
+     sudo -u deploy docker compose --env-file infra.env --env-file release.env --env-file stats.env \
        --env-file admin.env run --rm --no-deps api node dist/scripts/grant-role.js <почта> admin
      ```
   4. Войдите на `admin.stream-kit.ru` почтой, паролем и кодом. Остальным
      сотрудникам роль выдаётся уже в админке, и назначение попадает в журнал.
+  5. Вход отказал? Ответ один на все причины — неверный пароль, код или
+     отсутствие роли. Точную причину покажет журнал:
+     ```bash
+     sudo -u deploy docker compose --env-file infra.env --env-file release.env --env-file stats.env \
+       --env-file admin.env run --rm --no-deps api node dist/scripts/admin-status.js <почта>
+     ```
+     Если отказ за код, а часы телефона верны: в приложении могла остаться
+     запись от прежнего нажатия «Включить» — каждое выпускает новый ключ.
+     Выключите 2FA в дашборде и включите заново, удалив старую запись.
 
   Пароль Caddy меняется так: `terraform apply -replace=random_password.admin_password`,
   затем выкатка. Выданные пропуски при этом гаснут.
@@ -255,7 +269,7 @@ failed». Администратор входит на ВМ как `ops`.
 - Комната: гость **с телефона по мобильному интернету, Wi-Fi выключен** — видео
   доходит до оверлея. Это проверка TURN, адреса узла и портов разом.
 - Тестовая оплата в тестовом магазине ЮKassa; в логах воркера
-  (`docker compose logs worker` на ВМ) нет ошибок продления.
+  (`sudo -u deploy docker compose logs worker` на ВМ) нет ошибок продления.
 - Чат Twitch в виджете идёт — значит, воркер жив и держит соединение.
 - Админка закрыта снаружи: `curl -I https://admin.stream-kit.ru` отвечает 401,
   а `curl -s -o /dev/null -w '%{http_code}' https://api.stream-kit.ru/api/admin/auth/me`
