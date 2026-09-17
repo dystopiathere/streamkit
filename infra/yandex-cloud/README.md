@@ -118,7 +118,9 @@ yc lockbox secret add-version --id <external_secret_id> --payload '[
    выпуска; ключ храните вне репозитория).
 2. Консоль покажет TXT-запись. Перенесите имя и значение в `terraform.tfvars`
    (`postbox_dkim`, пример — в `terraform.tfvars.example`) и выполните
-   `terraform apply`.
+   `terraform apply`. Запись заводит только Terraform: не создавайте её в
+   консоли DNS и не нажимайте «Создать в Cloud DNS» в Postbox — `terraform
+   apply` упадёт на существующей записи с тем же именем.
 3. Дождитесь статуса «подтверждён» у адреса в Postbox. Значение в
    `terraform.tfvars` — одной строкой, как в консоли, без кавычек: кавычки и
    разбиение по 255 символов добавит Terraform. Проверка, что ключ опубликован
