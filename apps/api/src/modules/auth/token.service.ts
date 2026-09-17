@@ -1,11 +1,23 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import type { User } from '@prisma/client';
+import type { SessionScope, User } from '@prisma/client';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
+import { ADMIN_AUDIENCE } from '../../common/auth/access-token';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AppConfig } from '../../config/app-config.service';
+
+/**
+ * Срок админского access-токена.
+ *
+ * Короче, чем у дашборда: токен сотрудника открывает чужие аккаунты, и окно, в
+ * котором утёкший токен работает без обновления, должно быть маленьким.
+ */
+export const ADMIN_ACCESS_TTL_SECONDS = 300;
+
+/** Сессия админки живёт рабочий день, а не месяц, как в дашборде. */
+export const ADMIN_REFRESH_TTL_MS = 12 * 60 * 60 * 1000;
 
 export interface IssuedTokens {
   accessToken: string;
@@ -43,16 +55,30 @@ export class TokenService {
     return this.config.refreshTtlMs;
   }
 
-  async issueAccessToken(user: Pick<User, 'id' | 'email'>): Promise<string> {
-    return this.jwt.signAsync({ sub: user.id, email: user.email }, { expiresIn: this.accessTtl });
+  ttlFor(scope: SessionScope): number {
+    return scope === 'ADMIN' ? ADMIN_ACCESS_TTL_SECONDS : this.accessTtl;
+  }
+
+  async issueAccessToken(
+    user: Pick<User, 'id' | 'email'>,
+    scope: SessionScope = 'USER',
+  ): Promise<string> {
+    return this.jwt.signAsync(
+      { sub: user.id, email: user.email },
+      {
+        expiresIn: this.ttlFor(scope),
+        ...(scope === 'ADMIN' ? { audience: ADMIN_AUDIENCE } : {}),
+      },
+    );
   }
 
   /** Новая сессия: новое семейство refresh-токенов. */
   async startSession(
     user: Pick<User, 'id' | 'email'>,
     context: AuditContext = {},
+    scope: SessionScope = 'USER',
   ): Promise<IssuedTokens> {
-    return this.issuePair(user, randomUUID(), context);
+    return this.issuePair(user, randomUUID(), context, scope);
   }
 
   /**
@@ -65,6 +91,7 @@ export class TokenService {
   async rotate(
     rawToken: string,
     context: AuditContext = {},
+    scope: SessionScope = 'USER',
   ): Promise<IssuedTokens & { user: User }> {
     const tokenHash = this.crypto.hashToken(rawToken);
     const record = await this.prisma.refreshToken.findUnique({
@@ -72,7 +99,9 @@ export class TokenService {
       include: { user: true },
     });
 
-    if (!record) {
+    // Токен другой сессии — как несуществующий. Погасить его нельзя: его
+    // владелец не виноват, что значение предъявили не туда.
+    if (!record || record.scope !== scope) {
       throw new UnauthorizedException('Сессия недействительна');
     }
 
@@ -93,6 +122,12 @@ export class TokenService {
       throw new UnauthorizedException('Учётная запись недоступна');
     }
 
+    // Снятая роль закрывает админку при следующем же обновлении.
+    if (scope === 'ADMIN' && record.user.role === 'USER') {
+      await this.revokeFamily(record.familyId);
+      throw new UnauthorizedException('Доступ к админке закрыт');
+    }
+
     const claimed = await this.prisma.refreshToken.updateMany({
       where: { id: record.id, revokedAt: null },
       data: { revokedAt: new Date(), lastUsedAt: new Date() },
@@ -108,7 +143,7 @@ export class TokenService {
       throw new UnauthorizedException('Сессия недействительна');
     }
 
-    const issued = await this.issuePair(record.user, record.familyId, context);
+    const issued = await this.issuePair(record.user, record.familyId, context, scope);
     await this.prisma.refreshToken.update({
       where: { id: record.id },
       data: { replacedById: issued.refreshTokenId },
@@ -121,9 +156,11 @@ export class TokenService {
     user: Pick<User, 'id' | 'email'>,
     familyId: string,
     context: AuditContext,
+    scope: SessionScope,
   ): Promise<IssuedTokens & { refreshTokenId: string }> {
     const rawRefresh = this.crypto.generateToken(32);
-    const refreshExpiresAt = new Date(Date.now() + this.refreshTtlMs);
+    const ttl = scope === 'ADMIN' ? ADMIN_REFRESH_TTL_MS : this.refreshTtlMs;
+    const refreshExpiresAt = new Date(Date.now() + ttl);
 
     const created = await this.prisma.refreshToken.create({
       data: {
@@ -133,13 +170,14 @@ export class TokenService {
         userAgent: context.userAgent ?? null,
         ipHash: context.ipHash ?? null,
         expiresAt: refreshExpiresAt,
+        scope,
       },
       select: { id: true },
     });
 
     return {
-      accessToken: await this.issueAccessToken(user),
-      expiresIn: this.accessTtl,
+      accessToken: await this.issueAccessToken(user, scope),
+      expiresIn: this.ttlFor(scope),
       refreshToken: rawRefresh,
       refreshExpiresAt,
       refreshTokenId: created.id,
@@ -173,11 +211,41 @@ export class TokenService {
   /**
    * Активные сессии пользователя. Группируем по семейству: одно семейство —
    * одно устройство, сколько бы ротаций внутри него ни произошло.
+   *
+   * В дашборде — только сессии дашборда: вход в админку стример и сотрудник
+   * видят и гасят в админке.
    */
-  async listSessions(userId: string, currentRawToken?: string) {
+  async listSessions(userId: string, currentRawToken?: string, scope: SessionScope = 'USER') {
     const currentHash = currentRawToken ? this.crypto.hashToken(currentRawToken) : null;
+    return (await this.activeFamilies(userId, scope)).map((token) => ({
+      id: token.familyId,
+      createdAt: token.createdAt.toISOString(),
+      lastUsedAt: token.lastUsedAt.toISOString(),
+      userAgent: token.userAgent,
+      ipHash: token.ipHash,
+      isCurrent: currentHash !== null && token.tokenHash === currentHash,
+    }));
+  }
+
+  /** Все живые сессии пользователя обеих областей — для карточки в админке. */
+  async listAllSessions(userId: string) {
+    return (await this.activeFamilies(userId)).map((token) => ({
+      id: token.familyId,
+      scope: token.scope === 'ADMIN' ? ('admin' as const) : ('user' as const),
+      createdAt: token.createdAt.toISOString(),
+      lastUsedAt: token.lastUsedAt.toISOString(),
+      userAgent: token.userAgent,
+    }));
+  }
+
+  private async activeFamilies(userId: string, scope?: SessionScope) {
     const tokens = await this.prisma.refreshToken.findMany({
-      where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
+      where: {
+        userId,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+        ...(scope ? { scope } : {}),
+      },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -188,15 +256,7 @@ export class TokenService {
         byFamily.set(token.familyId, token);
       }
     }
-
-    return [...byFamily.values()].map((token) => ({
-      id: token.familyId,
-      createdAt: token.createdAt.toISOString(),
-      lastUsedAt: token.lastUsedAt.toISOString(),
-      userAgent: token.userAgent,
-      ipHash: token.ipHash,
-      isCurrent: currentHash !== null && token.tokenHash === currentHash,
-    }));
+    return [...byFamily.values()];
   }
 
   /** Удаление протухших записей. Вызывается по расписанию из worker. */

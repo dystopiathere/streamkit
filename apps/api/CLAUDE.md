@@ -18,7 +18,7 @@ NestJS 11 (Express), Prisma 7 + PostgreSQL, ioredis, Socket.IO + redis-adapter,
 |---|---|
 | `src/config` | Схема окружения (Zod), типизированный `AppConfig`, поиск файлов `.env` |
 | `src/common/crypto` | AES-256-GCM, хэши токенов, argon2id для паролей |
-| `src/common/auth` | Глобальный guard, декораторы `@Public`, `@CurrentUser` |
+| `src/common/auth` | Глобальный guard, `AdminGuard`, декораторы `@Public`, `@CurrentUser`, `@AdminApi`, `@RequireRole` |
 | `src/common/bus` | Шина реального времени поверх Redis pub/sub |
 | `src/common/audit` | Журнал событий безопасности |
 | `src/modules/auth` | Регистрация, вход, ротация refresh, TOTP, сессии |
@@ -33,6 +33,8 @@ NestJS 11 (Express), Prisma 7 + PostgreSQL, ioredis, Socket.IO + redis-adapter,
 | `src/common/http` | Клиент внешних API: таймаут, повторы, разбор отказов по смыслу |
 | `src/modules/privacy` | Согласия, выгрузка и удаление данных |
 | `src/modules/maintenance` | Регулярная уборка по расписанию |
+| `src/modules/admin` | Админка: вход сотрудника, блокировка и роли, списки объектов, статистика платформы |
+| `src/scripts` | Скрипты для ВМ: `grant-role` назначает первого админа |
 
 ## Ключевые решения
 
@@ -114,6 +116,28 @@ NestJS 11 (Express), Prisma 7 + PostgreSQL, ioredis, Socket.IO + redis-adapter,
   касается и базы Umami: у него самого удаления старых данных нет, и таблицы
   событий перечислены в `SITE_STATS_EVENT_TABLES` — при обновлении Umami их
   сверить.
+
+- **Админка — отдельная сессия.** Токен с аудиторией `streamkit-admin` живёт
+  5 минут, refresh — своя cookie на `/api/admin/auth`, семейство с
+  `scope = ADMIN`. Глобальный guard пускает админский токен только на
+  `@AdminApi()`, токен дашборда — только на остальное. Роль и статус
+  сотрудника читает `AdminGuard` из БД на каждый запрос; ручка без
+  `@RequireRole` требует `admin`, и таблица в `admin.controller.test.ts`
+  должна знать о каждой новой ручке.
+- **Сотрудник меняет чужое через сервисы владельца** (`widgets.revokeOverlayToken(ownerId, …)`),
+  а не своими запросами к БД: иначе у отзыва из админки не было бы следствий
+  отзыва из дашборда. Автор — `AuditContext.actorId`, он доезжает до записей
+  аудита этих сервисов.
+- **Блокировка — пять следствий, и все в `AccountStatusService.suspend`:**
+  статус и сессии, отметка `auth:blocked:<id>` для живых access-токенов,
+  отключение сокетов дашборда, обрыв оверлеев (`owner-suspended`), опустошение
+  комнат. Статус владельца проверяют ещё `resolveOverlayToken`,
+  `roomsAccess` и `renewDue`.
+- **Админка не видит имён и сообщений донатеров, ников и имён гостей** —
+  только числа (соглашение, раздел 13). Интеграционный тест ищет имя
+  донатера в ответах карточки и статистики.
+- **`contains` в Prisma не экранирует `%` и `_`.** Поиск из админки проходит
+  через `escapeLike`, иначе «_» находил каждого.
 
 ## Проверка
 

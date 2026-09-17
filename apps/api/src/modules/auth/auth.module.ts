@@ -23,6 +23,6 @@ import { TotpService } from './totp.service';
   ],
   controllers: [AuthController],
   providers: [AuthService, TokenService, TotpService],
-  exports: [AuthService, TokenService],
+  exports: [AuthService, TokenService, TotpService],
 })
 export class AuthModule {}

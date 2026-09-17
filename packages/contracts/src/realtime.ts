@@ -101,8 +101,20 @@ export const widgetStateMessageSchema = z.object({
 });
 export type WidgetStateMessage = z.infer<typeof widgetStateMessageSchema>;
 
+/**
+ * Причины отзыва ссылки. `owner-suspended` — аккаунт владельца заблокирован:
+ * оверлей закрывает соединение так же, как при отзыве, и после разблокировки
+ * источник в OBS нужно обновить.
+ */
+export const OVERLAY_REVOKE_REASONS = [
+  'token-revoked',
+  'widget-deleted',
+  'owner-suspended',
+] as const;
+export type OverlayRevokeReason = (typeof OVERLAY_REVOKE_REASONS)[number];
+
 export const revokedMessageSchema = z.object({
-  reason: z.enum(['token-revoked', 'widget-deleted']),
+  reason: z.enum(OVERLAY_REVOKE_REASONS),
 });
 export type RevokedMessage = z.infer<typeof revokedMessageSchema>;
 

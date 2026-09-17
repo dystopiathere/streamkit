@@ -18,5 +18,6 @@ import { RoomsService } from './rooms.service';
   imports: [WidgetsModule, RoomMediaModule, BillingModule],
   controllers: [RoomsController, OverlayRoomController, LiveKitWebhookController],
   providers: [RoomsService, LiveKitTokens, LiveKitWebhooks],
+  exports: [RoomsService],
 })
 export class RoomsModule {}

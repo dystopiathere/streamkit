@@ -33,6 +33,21 @@ const SYNC_STATE_FROM_PRISMA: Record<PrismaSyncState, ChannelSyncState> = {
   ERROR: 'error',
 };
 
+const SYNC_STATE_TO_PRISMA: Record<ChannelSyncState, PrismaSyncState> = {
+  ok: PrismaSyncState.OK,
+  'auth-expired': PrismaSyncState.AUTH_EXPIRED,
+  'rate-limited': PrismaSyncState.RATE_LIMITED,
+  error: PrismaSyncState.ERROR,
+};
+
+export function toContractSyncState(state: PrismaSyncState): ChannelSyncState {
+  return SYNC_STATE_FROM_PRISMA[state];
+}
+
+export function toPrismaSyncState(state: ChannelSyncState): PrismaSyncState {
+  return SYNC_STATE_TO_PRISMA[state];
+}
+
 /** Площадки, по которым есть сбор метрик. Ими фильтруются выборки аналитики. */
 export const ANALYTICS_PLATFORMS: PrismaPlatform[] = Object.values(PLATFORM_TO_PRISMA);
 

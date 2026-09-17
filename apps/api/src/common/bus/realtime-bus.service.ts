@@ -3,6 +3,7 @@ import type {
   AlertEvent,
   ChannelStats,
   ChatMessage,
+  OverlayRevokeReason,
   WidgetConfig,
   WidgetState,
 } from '@streamkit/contracts';
@@ -23,8 +24,11 @@ export type BusMessage =
   // Чат адресуется КАНАЛОМ, а не пользователем: комната доставки общая на
   // канал, и раскладывать сообщение по виджетам на каждой реплике не нужно.
   | { kind: 'chat'; message: ChatMessage }
-  | { kind: 'overlay-revoked'; tokenId: string; reason: 'token-revoked' | 'widget-deleted' }
-  | { kind: 'analytics'; userId: string; channelId: string; stats: ChannelStats };
+  | { kind: 'overlay-revoked'; tokenId: string; reason: OverlayRevokeReason }
+  | { kind: 'analytics'; userId: string; channelId: string; stats: ChannelStats }
+  // Аккаунт заблокирован: открытые вкладки дашборда отключаются, а не
+  // досматривают ленту событий до конца срока токена.
+  | { kind: 'user-suspended'; userId: string };
 
 /**
  * Шина реального времени поверх Redis pub/sub.

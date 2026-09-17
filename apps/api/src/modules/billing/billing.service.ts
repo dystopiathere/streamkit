@@ -126,7 +126,7 @@ export class BillingService {
         ? { amountMinor: row.renewalAmountMinor, currency: row.renewalCurrency as 'RUB' }
         : null,
       paymentMethodTitle: row?.paymentMethodTitle ?? null,
-      roomsAccess: !this.configured || hasRoomsAccess(status),
+      roomsAccess: await this.roomsAccess(userId, now),
       billingConfigured: this.configured,
     };
   }
@@ -138,12 +138,18 @@ export class BillingService {
    * установке, где продавать некому.
    */
   async roomsAccess(userId: string, now = new Date()): Promise<boolean> {
-    if (!this.configured) return true;
-    const row = await this.prisma.subscription.findUnique({
-      where: { userId },
-      select: { currentPeriodEnd: true, autoRenew: true },
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        status: true,
+        subscription: { select: { currentPeriodEnd: true, autoRenew: true } },
+      },
     });
-    return hasRoomsAccess(subscriptionStatus(row, now));
+    // Заблокированному аккаунту комнаты закрыты при любой подписке: гость и
+    // оверлей получают отказ при входе, а вебхук выгоняет вошедших раньше.
+    if (!user || user.status !== 'ACTIVE') return false;
+    if (!this.configured) return true;
+    return hasRoomsAccess(subscriptionStatus(user.subscription, now));
   }
 
   async requireRoomsAccess(userId: string): Promise<void> {
@@ -483,6 +489,62 @@ export class BillingService {
     return this.subscription(userId);
   }
 
+  /**
+   * Бесплатные дни от платформы — например, в компенсацию сбоя.
+   *
+   * Платежа не создаётся: денег не было. Отметка письма о списании
+   * сбрасывается — конец периода сдвинулся, и прежнее письмо называло другую
+   * дату. Новое уйдёт по обычному расписанию, и без него списания не будет.
+   */
+  async extend(
+    userId: string,
+    days: number,
+    context: AuditContext = {},
+    now = new Date(),
+  ): Promise<SubscriptionView> {
+    await this.prisma.$transaction(async (tx) => {
+      // Строка подписки блокируется: параллельное применение платежа тоже
+      // сдвигает конец периода, и одно из двух продлений потерялось бы.
+      const [locked] = await tx.$queryRaw<Array<{ id: string; currentPeriodEnd: Date | null }>>`
+        SELECT "id", "currentPeriodEnd" FROM "Subscription" WHERE "userId" = ${userId}::uuid FOR UPDATE`;
+      const from =
+        locked?.currentPeriodEnd && locked.currentPeriodEnd > now ? locked.currentPeriodEnd : now;
+      const end = new Date(from.getTime() + days * DAY_MS);
+
+      if (locked) {
+        await tx.subscription.update({
+          where: { id: locked.id },
+          data: {
+            currentPeriodEnd: end,
+            renewalFailures: 0,
+            nextRenewalAttemptAt: null,
+            renewalNoticeFor: null,
+            renewalNoticeSentAt: null,
+          },
+        });
+      } else {
+        // Без подписки — месячная без автопродления: списывать нечем и не на
+        // что, согласия на списания пользователь не давал.
+        await tx.subscription.create({
+          data: {
+            userId,
+            period: 'MONTH',
+            currentPeriodEnd: end,
+            autoRenew: false,
+            renewalAmountMinor: PLAN_PRICES.month.amountMinor,
+            renewalCurrency: PLAN_PRICES.month.currency,
+          },
+        });
+      }
+    });
+
+    await this.audit.record('admin.subscription.extended', userId, {
+      ...context,
+      metadata: { ...context.metadata, days },
+    });
+    return this.subscription(userId, now);
+  }
+
   /* ---------------------------------------------------------------- */
   /* Продление — вызывается планировщиком воркера                       */
   /* ---------------------------------------------------------------- */
@@ -575,6 +637,8 @@ export class BillingService {
     const due = await this.prisma.subscription.findMany({
       where: {
         autoRenew: true,
+        // Заблокированному не списываем: пользоваться оплаченным он не может.
+        user: { status: 'ACTIVE' },
         paymentMethodEncrypted: { not: null },
         currentPeriodEnd: { lte: new Date(now.getTime() + RENEW_AHEAD_MS) },
         OR: [{ nextRenewalAttemptAt: null }, { nextRenewalAttemptAt: { lte: now } }],
@@ -819,7 +883,7 @@ function describe(period: BillingPeriod): string {
     : 'Подписка StreamKit «Про» на 1 месяц';
 }
 
-function toPaymentView(row: Payment): PaymentView {
+export function toPaymentView(row: Payment): PaymentView {
   return {
     id: row.id,
     amountMinor: row.amountMinor,

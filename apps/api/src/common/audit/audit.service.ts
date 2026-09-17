@@ -41,9 +41,30 @@ export type AuditAction =
   | 'integration.connected'
   | 'integration.disconnected'
   | 'integration.token.expired'
-  | 'integration.state.invalid';
+  | 'integration.state.invalid'
+  | 'admin.login.success'
+  | 'admin.login.failed'
+  | 'admin.logout'
+  | 'admin.user.viewed'
+  | 'admin.user.suspended'
+  | 'admin.user.restored'
+  | 'admin.user.anonymized'
+  | 'admin.role.changed'
+  | 'admin.sessions.revoked'
+  | 'admin.totp.reset'
+  | 'admin.widget.disabled'
+  | 'admin.widget.enabled'
+  | 'admin.subscription.extended'
+  | 'admin.channel.resync'
+  | 'admin.payment.synced';
 
 export interface AuditContext {
+  /**
+   * Сотрудник, действующий над чужим аккаунтом. Пусто — действует сам владелец.
+   * Передаётся дальше в сервисы вместе с контекстом запроса, поэтому их
+   * собственные записи (отзыв ссылки, удаление комнаты) тоже получают автора.
+   */
+  actorId?: string | null;
   ipHash?: string | null;
   userAgent?: string | null;
   metadata?: Record<string, unknown>;
@@ -72,6 +93,7 @@ export class AuditService {
         data: {
           action,
           userId,
+          actorId: context.actorId ?? null,
           ipHash: context.ipHash ?? null,
           userAgent: context.userAgent ?? null,
           metadata: (context.metadata ?? undefined) as never,

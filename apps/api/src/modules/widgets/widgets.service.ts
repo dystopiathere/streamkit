@@ -6,6 +6,7 @@ import {
   type CreatedOverlayToken,
   type CreateWidgetInput,
   overlayIdentity,
+  type OverlayRevokeReason,
   type OverlayTokenView,
   type UpdateWidgetInput,
   type Widget,
@@ -274,10 +275,13 @@ export class WidgetsService {
   async resolveOverlayToken(rawToken: string): Promise<ResolvedOverlayToken | null> {
     const row = await this.prisma.overlayToken.findUnique({
       where: { tokenHash: this.crypto.hashToken(rawToken) },
-      include: { widget: true },
+      include: { widget: { include: { user: { select: { status: true } } } } },
     });
 
     if (!row || row.revokedAt) return null;
+    // Ссылки заблокированного аккаунта не отзываются — после разблокировки они
+    // снова работают, — но и не открываются, пока блокировка действует.
+    if (row.widget.user.status !== 'ACTIVE') return null;
 
     return {
       tokenId: row.id,
@@ -287,6 +291,43 @@ export class WidgetsService {
       isEnabled: row.widget.isEnabled,
       widget: parseWidgetConfig(row.widget.type, row.widget.config),
     };
+  }
+
+  /** Живые ссылки всех виджетов владельца. */
+  async activeOverlayTokenIds(userId: string): Promise<string[]> {
+    const tokens = await this.prisma.overlayToken.findMany({
+      where: { revokedAt: null, widget: { userId } },
+      select: { id: true },
+    });
+    return tokens.map((token) => token.id);
+  }
+
+  /**
+   * Оборвать открытые оверлеи владельца: сокеты и подключения к комнатам.
+   *
+   * Запись в БД здесь не меняется — это делает вызывающий (отзыв при
+   * обезличивании) или статус владельца (блокировка). Без этого шага открытая в
+   * OBS сцена продолжала бы показывать алерты и гостей до перезапуска.
+   */
+  async disconnectOverlays(
+    userId: string,
+    tokenIds: string[],
+    reason: OverlayRevokeReason,
+  ): Promise<void> {
+    if (tokenIds.length === 0) return;
+    const widgets = await this.prisma.widget.findMany({
+      where: { userId, tokens: { some: { id: { in: tokenIds } } } },
+      include: { tokens: { where: { id: { in: tokenIds } }, select: { id: true } } },
+    });
+
+    for (const widget of widgets) {
+      const ids = widget.tokens.map((token) => token.id);
+      for (const tokenId of ids) {
+        await this.bus.publish({ kind: 'overlay-revoked', tokenId, reason });
+      }
+      const room = guestsRoomOf(widget);
+      if (room) await this.evictOverlays(room, ids);
+    }
   }
 
   /** Отметка активности — в дашборде видно, подключён ли оверлей к OBS. */

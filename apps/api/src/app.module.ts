@@ -10,6 +10,7 @@ import { PrismaModule } from './common/prisma/prisma.module';
 import { REDIS_CLIENT, RedisModule } from './common/redis/redis.module';
 import { AppConfig } from './config/app-config.service';
 import { AppConfigModule } from './config/config.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { EventsModule } from './modules/events/events.module';
@@ -85,6 +86,7 @@ import { BillingModule } from './modules/billing/billing.module';
     // чтение метрик. Долгоживущие соединения поднимает воркер.
     IntegrationsModule,
     AnalyticsModule,
+    AdminModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -58,6 +58,10 @@ export function toPrismaProvider(provider: EventProvider): PrismaProvider {
   return PROVIDER_TO_PRISMA[provider];
 }
 
+export function toContractProvider(provider: PrismaProvider): EventProvider {
+  return PROVIDER_FROM_PRISMA[provider];
+}
+
 /**
  * Строка БД → контракт. Сумма собирается обратно в объект `Money`; поля
  * `amountMinor` и `currency` заполнены либо оба, либо ни одного — это инвариант,
