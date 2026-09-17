@@ -6,8 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Полный sha коммита из main, образы которого опубликованы
-        required: true
+        description: Полный sha коммита из main. Пусто — последний выпущенный
+        required: false
+        default: ''
         type: string
       target:
         description: Что выкатывать
@@ -21,6 +22,8 @@ on:
 
 permissions:
   contents: read
+  # Чтение прогонов «Выпуска образов» — для тега по умолчанию.
+  actions: read
 
 # Две выкатки одновременно на одни ВМ — это миграции наперегонки.
 concurrency:
@@ -29,34 +32,59 @@ concurrency:
 
 jobs:
   deploy:
-    name: Выкатка ${{ inputs.target }} ${{ inputs.tag }}
+    name: Выкатка ${{ inputs.target }} ${{ inputs.tag || 'последнего выпуска' }}
     runs-on: ubuntu-latest
     # Окружение production на GitHub: здесь секреты выкатки и, при желании,
     # обязательное подтверждение вторым человеком.
     environment: production
     steps:
-      # Тег приходит строкой из формы и идёт в команду на сервере — проверяется
-      # до всякого использования.
-      - name: Проверка тега
+      # По умолчанию — последний коммит main, для которого выпуск образов
+      # действительно собрал образы. Не голова main: её выпуск может ещё идти,
+      # а прогон выпуска после упавшего CI тоже «успешен» — все его задания
+      # пропущены. Откат — явным тегом.
+      # Тег из формы идёт в команду на сервере — проверяется до всякого
+      # использования.
+      - name: Тег
+        id: tag
         env:
-          TAG: ${{ inputs.tag }}
+          INPUT: ${{ inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          if [[ ! $TAG =~ ^[0-9a-f]{40}$ ]]; then
-            echo "Тег должен быть полным sha коммита: $TAG" >&2
+          set -euo pipefail
+          sha=$INPUT
+          if [[ -z $sha ]]; then
+            runs=$(gh api "repos/${GH_REPO}/actions/workflows/release.yml/runs?branch=main&status=success&per_page=30" \
+              --jq '.workflow_runs[] | "\(.id) \(.head_sha)"')
+            while read -r id head; do
+              built=$(gh api "repos/${GH_REPO}/actions/runs/${id}/jobs" \
+                --jq '[.jobs[] | select(.conclusion == "success" and (.name | startswith("Образ ")))] | length')
+              if (( built > 0 )); then sha=$head; break; fi
+            done <<< "$runs"
+            if [[ -z $sha ]]; then
+              echo "Не нашлось выпуска с собранными образами — укажите тег явно" >&2
+              exit 1
+            fi
+            echo "Последний выпуск: $sha"
+          fi
+          if [[ ! $sha =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Тег должен быть полным sha коммита: $sha" >&2
             exit 1
           fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Выкатывается \`$sha\`" >> "$GITHUB_STEP_SUMMARY"
 
       # Файлы выкатки — из того же коммита, что и образы: compose.yml и скрипты
       # выпуска должны совпадать с кодом, который они запускают.
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ steps.tag.outputs.sha }}
           # Полная история — для проверки, что коммит входит в main.
           fetch-depth: 0
 
       - name: Коммит из main
         env:
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ steps.tag.outputs.sha }}
         run: |
           git fetch --no-tags origin main
           if ! git merge-base --is-ancestor "$TAG" origin/main; then
@@ -68,7 +96,7 @@ jobs:
         if: inputs.target != 'livekit'
         env:
           REGISTRY: ${{ vars.YC_REGISTRY }}
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ steps.tag.outputs.sha }}
           REGISTRY_KEY: ${{ secrets.YC_REGISTRY_KEY }}
         run: |
           set -euo pipefail
@@ -97,7 +125,7 @@ jobs:
         if: inputs.target == 'app' || inputs.target == 'all'
         env:
           HOST: ${{ vars.APP_HOST }}
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ steps.tag.outputs.sha }}
         run: |
           set -euo pipefail
           ssh_opts=(-i ~/.ssh/deploy -o StrictHostKeyChecking=yes)
