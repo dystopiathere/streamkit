@@ -197,6 +197,79 @@ importers:
         specifier: ^8.70.0
         version: 8.70.0(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
 
+  apps/admin:
+    dependencies:
+      '@streamkit/app-kit':
+        specifier: workspace:*
+        version: link:../../packages/app-kit
+      '@streamkit/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@tanstack/react-query':
+        specifier: ^5.102.8
+        version: 5.102.8(react@19.3.0)
+      i18next:
+        specifier: ^26.4.2
+        version: 26.4.2(typescript@5.9.3)
+      lucide-react:
+        specifier: ^1.45.0
+        version: 1.45.0(react@19.3.0)
+      react:
+        specifier: ^19.3.0
+        version: 19.3.0
+      react-dom:
+        specifier: ^19.3.0
+        version: 19.3.0(react@19.3.0)
+      react-i18next:
+        specifier: ^17.0.13
+        version: 17.0.13(i18next@26.4.2(typescript@5.9.3))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@5.9.3)
+      react-router-dom:
+        specifier: ^7.18.3
+        version: 7.18.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      recharts:
+        specifier: ^3.10.1
+        version: 3.10.1(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react-is@19.3.0)(react@19.3.0)(redux@5.0.1)
+      sonner:
+        specifier: ^2.0.8
+        version: 2.0.8(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      zustand:
+        specifier: ^5.0.15
+        version: 5.0.15(@types/react@19.3.0)(immer@11.1.18)(react@19.3.0)(use-sync-external-store@1.7.0(react@19.3.0))
+    devDependencies:
+      '@streamkit/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@tailwindcss/vite':
+        specifier: ^4.3.3
+        version: 4.3.3(vite@8.3.0(@types/node@26.5.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13))
+      '@testing-library/react':
+        specifier: ^16.3.3
+        version: 16.3.3(@testing-library/dom@10.4.1)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@types/react':
+        specifier: ^19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.3.0
+        version: 19.3.0(@types/react@19.3.0)
+      '@vitejs/plugin-react':
+        specifier: ^6.1.1
+        version: 6.1.1(vite@8.3.0(@types/node@26.5.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13))
+      jsdom:
+        specifier: '>=30'
+        version: 30.0.1(@noble/hashes@2.4.0)
+      tailwindcss:
+        specifier: ^4.3.3
+        version: 4.3.3
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^8.3.0
+        version: 8.3.0(@types/node@26.5.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)
+      vitest:
+        specifier: ^5.0.0
+        version: 5.0.0(@types/node@26.5.1)(jsdom@30.0.1(@noble/hashes@2.4.0))(vite@8.3.0(@types/node@26.5.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13))
+
   apps/api:
     dependencies:
       '@nest-lab/throttler-storage-redis':
@@ -405,6 +478,9 @@ importers:
       '@livekit/components-react':
         specifier: 2.9.24
         version: 2.9.24(livekit-client@2.22.3(@types/dom-mediacapture-record@1.0.22))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(tslib@2.8.1)
+      '@streamkit/app-kit':
+        specifier: workspace:*
+        version: link:../../packages/app-kit
       '@streamkit/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -514,9 +590,67 @@ importers:
       ioredis:
         specifier: ^6.0.0
         version: 6.0.0(supports-color@8.1.1)
+      otplib:
+        specifier: ^13.5.0
+        version: 13.5.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  packages/app-kit:
+    dependencies:
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      tailwind-merge:
+        specifier: ^3.6.0
+        version: 3.6.0
+    devDependencies:
+      '@streamkit/config':
+        specifier: workspace:*
+        version: link:../config
+      '@testing-library/react':
+        specifier: ^16.3.3
+        version: 16.3.3(@testing-library/dom@10.4.1)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@types/react':
+        specifier: ^19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.3.0
+        version: 19.3.0(@types/react@19.3.0)
+      i18next:
+        specifier: ^26.4.2
+        version: 26.4.2(typescript@5.9.3)
+      jsdom:
+        specifier: '>=30'
+        version: 30.0.1(@noble/hashes@2.4.0)
+      lucide-react:
+        specifier: ^1.45.0
+        version: 1.45.0(react@19.3.0)
+      react:
+        specifier: ^19.3.0
+        version: 19.3.0
+      react-dom:
+        specifier: ^19.3.0
+        version: 19.3.0(react@19.3.0)
+      react-i18next:
+        specifier: ^17.0.13
+        version: 17.0.13(i18next@26.4.2(typescript@5.9.3))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@5.9.3)
+      react-router-dom:
+        specifier: ^7.18.3
+        version: 7.18.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      recharts:
+        specifier: ^3.10.1
+        version: 3.10.1(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react-is@19.3.0)(react@19.3.0)(redux@5.0.1)
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(@swc/core@1.16.2)(jiti@2.7.0)(postcss@8.5.28)(supports-color@8.1.1)(tsx@4.23.13)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^5.0.0
+        version: 5.0.0(@types/node@26.5.1)(jsdom@30.0.1(@noble/hashes@2.4.0))(vite@8.3.0(@types/node@26.5.1)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13))
 
   packages/config: {}
 

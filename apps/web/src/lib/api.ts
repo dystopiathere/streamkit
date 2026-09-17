@@ -1,133 +1,17 @@
+import { createApiClient } from '@streamkit/app-kit';
+import type { PublicUser } from '@streamkit/contracts';
 import { API_BASE } from './config';
 import { useAuthStore } from './auth-store';
 
-export class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-    readonly details?: Array<{ path: string; message: string }>,
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
+export { ApiError } from '@streamkit/app-kit';
 
-interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
-  body?: unknown;
-  /** Внутренний флаг: запрос уже повторялся после обновления токена. */
-  retried?: boolean;
-}
-
-/**
- * Единственное место, где происходит обновление access-токена.
- *
- * Промис обновления кэшируется: при загрузке страницы уходит сразу несколько
- * запросов, и без кэша каждый 401 запустил бы свой `/auth/refresh`. Параллельные
- * обновления гасят друг друга — сервер считает переиспользованием токена
- * второе обращение и выкидывает пользователя из аккаунта.
- */
-type RefreshOutcome = 'refreshed' | 'rejected' | 'unavailable';
-
-let refreshPromise: Promise<RefreshOutcome> | null = null;
-
-/**
- * Между вкладками — по очереди.
- *
- * Кэш промиса выше живёт в одной вкладке. Браузер, восстановивший сессию с
- * дашбордом и комнатой в двух вкладках, отправлял два обновления с одной и той же
- * cookie разом, сервер видел повторное предъявление токена и гасил сессию
- * целиком. Под общей блокировкой вторая вкладка ждёт первую и идёт уже с новой
- * cookie: хранилище cookie у вкладок общее.
- */
-async function acrossTabs<T>(task: () => Promise<T>): Promise<T> {
-  if (typeof navigator === 'undefined' || !navigator.locks) return task();
-  return navigator.locks.request('streamkit:auth-refresh', task);
-}
-
-async function refreshAccessToken(): Promise<RefreshOutcome> {
-  refreshPromise ??= (async () => {
-    try {
-      const response = await acrossTabs(() =>
-        fetch(`${API_BASE}/auth/refresh`, { method: 'POST', credentials: 'include' }),
-      );
-      // Разлогинивает только отказ по самой сессии. 429 и 5xx — это «сейчас не
-      // вышло», а не «сессии нет»: выкидывать человека из аккаунта из-за
-      // перегруженного API или лимита на общий IP нельзя.
-      if (response.status === 401 || response.status === 403) return 'rejected';
-      if (!response.ok) return 'unavailable';
-
-      const data = (await response.json()) as { accessToken: string; user: unknown };
-      useAuthStore.getState().setSession(data.accessToken, data.user as never);
-      return 'refreshed';
-    } catch {
-      return 'unavailable';
-    } finally {
-      // Сбрасываем в микротаске, чтобы все ожидающие успели получить результат.
-      queueMicrotask(() => {
-        refreshPromise = null;
-      });
-    }
-  })();
-
-  return refreshPromise;
-}
-
-export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, retried = false } = options;
-  const accessToken = useAuthStore.getState().accessToken;
-
-  const response = await fetch(`${API_BASE}${path}`, {
-    method,
-    // credentials нужны только ради refresh-cookie; она уходит лишь на /auth/*,
-    // потому что Path у неё узкий.
-    credentials: 'include',
-    headers: {
-      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-    },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-  });
-
-  if (response.status === 401 && !retried) {
-    const outcome = await refreshAccessToken();
-    if (outcome === 'refreshed') {
-      return apiRequest<T>(path, { ...options, retried: true });
-    }
-    if (outcome === 'rejected') {
-      useAuthStore.getState().clearSession();
-    } else {
-      throw new ApiError(503, 'Сервис временно недоступен, попробуйте ещё раз');
-    }
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  const payload = (await response.json().catch(() => null)) as {
-    message?: string;
-    errors?: Array<{ path: string; message: string }>;
-  } | null;
-
-  if (!response.ok) {
-    throw new ApiError(
-      response.status,
-      payload?.message ?? 'Не удалось выполнить запрос',
-      payload?.errors,
-    );
-  }
-
-  return payload as T;
-}
-
-export const api = {
-  get: <T>(path: string) => apiRequest<T>(path),
-  post: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'POST', body }),
-  patch: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'PATCH', body }),
-  // DELETE с телом нужен там, где удаление требует явного подтверждения
-  // (удаление аккаунта): подтверждение не должно уезжать в строку запроса.
-  delete: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'DELETE', body }),
-  /** Восстановление сессии при загрузке страницы: access-токен живёт только в памяти. */
-  restoreSession: async (): Promise<boolean> => (await refreshAccessToken()) === 'refreshed',
-};
+export const api = createApiClient<PublicUser>({
+  baseUrl: API_BASE,
+  refreshPath: '/auth/refresh',
+  lockName: 'streamkit:auth-refresh',
+  session: {
+    getToken: () => useAuthStore.getState().accessToken,
+    setSession: (accessToken, user) => useAuthStore.getState().setSession(accessToken, user),
+    clearSession: () => useAuthStore.getState().clearSession(),
+  },
+});

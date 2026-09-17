@@ -224,7 +224,7 @@ jobs:
       ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcyEhISE=
       IP_HASH_PEPPER: test-pepper-for-ci
       TOKEN_HASH_PEPPER: test-token-pepper-for-ci
-      CORS_ORIGINS: http://localhost:5173,http://localhost:5174
+      CORS_ORIGINS: http://localhost:5173,http://localhost:5174,http://localhost:5175
       OVERLAY_BASE_URL: http://localhost:5174
       VITE_API_URL: http://localhost:3000
 
@@ -340,15 +340,17 @@ jobs:
 
       - name: Caddyfile
         run: |
-          # Хэш пароля stats.<домен> — настоящий bcrypt от пароля «ci»: пустой
-          # basic_auth не проходит проверку.
+          # Хэш пароля stats.<домен> и admin.<домен> — настоящий bcrypt от пароля
+          # «ci»: пустой basic_auth не проходит проверку.
           docker run --rm -e DOMAIN=stream-kit.ru -e ACME_EMAIL=ci@stream-kit.ru -e LIVEKIT_PRIVATE_IP=10.10.0.20 \
             -e 'STATS_BASIC_HASH=$2a$14$sJ1VWOJyolWws4klKNbf8uZtpC/Uh02TsKquLsS05A1p2rJJdg796' \
             -e STATS_GATE_TOKEN=ci-gate \
+            -e 'ADMIN_BASIC_HASH=$2a$14$sJ1VWOJyolWws4klKNbf8uZtpC/Uh02TsKquLsS05A1p2rJJdg796' \
+            -e ADMIN_GATE_TOKEN=ci-admin-gate \
             -v "$PWD/infra/yandex-cloud/app/Caddyfile:/etc/caddy/Caddyfile:ro" \
             caddy:2.10.0 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
-  # Три образа собираются ПАРАЛЛЕЛЬНО, по раннеру на образ, и у каждого СВОЙ
+  # Образы собираются ПАРАЛЛЕЛЬНО, по раннеру на образ, и у каждого СВОЙ
   # кэш. Раньше они шли одним заданием подряд и писали в общий scope кэша
   # GitHub Actions: образ, собранный последним, затирал кэш предыдущего. В
   # логах все три импортировали один и тот же манифест, попаданий в кэш не
@@ -381,6 +383,10 @@ jobs:
             file: infra/docker/web.Dockerfile
             target: runtime
             build-args: APP=overlay
+          - image: admin
+            file: infra/docker/web.Dockerfile
+            target: runtime
+            build-args: APP=admin
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4

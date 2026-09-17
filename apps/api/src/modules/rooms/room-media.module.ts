@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { LiveKitRoomMediaServer, ROOM_MEDIA_SERVER } from './livekit.service';
+import { RoomEviction } from './room-eviction.service';
 
 /**
  * Серверный API медиасервера — отдельным модулем.
@@ -10,7 +11,7 @@ import { LiveKitRoomMediaServer, ROOM_MEDIA_SERVER } from './livekit.service';
  * живёт здесь, а не в `RoomsModule`: иначе зависимость стала бы круговой.
  */
 @Module({
-  providers: [{ provide: ROOM_MEDIA_SERVER, useClass: LiveKitRoomMediaServer }],
-  exports: [ROOM_MEDIA_SERVER],
+  providers: [{ provide: ROOM_MEDIA_SERVER, useClass: LiveKitRoomMediaServer }, RoomEviction],
+  exports: [ROOM_MEDIA_SERVER, RoomEviction],
 })
 export class RoomMediaModule {}

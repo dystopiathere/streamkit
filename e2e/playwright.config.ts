@@ -5,6 +5,7 @@ import { defineConfig, devices } from '@playwright/test';
 // должна знать свой адрес API. В CI — всегда значения по умолчанию.
 const WEB_URL = process.env.E2E_WEB_URL ?? 'http://localhost:5173';
 const OVERLAY_URL = process.env.E2E_OVERLAY_URL ?? 'http://localhost:5174';
+const ADMIN_URL = process.env.E2E_ADMIN_URL ?? 'http://localhost:5175';
 const API_URL = process.env.E2E_API_URL ?? 'http://localhost:3000';
 const FAKE_YOOKASSA_PORT = process.env.FAKE_YOOKASSA_PORT ?? '3099';
 
@@ -49,7 +50,7 @@ export default defineConfig({
         NODE_ENV: 'production',
         PORT: '3000',
         LOG_LEVEL: 'error',
-        CORS_ORIGINS: `${WEB_URL},${OVERLAY_URL}`,
+        CORS_ORIGINS: `${WEB_URL},${OVERLAY_URL},${ADMIN_URL}`,
         OVERLAY_BASE_URL: OVERLAY_URL,
         // Лимит не отключён, а поднят — как в интеграционных тестах. Боевые
         // десять запросов к /auth в минуту с одного IP прогон исчерпывает сам:
@@ -96,6 +97,12 @@ export default defineConfig({
     {
       command: 'pnpm --filter @streamkit/overlay preview',
       url: OVERLAY_URL,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+    {
+      command: 'pnpm --filter @streamkit/admin preview',
+      url: ADMIN_URL,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },

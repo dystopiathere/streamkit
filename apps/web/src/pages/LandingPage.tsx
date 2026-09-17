@@ -2,13 +2,16 @@ import { formatMoney, MAX_GUESTS_PER_ROOM, PLAN_PRICES } from '@streamkit/contra
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
+  buttonClasses,
+  ButtonLink,
+  Card,
+  cn,
   MainContent,
   MenuButton,
   SkipLink,
   useCollapsibleMenu,
   usePageTitle,
-} from '@/components/header';
-import { ButtonLink, buttonClasses, Card, cn } from '@/components/ui';
+} from '@streamkit/app-kit';
 import { PublicFooter } from '@/features/public/PublicFooter';
 import { MISSING, useSeller } from '@/features/public/seller';
 import { useAuthStore } from '@/lib/auth-store';

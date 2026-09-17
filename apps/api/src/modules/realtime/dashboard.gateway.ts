@@ -1,10 +1,12 @@
-import { Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import { Inject, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { type OnGatewayConnection, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import { SOCKET_EVENTS, dashboardRoom } from '@streamkit/contracts';
 import type { Server, Socket } from 'socket.io';
-import type { AccessTokenPayload } from '../../common/auth/access-token.guard';
+import type { Redis } from 'ioredis';
+import { verifyAccessToken } from '../../common/auth/access-token';
 import { RealtimeBus, type BusMessage } from '../../common/bus/realtime-bus.service';
+import { REDIS_CLIENT } from '../../common/redis/redis.module';
 
 /**
  * Живая лента событий в личном кабинете.
@@ -24,6 +26,7 @@ export class DashboardGateway implements OnGatewayConnection, OnModuleInit, OnMo
   constructor(
     private readonly jwt: JwtService,
     private readonly bus: RealtimeBus,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -44,7 +47,8 @@ export class DashboardGateway implements OnGatewayConnection, OnModuleInit, OnMo
     }
 
     try {
-      const payload = await this.jwt.verifyAsync<AccessTokenPayload>(token);
+      // Админский токен ленту дашборда не открывает, заблокированный — тоже.
+      const payload = await verifyAccessToken(this.jwt, this.redis, token, 'dashboard');
       await client.join(dashboardRoom(payload.sub));
     } catch {
       client.disconnect(true);
@@ -65,6 +69,10 @@ export class DashboardGateway implements OnGatewayConnection, OnModuleInit, OnMo
             channelId: message.channelId,
             stats: message.stats,
           });
+          break;
+
+        case 'user-suspended':
+          this.server.local.in(dashboardRoom(message.userId)).disconnectSockets(true);
           break;
 
         // Остальные сообщения шины адресованы оверлею, а не дашборду.

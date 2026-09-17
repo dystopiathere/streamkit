@@ -24,6 +24,7 @@ function createPrismaMock() {
     passwordHash: 'hash',
     displayName: 'Стример',
     status: 'ACTIVE',
+    role: 'USER',
     isTotpEnabled: false,
     totpSecretEncrypted: null,
     createdAt: new Date(),
@@ -46,6 +47,7 @@ function createPrismaMock() {
           lastUsedAt: new Date(),
           revokedAt: null,
           replacedById: null,
+          scope: (data.scope as RefreshToken['scope'] | undefined) ?? 'USER',
         } satisfies RefreshToken;
         rows.set(row.id, row);
         return row;
@@ -110,6 +112,7 @@ function createService() {
     rows,
     user,
     audit,
+    jwt,
   };
 }
 
@@ -176,6 +179,34 @@ describe('TokenService', () => {
     await expect(harness.service.rotate(stolenRotation.refreshToken)).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
+  });
+
+  it('сессия админки не обновляется путём дашборда и не гасится им', async () => {
+    const admin = await harness.service.startSession(harness.user, {}, 'ADMIN');
+
+    await expect(harness.service.rotate(admin.refreshToken)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    expect([...harness.rows.values()].every((row) => row.revokedAt === null)).toBe(true);
+  });
+
+  it('админский токен выпускается с аудиторией админки и коротким сроком', async () => {
+    const issued = await harness.service.startSession(harness.user, {}, 'ADMIN');
+
+    expect(issued.expiresIn).toBe(300);
+    expect(harness.jwt.signAsync).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ audience: 'streamkit-admin', expiresIn: 300 }),
+    );
+  });
+
+  it('снятая роль гасит админскую сессию при обновлении', async () => {
+    harness.user.role = 'ADMIN';
+    const admin = await harness.service.startSession(harness.user, {}, 'ADMIN');
+    harness.user.role = 'USER';
+
+    await expect(harness.service.rotate(admin.refreshToken, {}, 'ADMIN')).rejects.toThrow('закрыт');
+    expect([...harness.rows.values()].every((row) => row.revokedAt !== null)).toBe(true);
   });
 
   it('отвергает неизвестный токен', async () => {

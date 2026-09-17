@@ -30,9 +30,10 @@ UMAMI_VERSION=3.3.1
 
 echo "==> Окружение из Lockbox"
 umask 077
-# Ключи статистики посещений лежат в секрете приложения, но API они не нужны:
-# их получают только Umami, Caddy (хэш пароля) и воркер (адрес базы Umami).
-STATS_KEYS='^(UMAMI_DB_PASSWORD|UMAMI_APP_SECRET|STATS_PASSWORD)='
+# Ключи статистики посещений и пароль админки лежат в секрете приложения, но
+# API они не нужны: их получают только Umami, Caddy (хэши паролей) и воркер
+# (адрес базы Umami).
+STATS_KEYS='^(UMAMI_DB_PASSWORD|UMAMI_APP_SECRET|STATS_PASSWORD|ADMIN_PASSWORD)='
 lockbox_env "$LOCKBOX_APP_SECRET_ID" >.app-secret.next
 {
   echo "# Собрано deploy.sh $(date -u +%FT%TZ). Не редактировать: перезапишется."
@@ -43,10 +44,12 @@ lockbox_env "$LOCKBOX_APP_SECRET_ID" >.app-secret.next
 UMAMI_DB_PASSWORD=$(env_value .app-secret.next UMAMI_DB_PASSWORD)
 UMAMI_APP_SECRET=$(env_value .app-secret.next UMAMI_APP_SECRET)
 STATS_PASSWORD=$(env_value .app-secret.next STATS_PASSWORD)
+ADMIN_PASSWORD=$(env_value .app-secret.next ADMIN_PASSWORD)
 rm -f .app-secret.next
-# Без них Umami не стартует, а хэш пустого пароля открыл бы stats.<домен> любому.
-if [[ -z $UMAMI_DB_PASSWORD || -z $UMAMI_APP_SECRET || -z $STATS_PASSWORD ]]; then
-  echo "В секрете приложения нет ключей статистики — выполните terraform apply" >&2
+# Без них Umami не стартует, а хэш пустого пароля открыл бы stats.<домен> и
+# admin.<домен> любому.
+if [[ -z $UMAMI_DB_PASSWORD || -z $UMAMI_APP_SECRET || -z $STATS_PASSWORD || -z $ADMIN_PASSWORD ]]; then
+  echo "В секрете приложения нет ключей статистики или пароля админки — выполните terraform apply" >&2
   exit 1
 fi
 
@@ -62,7 +65,7 @@ LOG_LEVEL='info'
 NODE_EXTRA_CA_CERTS='/etc/streamkit/yandex-ca.pem'
 DATABASE_URL='postgresql://${DATABASE}?sslmode=verify-full'
 REDIS_URL='rediss://:${VALKEY_PASSWORD}@${VALKEY_HOST}:6380'
-CORS_ORIGINS='https://${DOMAIN},https://overlay.${DOMAIN}'
+CORS_ORIGINS='https://${DOMAIN},https://overlay.${DOMAIN},https://admin.${DOMAIN}'
 WEB_BASE_URL='https://${DOMAIN}'
 OVERLAY_BASE_URL='https://overlay.${DOMAIN}'
 OAUTH_REDIRECT_BASE_URL='https://api.${DOMAIN}'
@@ -122,29 +125,41 @@ MIGRATE_DATABASE_URL=postgresql://${DATABASE}?sslmode=require&sslaccept=strict&s
 EOF
 
 compose() {
-  docker compose --env-file infra.env --env-file release.env --env-file stats.env "$@"
+  docker compose --env-file infra.env --env-file release.env --env-file stats.env \
+    --env-file admin.env "$@"
 }
 
 echo "==> Образы ${TAG}"
 registry_login
 
-# Хэш пароля stats.<домен> для Caddy. Считается заново только при смене пароля:
-# новый хэш на каждой выкатке пересоздавал бы Caddy и рвал соединения оверлеев.
-# Значение в одинарных кавычках: в bcrypt-хэше знаки $, и compose иначе принял
-# бы их за подстановку переменных.
+# Пароль Caddy и cookie-пропуск после него: stats.<домен> и admin.<домен>.
 #
-# Рядом — значение cookie-пропуска, который Caddy выдаёт после пароля (см.
-# Caddyfile). Оно выводится из пароля: смена пароля гасит выданные пропуски, а
-# сам пароль из cookie не восстановить.
-STATS_FINGERPRINT=$(printf '%s' "$STATS_PASSWORD" | sha256sum | cut -d' ' -f1)
-if [[ ! -f stats.env ]] || ! grep -qx "# ${STATS_FINGERPRINT}" stats.env ||
-  ! grep -q '^STATS_GATE_TOKEN=' stats.env; then
-  STATS_BASIC_HASH=$(docker run --rm "${REGISTRY}/mirror/caddy:${CADDY_VERSION}" \
-    caddy hash-password --plaintext "$STATS_PASSWORD")
-  STATS_GATE_TOKEN=$(printf 'stats-gate:%s' "$STATS_PASSWORD" | sha256sum | cut -d' ' -f1)
-  printf "# %s\nSTATS_BASIC_HASH='%s'\nSTATS_GATE_TOKEN='%s'\n" \
-    "$STATS_FINGERPRINT" "$STATS_BASIC_HASH" "$STATS_GATE_TOKEN" >stats.env
-fi
+# Хэш считается заново только при смене пароля: новый хэш на каждой выкатке
+# пересоздавал бы Caddy и рвал соединения оверлеев. Значение в одинарных
+# кавычках: в bcrypt-хэше знаки $, и compose иначе принял бы их за подстановку.
+#
+# Пропуск выводится из пароля: смена пароля гасит выданные пропуски, а сам
+# пароль из cookie не восстановить. Соль у каждого своя — пропуск stats не
+# открывает админку, даже если пароли когда-нибудь совпадут. Формат файла
+# stats.env прежний: при выкатке он не пересчитывается.
+#
+#   password_gate <файл> <префикс переменных> <пароль> <соль>
+password_gate() {
+  local file=$1 prefix=$2 password=$3 salt=$4
+  local fingerprint hash token
+  fingerprint=$(printf '%s' "$password" | sha256sum | cut -d' ' -f1)
+  if [[ -f $file ]] && grep -qx "# ${fingerprint}" "$file" &&
+    grep -q "^${prefix}_GATE_TOKEN=" "$file"; then
+    return
+  fi
+  hash=$(docker run --rm "${REGISTRY}/mirror/caddy:${CADDY_VERSION}" \
+    caddy hash-password --plaintext "$password")
+  token=$(printf '%s:%s' "$salt" "$password" | sha256sum | cut -d' ' -f1)
+  printf "# %s\n%s_BASIC_HASH='%s'\n%s_GATE_TOKEN='%s'\n" \
+    "$fingerprint" "$prefix" "$hash" "$prefix" "$token" >"$file"
+}
+password_gate stats.env STATS "$STATS_PASSWORD" stats-gate
+password_gate admin.env ADMIN "$ADMIN_PASSWORD" admin-gate
 compose --profile migrate pull --quiet
 
 echo "==> Миграции"

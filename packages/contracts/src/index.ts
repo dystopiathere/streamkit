@@ -14,5 +14,6 @@ export * from './rooms.js';
 export * from './widgets.js';
 export * from './auth.js';
 export * from './billing.js';
+export * from './admin.js';
 export * from './site-stats.js';
 export * from './realtime.js';

@@ -15,7 +15,7 @@ x-app-environment: &app-environment
   ENCRYPTION_KEY: ${ENCRYPTION_KEY:?нужно задать ENCRYPTION_KEY}
   IP_HASH_PEPPER: ${IP_HASH_PEPPER:?нужно задать IP_HASH_PEPPER}
   TOKEN_HASH_PEPPER: ${TOKEN_HASH_PEPPER:?нужно задать TOKEN_HASH_PEPPER}
-  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:8081}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:8081,http://localhost:8082}
   COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
   OVERLAY_BASE_URL: ${OVERLAY_BASE_URL:-http://localhost:8081}
   # Из него собираются ссылки-приглашения в комнаты: гость открывает дашборд.
@@ -199,6 +199,18 @@ services:
     restart: unless-stopped
     ports:
       - '8081:80'
+
+  admin:
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        APP: admin
+        VITE_API_URL: ${PUBLIC_API_URL:-http://localhost:3000}
+        CSP_CONNECT_EXTRA: ${CSP_CONNECT_EXTRA-http://localhost:3000}
+    restart: unless-stopped
+    ports:
+      - '8082:80'
 
 volumes:
   postgres-data:

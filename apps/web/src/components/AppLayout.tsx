@@ -2,8 +2,14 @@ import { useTranslation } from 'react-i18next';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { useAuthStore, useCurrentUser } from '@/lib/auth-store';
-import { MainContent, MenuButton, SkipLink, useCollapsibleMenu } from './header';
-import { Button, cn } from './ui';
+import {
+  Button,
+  cn,
+  MainContent,
+  MenuButton,
+  SkipLink,
+  useCollapsibleMenu,
+} from '@streamkit/app-kit';
 
 const NAV_ITEMS = [
   { to: '/widgets', label: 'nav.widgets' },

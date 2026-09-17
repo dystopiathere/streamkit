@@ -7,8 +7,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { usePageTitle } from '@/components/header';
-import { Card } from '@/components/ui';
+import { Card, usePageTitle } from '@streamkit/app-kit';
 import { useRecentEvents } from '@/features/widgets/queries';
 import { useDashboardSocket } from '@/lib/useDashboardSocket';
 

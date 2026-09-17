@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Button, Card, Input } from '@/components/ui';
+import { Button, Card, Input } from '@streamkit/app-kit';
 import { useCreateOverlayToken, useOverlayTokens, useRevokeOverlayToken } from './queries';
 
 /**

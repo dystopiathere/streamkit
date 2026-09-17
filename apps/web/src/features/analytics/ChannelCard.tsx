@@ -1,6 +1,6 @@
 import type { AnalyticsRange, Channel } from '@streamkit/contracts';
 import { useTranslation } from 'react-i18next';
-import { Button, Card } from '@/components/ui';
+import { Button, Card } from '@streamkit/app-kit';
 import { useChannelSeries, useChannelSummary, useDisconnectChannel } from './queries';
 import { MetricChart } from './MetricChart';
 

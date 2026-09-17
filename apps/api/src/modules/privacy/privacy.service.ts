@@ -4,6 +4,8 @@ import type { ConsentDocument } from '@prisma/client';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
 import { PasswordService } from '../../common/crypto/password.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { RoomEviction } from '../rooms/room-eviction.service';
+import { WidgetsService } from '../widgets/widgets.service';
 import { LEGAL_DOCUMENTS, publishedDocuments, REQUIRED_ON_REGISTER } from './legal-documents';
 
 export interface ConsentView {
@@ -28,6 +30,8 @@ export class PrivacyService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly passwords: PasswordService,
+    private readonly widgets: WidgetsService,
+    private readonly rooms: RoomEviction,
   ) {}
 
   /**
@@ -269,6 +273,12 @@ export class PrivacyService {
    */
   async anonymize(userId: string, context: AuditContext = {}): Promise<void> {
     const placeholder = `deleted-${randomUUID()}@streamkit.invalid`;
+    // Что оборвать после транзакции: внутри неё ссылки гаснут и комнаты
+    // удаляются только в БД, а открытые сцены OBS и созвоны живут отдельно.
+    const overlayTokenIds = await this.widgets.activeOverlayTokenIds(userId);
+    const roomIds = (
+      await this.prisma.room.findMany({ where: { userId }, select: { id: true } })
+    ).map((room) => room.id);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
@@ -338,5 +348,8 @@ export class PrivacyService {
     });
 
     await this.audit.record('privacy.account.anonymized', userId, context);
+
+    await this.widgets.disconnectOverlays(userId, overlayTokenIds, 'token-revoked');
+    await this.rooms.emptyRooms(roomIds);
   }
 }

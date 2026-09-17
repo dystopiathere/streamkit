@@ -4,8 +4,16 @@ import { DisconnectReason, type LocalVideoTrack, Track } from 'livekit-client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { MainContent, usePageTitle } from '@/components/header';
-import { Button, Card, Input, Label, NewTabHint, selectClasses } from '@/components/ui';
+import {
+  Button,
+  Card,
+  Input,
+  Label,
+  MainContent,
+  NewTabHint,
+  selectClasses,
+  usePageTitle,
+} from '@streamkit/app-kit';
 import { MicrophoneSettings } from '@/features/rooms/MicrophoneSettings';
 import { RoomStage } from '@/features/rooms/RoomStage';
 import { ROOM_OPTIONS } from '@/features/rooms/room-options';

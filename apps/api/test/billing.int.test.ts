@@ -562,6 +562,40 @@ describe('Подписка на платформу (feature)', () => {
     return { userId: owner.userId, end };
   }
 
+  it('заблокированному аккаунту продление не списывается, а комнаты закрыты', async () => {
+    const { userId } = await dueSoon();
+    await harness.prisma.user.update({ where: { id: userId }, data: { status: 'SUSPENDED' } });
+
+    await billing.renewDue();
+    expect(gateway.charged).toHaveLength(0);
+    expect(await billing.roomsAccess(userId)).toBe(false);
+  });
+
+  it('бесплатные дни сдвигают конец периода и требуют нового письма о списании', async () => {
+    const { userId, end } = await dueSoon();
+
+    const view = await billing.extend(userId, 10);
+
+    expect(new Date(view.currentPeriodEnd!).getTime()).toBe(end.getTime() + 10 * DAY_MS);
+    const row = await harness.prisma.subscription.findUniqueOrThrow({ where: { userId } });
+    expect(row.renewalNoticeFor).toBeNull();
+    expect(await harness.prisma.payment.count({ where: { userId } })).toBe(1);
+
+    // Прежнее письмо называло другую дату — без нового списания нет.
+    await billing.renewDue(new Date(end.getTime() + 9.5 * DAY_MS));
+    expect(gateway.charged).toHaveLength(0);
+  });
+
+  it('бесплатные дни без подписки открывают комнаты без автопродления', async () => {
+    const owner = await streamer();
+    const now = new Date();
+
+    const view = await billing.extend(owner.userId, 7, {}, now);
+
+    expect(view).toMatchObject({ status: 'active', autoRenew: false, roomsAccess: true });
+    expect(new Date(view.currentPeriodEnd!).getTime()).toBe(now.getTime() + 7 * DAY_MS);
+  });
+
   it('письмо о списании уходит за три дня до окна продления, один раз и с суммой подписки', async () => {
     const owner = await streamer();
     await subscribed(owner.token);

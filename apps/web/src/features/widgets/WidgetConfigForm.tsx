@@ -8,7 +8,7 @@ import {
 } from '@streamkit/contracts';
 import type { FieldValues, UseFormReturn } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { Card } from '@/components/ui';
+import { Card } from '@streamkit/app-kit';
 import { useChannels } from '@/features/analytics/queries';
 import { useRooms } from '@/features/rooms/queries';
 import {

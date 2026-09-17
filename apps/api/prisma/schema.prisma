@@ -37,12 +37,23 @@ enum UserStatus {
   ANONYMIZED
 }
 
+/// Роль сотрудника платформы. Стример — USER; SUPPORT и ADMIN входят в
+/// админку, и только с включённой TOTP.
+enum UserRole {
+  USER
+  /// Видит данные и отзывает ссылки и сессии.
+  SUPPORT
+  /// Вдобавок блокирует и обезличивает аккаунты, выдаёт роли, меняет подписки.
+  ADMIN
+}
+
 model User {
   id                  String     @id @default(uuid()) @db.Uuid
   email               String     @unique
   passwordHash        String
   displayName         String
   status              UserStatus @default(ACTIVE)
+  role                UserRole   @default(USER)
   isTotpEnabled       Boolean    @default(false)
   /// Шифротекст TOTP-секрета. NULL, пока второй фактор не подключён.
   totpSecretEncrypted String?
@@ -61,32 +72,46 @@ model User {
   subscription    Subscription?
   payments        Payment[]
   auditLogs       AuditLog[]
+  /// Действия сотрудника над чужими аккаунтами.
+  actedAuditLogs  AuditLog[]              @relation("AuditActor")
 
   @@index([status])
+  @@index([role])
+  @@index([createdAt])
+}
+
+/// Где действует сессия. Админская сессия — отдельное семейство со своей
+/// cookie: утёкший токен дашборда не открывает админку, и наоборот.
+enum SessionScope {
+  USER
+  ADMIN
 }
 
 /// Refresh-токен с ротацией. Семейство (familyId) заводится при логине; каждое
 /// обновление создаёт новый токен и помечает старый использованным. Предъявление
 /// уже использованного токена означает кражу — гасим всё семейство.
 model RefreshToken {
-  id           String    @id @default(uuid()) @db.Uuid
-  userId       String    @db.Uuid
-  familyId     String    @db.Uuid
+  id           String       @id @default(uuid()) @db.Uuid
+  userId       String       @db.Uuid
+  familyId     String       @db.Uuid
   /// sha256 от секрета. Сам секрет в БД не попадает.
-  tokenHash    String    @unique
+  tokenHash    String       @unique
   userAgent    String?
   /// Хэш IP, а не IP: для разбора инцидентов хватает, объём ПДн меньше.
   ipHash       String?
   expiresAt    DateTime
-  createdAt    DateTime  @default(now())
-  lastUsedAt   DateTime  @default(now())
+  createdAt    DateTime     @default(now())
+  lastUsedAt   DateTime     @default(now())
   /// Проставляется при ротации или отзыве. Непустое значение = токен больше не валиден.
   revokedAt    DateTime?
-  replacedById String?   @db.Uuid
+  replacedById String?      @db.Uuid
+  scope        SessionScope @default(USER)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  /// Активные пользователи за период — по последнему обновлению сессии.
+  @@index([lastUsedAt])
   @@index([familyId])
   @@index([expiresAt])
 }
@@ -133,16 +158,21 @@ model Consent {
 /// данных, неудачные проверки подписи вебхука.
 model AuditLog {
   id        String   @id @default(uuid()) @db.Uuid
+  /// Чей аккаунт или объект затронут.
   userId    String?  @db.Uuid
+  /// Кто действовал, если не сам владелец: сотрудник из админки.
+  actorId   String?  @db.Uuid
   action    String
   ipHash    String?
   userAgent String?
   metadata  Json?
   createdAt DateTime @default(now())
 
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user  User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
+  @@index([actorId, createdAt])
   @@index([action, createdAt])
   /// Уборка по сроку хранения удаляет по одному createdAt: составные индексы
   /// выше ей не помогают, и каждый ночной проход читал таблицу целиком.
@@ -344,6 +374,8 @@ model AlertEvent {
 
   @@unique([provider, externalId, userId])
   @@index([userId, createdAt])
+  /// Сводка по платформе в админке считает события за период по всем аккаунтам.
+  @@index([createdAt])
 }
 
 /// Подключённый источник донат-событий.

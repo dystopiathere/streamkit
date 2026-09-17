@@ -63,6 +63,12 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  # Административная панель. Наружу — через Caddy на admin.<домен> за паролем.
+  admin:
+    image: ${REGISTRY}/streamkit-admin:${IMAGE_TAG}
+    restart: unless-stopped
+    logging: *logging
+
   # Статистика посещений публичных страниц. Наружу — только через Caddy: скрипт
   # и приём событий на основном домене по префиксу /u, интерфейс — на
   # stats.<домен> за паролем. Своя база в управляемом PostgreSQL (Terraform).
@@ -91,6 +97,9 @@ services:
       STATS_BASIC_HASH: ${STATS_BASIC_HASH}
       # Значение cookie-пропуска stats.<домен> после пароля — см. Caddyfile.
       STATS_GATE_TOKEN: ${STATS_GATE_TOKEN}
+      # То же для admin.<домен>; пропуск проверяется и на api.<домен>.
+      ADMIN_BASIC_HASH: ${ADMIN_BASIC_HASH}
+      ADMIN_GATE_TOKEN: ${ADMIN_GATE_TOKEN}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # Сертификаты переживают пересоздание контейнера: иначе каждая выкатка
@@ -101,6 +110,7 @@ services:
       - api
       - web
       - overlay
+      - admin
       - umami
     logging: *logging
 
