@@ -1,7 +1,10 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  // График — отдельный вход: иначе recharts, импортированный из главного
+  // входа, попадал в основной бандл приложения, даже если графики есть только
+  // на лениво загружаемой странице.
+  entry: ['src/index.ts', 'src/chart.tsx'],
   format: ['esm', 'cjs'],
   dts: true,
   sourcemap: true,

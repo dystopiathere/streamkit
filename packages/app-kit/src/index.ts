@@ -1,8 +1,11 @@
 /**
  * @streamkit/app-kit — интерфейс, общий для дашборда и админки.
  *
- * Примитивы, каркас страницы, таблицы, диалог подтверждения, график и клиент
- * API. Рендереры виджетов сюда не относятся: они общие для дашборда и оверлея и
+ * Примитивы, каркас страницы, таблицы, диалог подтверждения и клиент API.
+ * График — отдельным входом `@streamkit/app-kit/chart`: он тянет recharts, и
+ * страницам без графиков платить за него загрузкой незачем.
+ *
+ * Рендереры виджетов сюда не относятся: они общие для дашборда и оверлея и
  * живут в `@streamkit/ui`, где нет ни Tailwind, ни роутера.
  *
  * Пакету нужны переводы приложения: `common.newTab`, `common.skipToContent`,
@@ -42,12 +45,6 @@ export {
   type StatusTone,
 } from './data';
 export { ConfirmDialog, type ConfirmDialogProps } from './dialog';
-export {
-  type SeriesPoint,
-  seriesSummary,
-  TimeSeriesChart,
-  type TimeSeriesChartProps,
-} from './chart';
 export {
   type ApiClient,
   type ApiClientOptions,

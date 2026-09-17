@@ -12,6 +12,11 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./chart": {
+      "types": "./dist/chart.d.ts",
+      "import": "./dist/chart.js",
+      "require": "./dist/chart.cjs"
+    },
     "./theme.css": "./src/theme.css"
   },
   "files": [
@@ -53,5 +58,8 @@
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^5.0.0"
-  }
+  },
+  "sideEffects": [
+    "*.css"
+  ]
 }

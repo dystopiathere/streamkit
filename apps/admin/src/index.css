@@ -1,0 +1,6 @@
+@import 'tailwindcss';
+@import '@streamkit/app-kit/theme.css';
+
+/* Классы компонентов пакета: Tailwind 4 не сканирует зависимости сам, и без
+   этой строки кнопки и поля из app-kit приходили без оформления. */
+@source '../../../packages/app-kit/src';

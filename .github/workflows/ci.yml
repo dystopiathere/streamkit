@@ -224,7 +224,7 @@ jobs:
       ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcyEhISE=
       IP_HASH_PEPPER: test-pepper-for-ci
       TOKEN_HASH_PEPPER: test-token-pepper-for-ci
-      CORS_ORIGINS: http://localhost:5173,http://localhost:5174
+      CORS_ORIGINS: http://localhost:5173,http://localhost:5174,http://localhost:5175
       OVERLAY_BASE_URL: http://localhost:5174
       VITE_API_URL: http://localhost:3000
 
