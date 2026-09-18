@@ -2,7 +2,6 @@ import {
   ANALYTICS_RANGES,
   type AnalyticsRange,
   type AvailablePlatform,
-  formatMoney,
 } from '@streamkit/contracts';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +16,7 @@ import {
   useLiveChannelStats,
   usePlatforms,
 } from '@/features/analytics/queries';
+import { formatMoney } from '@/lib/locale';
 
 /**
  * Аналитика подключённых площадок.

@@ -9,7 +9,7 @@ import type {
   WidgetState,
   WidgetType,
 } from '@streamkit/contracts';
-import { defaultWidgetConfig } from '@streamkit/contracts';
+import { defaultWidgetConfig, type Language } from '@streamkit/contracts';
 import {
   AlertAnimationStyles,
   AlertCard,
@@ -19,14 +19,7 @@ import {
   TimerDisplay,
   TopDonorsList,
 } from '@streamkit/ui';
-
-/** Событие-пустышка: показывает, как алерт выглядит в эфире. */
-const PREVIEW_EVENT = {
-  username: 'Зритель',
-  message: 'Спасибо за стрим! Держи на кофе.',
-  amount: { amountMinor: 50_000, currency: 'RUB' as const },
-  type: 'donation' as const,
-};
+import { currentLanguage } from '@/lib/locale';
 
 /**
  * Предпросмотр виджета.
@@ -93,6 +86,9 @@ function Surface({
   state: WidgetState | null;
 }): React.JSX.Element | null {
   const config = withDefaults(type, raw);
+  // Примеры — на языке дашборда: русский «Зритель» в английском интерфейсе
+  // выглядел бы непереведённым куском, а не данными.
+  const sample = SAMPLES[currentLanguage()];
 
   switch (type) {
     case 'alerts':
@@ -100,7 +96,7 @@ function Surface({
         <>
           <AlertAnimationStyles />
           <AlertCard
-            event={PREVIEW_EVENT}
+            event={sample.event}
             config={config as unknown as AlertWidgetConfig}
             animate={false}
           />
@@ -155,7 +151,7 @@ function Surface({
       // Гашение строк в примере выключено. У примера метки времени застывшие,
       // и через заданное число секунд все три строки гасли — предпросмотр
       // пустел навсегда, будто настройка сломала виджет.
-      return <ChatBox config={{ ...chat, messageLifetimeSeconds: 0 }} messages={SAMPLE_CHAT} />;
+      return <ChatBox config={{ ...chat, messageLifetimeSeconds: 0 }} messages={sample.chat} />;
     }
 
     case 'top-donors': {
@@ -169,7 +165,7 @@ function Surface({
               : {
                   kind: 'top-donors',
                   currency: top.currency,
-                  entries: SAMPLE_DONORS.slice(0, top.limit),
+                  entries: sample.donors.slice(0, top.limit),
                 }
           }
         />
@@ -182,85 +178,155 @@ function Surface({
       const guests = config as unknown as GuestsWidgetConfig;
       return (
         <div className="h-full w-full p-4">
-          <ParticipantLayout config={guests} tiles={SAMPLE_GUESTS} />
+          <ParticipantLayout config={guests} tiles={sample.guests} />
         </div>
       );
     }
   }
 }
 
-const SAMPLE_GUESTS = [
-  { name: 'Гость подкаста', hue: 262 },
-  { name: 'Соведущий', hue: 190 },
-  { name: 'Эксперт', hue: 32 },
-].map(({ name, hue }, index) => ({
-  id: `sample-${index}`,
-  name,
-  // Третий «гость» — с выключенной камерой: так видно, как выглядит плитка без видео.
-  hasVideo: index < 2,
-  media: (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        background: `linear-gradient(135deg, hsl(${hue} 45% 32%), hsl(${hue + 40} 50% 18%))`,
-      }}
-    />
-  ),
-}));
+/** Тексты примеров. Имена и реплики выдуманы. */
+const SAMPLE_TEXT: Record<
+  Language,
+  {
+    event: { username: string; message: string };
+    guests: [string, string, string];
+    donors: string[];
+    chat: [string, string, string];
+    chatNames: [string, string, string];
+  }
+> = {
+  ru: {
+    event: { username: 'Зритель', message: 'Спасибо за стрим! Держи на кофе.' },
+    guests: ['Гость подкаста', 'Соведущий', 'Эксперт'],
+    donors: ['Аня', 'Кирилл', 'Аноним', 'Даша', 'Пётр', 'Лена', 'Максим', 'Соня', 'Игорь', 'Вика'],
+    chatNames: ['Зритель', 'Модератор', 'Гость'],
+    chat: ['привет, как настройка идёт?', 'сейчас проверим ', 'шрифт читается, обводки хватает'],
+  },
+  en: {
+    event: { username: 'Viewer', message: 'Thanks for the stream! Coffee is on me.' },
+    guests: ['Podcast guest', 'Co-host', 'Expert'],
+    donors: [
+      'Anna',
+      'Kirill',
+      'Anonymous',
+      'Dasha',
+      'Peter',
+      'Lena',
+      'Max',
+      'Sonya',
+      'Igor',
+      'Vika',
+    ],
+    chatNames: ['Viewer', 'Moderator', 'Guest'],
+    chat: [
+      'hi, how is the setup going?',
+      'let me check ',
+      'the font is readable, the outline is enough',
+    ],
+  },
+};
 
-const SAMPLE_DONORS = [
-  { username: 'Аня', amountMinor: 250_000, count: 4 },
-  { username: 'Кирилл', amountMinor: 150_000, count: 2 },
-  { username: 'Аноним', amountMinor: 90_000, count: 7 },
-  { username: 'Даша', amountMinor: 50_000, count: 1 },
-  { username: 'Пётр', amountMinor: 30_000, count: 3 },
-  { username: 'Лена', amountMinor: 20_000, count: 2 },
-  { username: 'Максим', amountMinor: 15_000, count: 1 },
-  { username: 'Соня', amountMinor: 12_000, count: 2 },
-  { username: 'Игорь', amountMinor: 9_000, count: 1 },
-  { username: 'Вика', amountMinor: 5_000, count: 1 },
-];
+const DONOR_AMOUNTS = [
+  [250_000, 4],
+  [150_000, 2],
+  [90_000, 7],
+  [50_000, 1],
+  [30_000, 3],
+  [20_000, 2],
+  [15_000, 1],
+  [12_000, 2],
+  [9_000, 1],
+  [5_000, 1],
+] as const;
+
+const GUEST_HUES = [262, 190, 32];
+
+/** Примеры собираются один раз на язык: плитки гостей не пересоздаются на каждый рендер. */
+const SAMPLES = {
+  ru: buildSamples(SAMPLE_TEXT.ru),
+  en: buildSamples(SAMPLE_TEXT.en),
+};
+
+function buildSamples(text: (typeof SAMPLE_TEXT)[Language]) {
+  return {
+    /** Событие-пустышка: показывает, как алерт выглядит в эфире. */
+    event: {
+      ...text.event,
+      amount: { amountMinor: 50_000, currency: 'RUB' as const },
+      type: 'donation' as const,
+    },
+    guests: text.guests.map((name, index) => {
+      const hue = GUEST_HUES[index] ?? 0;
+      return {
+        id: `sample-${index}`,
+        name,
+        // Третий «гость» — с выключенной камерой: так видно, как выглядит плитка без видео.
+        hasVideo: index < 2,
+        media: (
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              background: `linear-gradient(135deg, hsl(${hue} 45% 32%), hsl(${hue + 40} 50% 18%))`,
+            }}
+          />
+        ),
+      };
+    }),
+    donors: DONOR_AMOUNTS.map(([amountMinor, count], index) => ({
+      username: text.donors[index] ?? '',
+      amountMinor,
+      count,
+    })),
+    chat: sampleChat(text.chatNames, text.chat),
+  };
+}
 
 /**
- * Пример чата. Ники и реплики выдуманы, эмоут настоящий (Kappa, id 25) — без
- * него не видно, как строка живёт с картинкой внутри.
+ * Пример чата. Эмоут настоящий (Kappa, id 25) — без него не видно, как строка
+ * живёт с картинкой внутри.
  */
-const SAMPLE_CHAT: ChatMessage[] = [
-  {
-    id: 'sample-1',
-    platform: 'twitch',
-    channel: 'example',
-    login: 'zritel',
-    username: 'Зритель',
-    color: '#7FD1B9',
-    badges: ['subscriber'],
-    parts: [{ kind: 'text', value: 'привет, как настройка идёт?' }],
-    sentAt: '2026-09-12T20:00:00.000Z',
-  },
-  {
-    id: 'sample-2',
-    platform: 'twitch',
-    channel: 'example',
-    login: 'moder',
-    username: 'Модератор',
-    color: '#E0A3F5',
-    badges: ['moderator', 'vip'],
-    parts: [
-      { kind: 'text', value: 'сейчас проверим ' },
-      { kind: 'emote', id: '25', alt: 'Kappa' },
-    ],
-    sentAt: '2026-09-12T20:00:05.000Z',
-  },
-  {
-    id: 'sample-3',
-    platform: 'twitch',
-    channel: 'example',
-    login: 'gost',
-    username: 'Гость',
-    color: null,
-    badges: [],
-    parts: [{ kind: 'text', value: 'шрифт читается, обводки хватает' }],
-    sentAt: '2026-09-12T20:00:09.000Z',
-  },
-];
+function sampleChat(
+  [viewer, moderator, guest]: [string, string, string],
+  [first, second, third]: [string, string, string],
+): ChatMessage[] {
+  return [
+    {
+      id: 'sample-1',
+      platform: 'twitch',
+      channel: 'example',
+      login: 'zritel',
+      username: viewer,
+      color: '#7FD1B9',
+      badges: ['subscriber'],
+      parts: [{ kind: 'text', value: first }],
+      sentAt: '2026-09-12T20:00:00.000Z',
+    },
+    {
+      id: 'sample-2',
+      platform: 'twitch',
+      channel: 'example',
+      login: 'moder',
+      username: moderator,
+      color: '#E0A3F5',
+      badges: ['moderator', 'vip'],
+      parts: [
+        { kind: 'text', value: second },
+        { kind: 'emote', id: '25', alt: 'Kappa' },
+      ],
+      sentAt: '2026-09-12T20:00:05.000Z',
+    },
+    {
+      id: 'sample-3',
+      platform: 'twitch',
+      channel: 'example',
+      login: 'gost',
+      username: guest,
+      color: null,
+      badges: [],
+      parts: [{ kind: 'text', value: third }],
+      sentAt: '2026-09-12T20:00:09.000Z',
+    },
+  ];
+}

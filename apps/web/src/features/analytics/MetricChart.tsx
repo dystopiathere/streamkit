@@ -11,6 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { intlLocale } from '@/lib/locale';
 
 /**
  * Цвета рядов.
@@ -179,7 +180,7 @@ function tooltip(color: string, valueLabel: string, range: AnalyticsRange): Reac
               />
               <span className="text-muted">{valueLabel}</span>
               <span className="font-medium tabular-nums">
-                {new Intl.NumberFormat('ru-RU').format(Number(point.value))}
+                {new Intl.NumberFormat(intlLocale()).format(Number(point.value))}
               </span>
             </p>
           </div>
@@ -199,16 +200,16 @@ function tooltip(color: string, valueLabel: string, range: AnalyticsRange): Reac
 function formatTick(value: string, range: AnalyticsRange): string {
   const date = new Date(value);
   return range === '24h'
-    ? date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-    : date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+    ? date.toLocaleTimeString(intlLocale(), { hour: '2-digit', minute: '2-digit' })
+    : date.toLocaleDateString(intlLocale(), { day: 'numeric', month: 'short' });
 }
 
 /** В подсказке точность полная: там место есть, и момент нужен точный. */
 function formatFull(value: string, range: AnalyticsRange): string {
   const date = new Date(value);
   return range === '30d'
-    ? date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
-    : date.toLocaleString('ru-RU', {
+    ? date.toLocaleDateString(intlLocale(), { day: 'numeric', month: 'long' })
+    : date.toLocaleString(intlLocale(), {
         day: 'numeric',
         month: 'short',
         hour: '2-digit',
@@ -226,11 +227,12 @@ function formatFull(value: string, range: AnalyticsRange): string {
  */
 function formatCompact(value: number): string {
   if (Math.abs(value) < 100_000) {
-    return new Intl.NumberFormat('ru-RU').format(Math.round(value));
+    return new Intl.NumberFormat(intlLocale()).format(Math.round(value));
   }
-  return new Intl.NumberFormat('ru-RU', { notation: 'compact', maximumFractionDigits: 1 }).format(
-    value,
-  );
+  return new Intl.NumberFormat(intlLocale(), {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value);
 }
 
 /**
@@ -245,7 +247,7 @@ function useChartSummary(points: AnalyticsPoint[], kind: MetricKind, title: stri
     .map((point) => point[kind])
     .filter((value): value is number => typeof value === 'number');
   if (values.length === 0) return '';
-  const format = (value: number): string => new Intl.NumberFormat('ru-RU').format(value);
+  const format = (value: number): string => new Intl.NumberFormat(intlLocale()).format(value);
   return t('analytics.chartSummary', {
     title,
     min: format(Math.min(...values)),

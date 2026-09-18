@@ -1,7 +1,6 @@
 import {
   BILLING_PERIODS,
   type BillingPeriod,
-  formatMoney,
   type Money,
   PLAN_PRICES,
   type SubscriptionView,
@@ -20,9 +19,14 @@ import {
 } from '@/features/billing/queries';
 import { trackSiteEvent } from '@/features/public/site-stats';
 import { ApiError } from '@/lib/api';
+import { formatMoney, intlLocale } from '@/lib/locale';
 
 const formatDate = (iso: string): string =>
-  new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+  new Date(iso).toLocaleDateString(intlLocale(), {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
 
 /**
  * Тариф «Про»: оформление, автопродление, история платежей.

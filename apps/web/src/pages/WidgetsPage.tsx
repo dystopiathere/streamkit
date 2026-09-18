@@ -29,7 +29,15 @@ export function WidgetsPage(): React.JSX.Element {
     // на сервере. Раньше сюда уезжал defaultWidgetConfig(type), вычисленный в
     // браузере, — вместе с ним уезжала и дата начала цели по часам машины
     // стримера. Сбитые часы означали цель, которая молча никогда не наполнится.
-    await createWidget.mutateAsync({ name: trimmed, type, config: {} } as CreateWidgetInput);
+    // Исключение — заголовки, которые видны в кадре: по умолчанию они русские,
+    // и английский стример получил бы «Цель» на экране трансляции.
+    const config =
+      type === 'goal'
+        ? { title: t('widgets.defaultTitle.goal') }
+        : type === 'top-donors'
+          ? { title: t('widgets.defaultTitle.topDonors') }
+          : {};
+    await createWidget.mutateAsync({ name: trimmed, type, config } as CreateWidgetInput);
     setName('');
   };
 

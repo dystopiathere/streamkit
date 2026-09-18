@@ -12,6 +12,7 @@ import { WidgetConfigForm } from '@/features/widgets/WidgetConfigForm';
 import { WidgetPreview } from '@/features/widgets/WidgetPreview';
 import { WidgetStateControls } from '@/features/widgets/WidgetStateControls';
 import { ApiError } from '@/lib/api';
+import { localizedResolver } from '@/lib/form-errors';
 
 /**
  * Редактор виджета.
@@ -30,7 +31,7 @@ export function WidgetEditorPage(): React.JSX.Element {
   const state = useWidgetState(id, Boolean(widget.data) && hasWidgetState(type));
 
   const form = useForm<FieldValues>({
-    resolver: zodResolver(configSchemaFor(type)),
+    resolver: localizedResolver(zodResolver(configSchemaFor(type))),
     // Значения приходят асинхронно, поэтому форма наполняется через reset ниже.
     defaultValues: configSchemaFor(type).parse({}) as FieldValues,
   });

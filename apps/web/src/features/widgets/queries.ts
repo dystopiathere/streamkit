@@ -11,6 +11,7 @@ import type {
 } from '@streamkit/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { currentLanguage } from '@/lib/locale';
 
 export const widgetKeys = {
   all: ['widgets'] as const,
@@ -107,7 +108,8 @@ export function useRevokeOverlayToken(widgetId: string) {
 
 export function useSendTestAlert() {
   return useMutation({
-    mutationFn: () => api.post<AlertEvent>('/events/test'),
+    // Язык — чтобы имя и текст тестового алерта в OBS были на языке дашборда.
+    mutationFn: () => api.post<AlertEvent>('/events/test', { language: currentLanguage() }),
   });
 }
 

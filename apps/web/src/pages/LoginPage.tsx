@@ -20,6 +20,7 @@ import {
 import { PublicFooter } from '@/features/public/PublicFooter';
 import { ApiError, api } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
+import { localizedResolver } from '@/lib/form-errors';
 
 export function LoginPage(): React.JSX.Element {
   const { t } = useTranslation();
@@ -30,7 +31,7 @@ export function LoginPage(): React.JSX.Element {
   const [needsTotp, setNeedsTotp] = useState(false);
 
   const form = useForm<LoginInput>({
-    resolver: zodResolver(loginSchema),
+    resolver: localizedResolver(zodResolver(loginSchema)),
     defaultValues: { email: '', password: '' },
   });
 

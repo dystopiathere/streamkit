@@ -1,4 +1,4 @@
-import { formatMoney, MAX_GUESTS_PER_ROOM, PLAN_PRICES } from '@streamkit/contracts';
+import { MAX_GUESTS_PER_ROOM, PLAN_PRICES } from '@streamkit/contracts';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
@@ -13,8 +13,9 @@ import {
   usePageTitle,
 } from '@streamkit/app-kit';
 import { PublicFooter } from '@/features/public/PublicFooter';
-import { MISSING, useSeller } from '@/features/public/seller';
+import { missingValue, useSeller } from '@/features/public/seller';
 import { useAuthStore } from '@/lib/auth-store';
+import { formatMoney } from '@/lib/locale';
 
 const FEATURES = ['alerts', 'widgets', 'chat', 'analytics', 'rooms', 'obs'] as const;
 const ANCHORS = ['pricing', 'delivery', 'contacts'] as const;
@@ -175,11 +176,11 @@ export function LandingPage(): React.JSX.Element {
           </h2>
           <dl className="grid max-w-3xl gap-x-6 gap-y-2 text-sm sm:grid-cols-[max-content_1fr]">
             <dt className="text-muted">{t('public.contacts.seller')}</dt>
-            <dd>{seller.data?.name ?? MISSING}</dd>
+            <dd>{seller.data?.name ?? missingValue()}</dd>
             <dt className="text-muted">{t('public.contacts.status')}</dt>
             <dd>{t('public.contacts.selfEmployed')}</dd>
             <dt className="text-muted">{t('public.contacts.inn')}</dt>
-            <dd className="tabular-nums">{seller.data?.inn ?? MISSING}</dd>
+            <dd className="tabular-nums">{seller.data?.inn ?? missingValue()}</dd>
             <dt className="text-muted">{t('public.contacts.email')}</dt>
             <dd>
               {seller.data?.email ? (
@@ -187,7 +188,7 @@ export function LandingPage(): React.JSX.Element {
                   {seller.data.email}
                 </a>
               ) : (
-                MISSING
+                missingValue()
               )}
             </dd>
             {seller.data?.phone ? (

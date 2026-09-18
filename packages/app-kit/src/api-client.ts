@@ -33,6 +33,12 @@ export interface ApiClientOptions<TUser> {
   /** Имя блокировки между вкладками. Разные сессии не должны ждать друг друга. */
   lockName: string;
   session: SessionStore<TUser>;
+  /**
+   * Сообщение ошибки на языке интерфейса. API отвечает по-русски, а дашборд
+   * бывает и английским: перевод по словарю `MESSAGES_EN` из contracts. У
+   * админки его нет — она только на русском.
+   */
+  localizeMessage?: (message: string) => string;
 }
 
 type RefreshOutcome = 'refreshed' | 'rejected' | 'unavailable';
@@ -63,6 +69,7 @@ export function createApiClient<TUser>({
   refreshPath,
   lockName,
   session,
+  localizeMessage = (message) => message,
 }: ApiClientOptions<TUser>): ApiClient {
   let refreshPromise: Promise<RefreshOutcome> | null = null;
 
@@ -132,7 +139,7 @@ export function createApiClient<TUser>({
       if (outcome === 'rejected') {
         session.clearSession();
       } else {
-        throw new ApiError(503, 'Сервис временно недоступен, попробуйте ещё раз');
+        throw new ApiError(503, localizeMessage('Сервис временно недоступен, попробуйте ещё раз'));
       }
     }
 
@@ -149,8 +156,8 @@ export function createApiClient<TUser>({
     if (!response.ok) {
       throw new ApiError(
         response.status,
-        payload?.message ?? 'Не удалось выполнить запрос',
-        payload?.errors,
+        localizeMessage(payload?.message ?? 'Не удалось выполнить запрос'),
+        payload?.errors?.map((error) => ({ ...error, message: localizeMessage(error.message) })),
         payload?.code,
       );
     }

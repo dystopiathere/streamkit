@@ -1,15 +1,11 @@
-import {
-  type AlertEvent,
-  SOCKET_EVENTS,
-  alertEventSchema,
-  formatMoney,
-} from '@streamkit/contracts';
+import { type AlertEvent, SOCKET_EVENTS, alertEventSchema } from '@streamkit/contracts';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, usePageTitle } from '@streamkit/app-kit';
 import { useRecentEvents } from '@/features/widgets/queries';
 import { useDashboardSocket } from '@/lib/useDashboardSocket';
+import { formatMoney, intlLocale } from '@/lib/locale';
 
 /** Сколько живых событий держим в памяти. Остальное есть в истории. */
 const LIVE_BUFFER = 50;
@@ -88,7 +84,7 @@ export function EventsPage(): React.JSX.Element {
                   <p className="font-medium text-success">{formatMoney(event.amount)}</p>
                 ) : null}
                 <p className="text-xs text-muted">
-                  {new Date(event.createdAt).toLocaleTimeString('ru-RU')}
+                  {new Date(event.createdAt).toLocaleTimeString(intlLocale())}
                 </p>
               </div>
             </Card>

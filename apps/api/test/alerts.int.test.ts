@@ -378,4 +378,23 @@ describe('Виджеты и приём событий (feature)', () => {
     // и стример решил бы, что настройка сломалась.
     expect(await harness.prisma.alertEvent.count()).toBe(2);
   });
+
+  it('тестовый алерт — на языке дашборда: он уходит в OBS', async () => {
+    const english = await request(server())
+      .post('/api/events/test')
+      .set(auth())
+      .send({ language: 'en' })
+      .expect(201);
+    expect(english.body.username).toBe('Test viewer');
+
+    // Без тела — как раньше, по-русски: Express 5 оставляет body пустым.
+    const russian = await request(server()).post('/api/events/test').set(auth()).expect(201);
+    expect(russian.body.username).toBe('Тестовый зритель');
+
+    await request(server())
+      .post('/api/events/test')
+      .set(auth())
+      .send({ language: 'de' })
+      .expect(400);
+  });
 });

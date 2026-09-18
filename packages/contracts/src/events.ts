@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isoDateSchema, moneySchema, uuidSchema } from './common.js';
+import { LANGUAGES } from './messages.js';
 
 /** Типы событий, которые могут вызвать алерт на стриме. */
 export const ALERT_EVENT_TYPES = [
@@ -70,3 +71,12 @@ export const webhookAlertPayloadSchema = z.object({
   occurredAt: isoDateSchema.optional(),
 });
 export type WebhookAlertPayload = z.infer<typeof webhookAlertPayloadSchema>;
+
+/**
+ * Тестовый алерт из дашборда. Имя и текст пишет сервер — на языке интерфейса
+ * стримера: алерт уходит в OBS, и английский дашборд с «Тестовым зрителем» в
+ * кадре выглядел бы поломкой перевода. Без тела — по-русски: Express 5 оставляет
+ * `body` неопределённым, если его нет, отсюда `.default({})`.
+ */
+export const testEventSchema = z.object({ language: z.enum(LANGUAGES).optional() }).default({});
+export type TestEventInput = z.infer<typeof testEventSchema>;

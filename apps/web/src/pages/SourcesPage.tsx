@@ -20,12 +20,13 @@ import {
 } from '@/features/sources/queries';
 import { ApiError } from '@/lib/api';
 import { API_BASE } from '@/lib/config';
+import { intlLocale } from '@/lib/locale';
 
 const errorText = (error: unknown, fallback: string): string =>
   error instanceof ApiError ? error.message : fallback;
 
 const formatDate = (iso: string): string =>
-  new Date(iso).toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short' });
+  new Date(iso).toLocaleString(intlLocale(), { dateStyle: 'medium', timeStyle: 'short' });
 
 /**
  * Источники донатов.

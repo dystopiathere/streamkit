@@ -17,6 +17,8 @@ import {
   type CursorPagination,
   cursorPaginationSchema,
   type Page,
+  type TestEventInput,
+  testEventSchema,
 } from '@streamkit/contracts';
 import type { Request } from 'express';
 import { AuditService } from '../../common/audit/audit.service';
@@ -46,8 +48,11 @@ export class EventsController {
   /** Тестовый алерт: проверка настройки виджета без ожидания реального доната. */
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('test')
-  async test(@CurrentUser() user: AuthenticatedUser): Promise<AlertEvent> {
-    return this.events.createTestEvent(user.id);
+  async test(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(testEventSchema)) body: TestEventInput,
+  ): Promise<AlertEvent> {
+    return this.events.createTestEvent(user.id, body.language);
   }
 
   /** Выдаёт новый секрет вебхука. Показывается один раз. */

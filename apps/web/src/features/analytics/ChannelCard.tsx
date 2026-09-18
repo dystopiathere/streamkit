@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, Card } from '@streamkit/app-kit';
 import { useChannelSeries, useChannelSummary, useDisconnectChannel } from './queries';
 import { MetricChart } from './MetricChart';
+import { intlLocale } from '@/lib/locale';
 
 interface ChannelCardProps {
   channel: Channel;
@@ -145,7 +146,7 @@ function Stat({ label, value, delta, suffix }: StatProps): React.JSX.Element {
           </span>
         ) : (
           <>
-            {new Intl.NumberFormat('ru-RU').format(value)}
+            {new Intl.NumberFormat(intlLocale()).format(value)}
             {suffix ? <span className="ml-1 text-sm font-normal text-muted">{suffix}</span> : null}
           </>
         )}
@@ -153,7 +154,7 @@ function Stat({ label, value, delta, suffix }: StatProps): React.JSX.Element {
       {delta !== undefined && delta !== null && delta !== 0 ? (
         <p className={delta > 0 ? 'text-xs text-success' : 'text-xs text-muted'}>
           {delta > 0 ? '+' : ''}
-          {new Intl.NumberFormat('ru-RU').format(delta)}
+          {new Intl.NumberFormat(intlLocale()).format(delta)}
         </p>
       ) : null}
     </div>

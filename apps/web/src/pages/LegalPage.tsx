@@ -1,3 +1,4 @@
+import { isLanguage } from '@streamkit/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import Markdown, { type Components } from 'react-markdown';
@@ -6,6 +7,7 @@ import remarkGfm from 'remark-gfm';
 import { MainContent, NewTabHint, SkipLink, usePageTitle } from '@streamkit/app-kit';
 import { PublicFooter } from '@/features/public/PublicFooter';
 import { escapeMarkdown, fillDocumentDetails, useSeller } from '@/features/public/seller';
+import { setLanguage } from '@/lib/locale';
 
 /** Соответствие адреса страницы файлу документа в public/legal. */
 const DOCUMENT_FILES: Record<string, string> = {
@@ -31,19 +33,26 @@ const OWN_HOSTS = new Set(['stream-kit.ru', 'www.stream-kit.ru']);
  * документ, ради которого человек пришёл. Сырой HTML в документах не
  * разрешён (`react-markdown` его не исполняет), а опасные схемы ссылок
  * вычищаются им же — текст остаётся дословным, меняется только оформление.
+ *
+ * Английский текст — перевод в `public/legal/en`, в начале каждого сказано,
+ * что действует русская редакция. Номер и дата редакции у перевода те же, что
+ * у оригинала: это проверяет `legal-documents.test.ts`.
  */
 export function LegalPage(): React.JSX.Element {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { slug = '' } = useParams();
+  // Язык из хука, а не из currentLanguage(): страница должна перерисоваться и
+  // перезапросить документ, когда переключают язык.
+  const language = i18n.language === 'en' ? 'en' : 'ru';
   const file = DOCUMENT_FILES[slug];
   const seller = useSeller();
 
   const document = useQuery({
-    queryKey: ['legal', slug],
+    queryKey: ['legal', language, slug],
     enabled: Boolean(file),
     queryFn: async () => {
-      const response = await fetch(`/legal/${file}`);
-      if (!response.ok) throw new Error('Документ недоступен');
+      const response = await fetch(language === 'en' ? `/legal/en/${file}` : `/legal/${file}`);
+      if (!response.ok) throw new Error(`Документ ${response.status}`);
       return response.text();
     },
   });
@@ -91,8 +100,16 @@ export function LegalPage(): React.JSX.Element {
 function DocumentLink({ href = '', children }: { href?: string; children?: React.ReactNode }) {
   const url = safeUrl(href);
   if (url && OWN_HOSTS.has(url.hostname)) {
+    // `?lang=ru` — ссылка перевода на русский оригинал. Язык читается из адреса
+    // только при загрузке страницы, а переход здесь внутри приложения, поэтому
+    // язык переключается щелчком.
+    const language = url.searchParams.get('lang');
     return (
-      <Link to={`${url.pathname}${url.hash}`} className="underline hover:text-fg">
+      <Link
+        to={`${url.pathname}${url.hash}`}
+        {...(isLanguage(language) ? { onClick: () => setLanguage(language) } : {})}
+        className="underline hover:text-fg"
+      >
         {children}
       </Link>
     );
