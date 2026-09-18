@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
 import { HttpClient } from '../../common/http/http-client.service';
 import { EventsModule } from '../events/events.module';
-import { ConnectorManager } from './connector-manager.service';
+import { ConnectorManager, ConnectorScheduler } from './connector-manager.service';
+import { DonationSourcesController } from './donation-sources.controller';
+import { DonationSourcesService } from './donation-sources.service';
+import { DonationAlertsApi } from './donationalerts.api';
 import { DonationAlertsConnector } from './donationalerts.connector';
 import { IntegrationsController } from './integrations.controller';
 import { OAuthStateService } from './oauth-state.service';
@@ -19,7 +22,7 @@ import { YouTubeProvider } from './youtube.provider';
  */
 @Module({
   imports: [EventsModule],
-  controllers: [IntegrationsController],
+  controllers: [IntegrationsController, DonationSourcesController],
   providers: [
     HttpClient,
     TwitchProvider,
@@ -28,8 +31,10 @@ import { YouTubeProvider } from './youtube.provider';
     PlatformTokenService,
     OAuthStateService,
     PlatformConnectionService,
+    DonationAlertsApi,
+    DonationSourcesService,
   ],
-  exports: [PlatformRegistry, PlatformTokenService, PlatformConnectionService],
+  exports: [PlatformRegistry, PlatformTokenService, PlatformConnectionService, DonationAlertsApi],
 })
 export class IntegrationsModule {}
 
@@ -43,7 +48,7 @@ export class IntegrationsModule {}
  */
 @Module({
   imports: [EventsModule, IntegrationsModule],
-  providers: [DonationAlertsConnector, ConnectorManager],
+  providers: [DonationAlertsConnector, ConnectorManager, ConnectorScheduler],
   exports: [ConnectorManager],
 })
 export class DonationConnectorsModule {}

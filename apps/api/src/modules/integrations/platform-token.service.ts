@@ -5,6 +5,7 @@ import { CryptoService } from '../../common/crypto/crypto.service';
 import { PlatformAuthError } from '../../common/http/platform-errors';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { RedisLock } from '../../common/redis/lock.service';
+import { DonationAlertsApi } from './donationalerts.api';
 import type { OAuthTokens } from './platform-provider';
 import { PlatformRegistry } from './platform-registry.service';
 
@@ -33,10 +34,10 @@ const REFRESH_WAIT_STEP_MS = 500;
 /**
  * Чьи учётные данные умеет хранить сервис.
  *
- * Шире, чем `Platform`: донат-площадки тоже кладут сюда OAuth-токены, хотя
- * провайдера метрик у них нет. Продлить их пока нечем — но и это лучше, чем
- * прежнее поведение, когда протухший токен молча уезжал в коннектор и источник
- * переставал работать без единого сообщения.
+ * Шире, чем `Platform`: донат-сервисы тоже кладут сюда OAuth-токены, хотя
+ * провайдера метрик у них нет. Продлевает их клиент сервиса
+ * (`DonationAlertsApi`); сервис без него — DonatePay — продлить нечем, и его
+ * доступ честно объявляется мёртвым вместо того, чтобы отдать протухший токен.
  */
 export type CredentialProvider = Platform | 'donationalerts' | 'donatepay';
 
@@ -63,6 +64,7 @@ export class PlatformTokenService {
     private readonly lock: RedisLock,
     private readonly registry: PlatformRegistry,
     private readonly audit: AuditService,
+    private readonly donationAlerts: DonationAlertsApi,
   ) {}
 
   /**
@@ -160,10 +162,13 @@ export class PlatformTokenService {
     platform: CredentialProvider,
     encryptedRefreshToken: string,
   ): Promise<string> {
-    const provider = this.registry.find(platform as Platform);
+    const provider =
+      platform === 'donationalerts'
+        ? this.donationAlerts
+        : this.registry.find(platform as Platform);
     if (!provider) {
-      // Донат-площадки: токен есть, провайдера для обновления нет. Честно
-      // сообщаем, что доступ мёртв, вместо того чтобы отдать протухший токен.
+      // Токен есть, продлить нечем. Честно сообщаем, что доступ мёртв, вместо
+      // того чтобы отдать протухший токен.
       await this.audit.record('integration.token.expired', userId, { metadata: { platform } });
       throw new PlatformAuthError(platform, 401, 'Срок доступа истёк, требуется переподключение');
     }

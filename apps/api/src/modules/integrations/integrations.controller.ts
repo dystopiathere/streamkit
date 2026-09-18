@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Query, Req, Res } from '@nestjs/common';
+import { Controller, Get, Logger, Param, Post, Query, Req, Res } from '@nestjs/common';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import {
   type AuthorizeResponse,
@@ -36,6 +36,8 @@ const callbackSchema = z.object({
 @SkipThrottle({ auth: true })
 @Controller('integrations')
 export class IntegrationsController {
+  private readonly logger = new Logger(IntegrationsController.name);
+
   constructor(
     private readonly connections: PlatformConnectionService,
     private readonly audit: AuditService,
@@ -107,9 +109,11 @@ export class IntegrationsController {
         this.audit.contextFromRequest(request),
       );
       response.redirect(this.dashboardUrl(platform, 'connected'));
-    } catch {
-      // Причина уже в аудите и логах. Наружу — только факт, потому что здесь
-      // ещё не известно, кто именно пришёл: state не сошёлся.
+    } catch (error) {
+      // Наружу — только факт: здесь ещё не известно, кто именно пришёл. Причина
+      // — в журнал: аудит пишет только отказ по state, а сбой обмена кода у
+      // площадки иначе не оставлял следа нигде.
+      this.logger.warn({ err: error, platform }, 'Подключение площадки не завершено');
       response.redirect(this.dashboardUrl(platform, 'failed'));
     }
   }
