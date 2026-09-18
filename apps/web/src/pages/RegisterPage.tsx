@@ -21,6 +21,7 @@ import { PublicFooter } from '@/features/public/PublicFooter';
 import { trackSiteEvent } from '@/features/public/site-stats';
 import { ApiError, api } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
+import { localizedResolver } from '@/lib/form-errors';
 
 /**
  * Согласия оформлены отдельными чекбоксами и не проставлены заранее.
@@ -45,7 +46,7 @@ export function RegisterPage(): React.JSX.Element {
   const setSession = useAuthStore((state) => state.setSession);
 
   const form = useForm<RegisterInput>({
-    resolver: zodResolver(registerSchema),
+    resolver: localizedResolver(zodResolver(registerSchema)),
     defaultValues: {
       email: '',
       password: '',

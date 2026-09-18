@@ -78,10 +78,15 @@ export function minorToDecimalString(amountMinor: number): string {
   return `${whole}.${String(fraction).padStart(2, '0')}`;
 }
 
+/**
+ * Сумма для людей. `narrowSymbol` — ради английского: без него `en-US` пишет
+ * «RUB 490» вместо «₽490». Русский вывод от этого не меняется.
+ */
 export function formatMoney(money: Money, locale = 'ru-RU'): string {
   return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: money.currency,
+    currencyDisplay: 'narrowSymbol',
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(money.amountMinor / MINOR_UNITS_PER_MAJOR);

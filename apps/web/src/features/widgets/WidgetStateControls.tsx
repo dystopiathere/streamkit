@@ -3,7 +3,6 @@ import {
   type WidgetState,
   formatDuration,
   formatMinorForInput,
-  formatMoney,
   hasWidgetState,
   parseMajorToMinor,
 } from '@streamkit/contracts';
@@ -13,6 +12,7 @@ import { toast } from 'sonner';
 import { Button, Card, Input, Label } from '@streamkit/app-kit';
 import { ApiError } from '@/lib/api';
 import { useWidgetCommand, useWidgetState } from './queries';
+import { formatMoney, intlLocale } from '@/lib/locale';
 
 /**
  * Управление состоянием виджета из дашборда.
@@ -174,7 +174,7 @@ function TimerControls({
             <>
               <span className="text-muted">{t('widgets.state.until')} </span>
               <span className="font-medium tabular-nums">
-                {new Date(timer.endsAt).toLocaleTimeString('ru-RU', {
+                {new Date(timer.endsAt).toLocaleTimeString(intlLocale(), {
                   hour: '2-digit',
                   minute: '2-digit',
                   second: '2-digit',

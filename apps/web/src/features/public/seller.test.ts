@@ -1,6 +1,6 @@
 import { formatMoney, PLAN_PRICES } from '@streamkit/contracts';
 import { describe, expect, it } from 'vitest';
-import { escapeMarkdown, fillDocumentDetails, MISSING } from './seller';
+import { escapeMarkdown, fillDocumentDetails, missingValue } from './seller';
 
 describe('реквизиты и цены в тексте документа', () => {
   it('подставляет заполненные реквизиты', () => {
@@ -17,7 +17,7 @@ describe('реквизиты и цены в тексте документа', ()
 
   it('незаполненное показывает явно, а не оставляет пустое место', () => {
     // Документ с «ИНН ,» выглядит как опечатка, а не как невнесённые реквизиты.
-    expect(fillDocumentDetails('ИНН {{SELLER_INN}}', undefined)).toBe(`ИНН ${MISSING}`);
+    expect(fillDocumentDetails('ИНН {{SELLER_INN}}', undefined)).toBe(`ИНН ${missingValue()}`);
   });
 
   it('цены в оферте берутся из тарифа, а не вписываются руками', () => {

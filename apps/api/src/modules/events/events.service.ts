@@ -1,12 +1,24 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { AlertEvent, CursorPagination, IncomingAlertEvent, Page } from '@streamkit/contracts';
+import type {
+  AlertEvent,
+  CursorPagination,
+  IncomingAlertEvent,
+  Language,
+  Page,
+} from '@streamkit/contracts';
 import { RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { WidgetStateService } from '../widgets/widget-state.service';
 import { DedupService } from './dedup.service';
 import { toContractEvent, toPrismaEventType, toPrismaProvider } from './event.mappers';
+
+/** Подпись тестового алерта: он уходит в OBS, поэтому на языке дашборда стримера. */
+const TEST_EVENT_TEXT: Record<Language, { username: string; message: string }> = {
+  ru: { username: 'Тестовый зритель', message: 'Проверка оповещения' },
+  en: { username: 'Test viewer', message: 'Checking the alert' },
+};
 
 export type IngestResult =
   { status: 'created'; event: AlertEvent } | { status: 'duplicate'; event: null };
@@ -107,14 +119,15 @@ export class EventsService {
    * Тестовый алерт из дашборда. Отдельный `externalId` на каждый вызов — иначе
    * дедупликация отбросит вторую проверку, и стример решит, что всё сломалось.
    */
-  async createTestEvent(userId: string): Promise<AlertEvent> {
+  async createTestEvent(userId: string, language: Language = 'ru'): Promise<AlertEvent> {
+    const text = TEST_EVENT_TEXT[language];
     const result = await this.ingest({
       userId,
       type: 'donation',
       provider: 'manual',
       externalId: `test-${randomUUID()}`,
-      username: 'Тестовый зритель',
-      message: 'Проверка оповещения',
+      username: text.username,
+      message: text.message,
       amount: { amountMinor: 50_000, currency: 'RUB' },
       isTest: true,
       occurredAt: new Date().toISOString(),

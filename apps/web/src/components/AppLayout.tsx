@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { LanguageSwitch } from '@/components/LanguageSwitch';
 import { api } from '@/lib/api';
 import { useAuthStore, useCurrentUser } from '@/lib/auth-store';
 import {
@@ -90,9 +91,12 @@ export function AppLayout(): React.JSX.Element {
               <span className="min-w-0 truncate px-3 text-sm text-muted lg:px-0">
                 {user?.displayName}
               </span>
-              <Button variant="ghost" onClick={handleLogout}>
-                {t('nav.logout')}
-              </Button>
+              <div className="flex items-center gap-1">
+                <LanguageSwitch className="rounded-lg px-3 py-1.5 text-sm text-muted" />
+                <Button variant="ghost" onClick={handleLogout}>
+                  {t('nav.logout')}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button, Card, Input } from '@streamkit/app-kit';
 import { useCreateInvite, useInvites, useRevokeInvite } from './queries';
+import { intlLocale } from '@/lib/locale';
 
 /**
  * Ссылки-приглашения комнаты.
@@ -104,7 +105,7 @@ export function RoomInvites({ roomId }: { roomId: string }): React.JSX.Element {
               <p className="text-xs text-muted">
                 {t('rooms.invites.lastUsed')}:{' '}
                 {invite.lastUsedAt
-                  ? new Date(invite.lastUsedAt).toLocaleString('ru-RU')
+                  ? new Date(invite.lastUsedAt).toLocaleString(intlLocale())
                   : t('rooms.invites.never')}
               </p>
             </div>

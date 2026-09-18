@@ -1,0 +1,194 @@
+# StreamKit Privacy Policy
+
+Version No. 6 of 18.09.2026
+
+This is an English translation provided for convenience. The governing text is
+the [Russian version](https://stream-kit.ru/legal/privacy?lang=ru); if the two
+differ, the Russian version prevails.
+
+## 1. Who processes the data
+
+The personal data operator is {{SELLER_NAME}}, a professional income tax payer
+(self-employed), Taxpayer ID (INN) {{SELLER_INN}}. Send questions about the
+processing of personal data to {{SELLER_EMAIL}}.
+
+This Policy applies to the StreamKit service at https://stream-kit.ru.
+
+## 2. What data we process
+
+**Account:** email address, display name, password hash (the password itself is
+not stored and cannot be recovered), and the encrypted two-factor authentication
+secret, if it is enabled.
+
+**Operation of the service:**
+
+- widget settings and room names;
+- session details and the security log: IP address hash, User-Agent string,
+  time of sign-in and of significant actions;
+- the consent log: which document, which version, and when it was accepted or
+  withdrawn.
+
+**Connected platforms** (Twitch, YouTube, DonationAlerts): access tokens issued
+by these services (stored encrypted and not shown even to the owner), the
+channel ID, name and image, numeric channel metrics (viewers, subscribers,
+whether the channel is live), and for DonationAlerts, the account ID and name.
+We do not store or use the email address of the platform account.
+DonationAlerts sends it together with the profile, without which donations
+cannot be connected — we discard it immediately without storing it.
+
+**Payment for the Pro plan:** amount and billing period, payment and refund
+history, the encrypted identifier of the saved payment method and its label such
+as “Card \*4444”. Card details are entered on the YooKassa page and are not
+passed to us.
+
+**Service emails:** the account email address and display name — for emails
+about an upcoming automatic charge.
+
+**Private room guests** (no sign-up): the guest's consent log — invite link,
+version of the terms, time, IP address hash and User-Agent. We process the
+guest's name, image and voice on behalf of the user, see section 4.
+
+**Visit statistics** (only with consent, on the home page, document pages and
+the sign-in and sign-up pages): the page address without parameters except
+`utm_*` tags, the referring site and page without parameters, the page title,
+screen size, language, browser, operating system and device type, country and
+city by IP address (the IP address itself is not stored), and the facts of
+signing up and proceeding to payment. Visitors are distinguished by a hash whose
+secret changes once a month. The consent log of a visitor without an account: a
+random browser identifier, document version, time, IP address hash and
+User-Agent. Details are in the Cookie Policy.
+
+## 3. Purposes and legal grounds
+
+| Purpose | Legal ground |
+|---|---|
+| Providing the service: widgets, events, analytics, rooms | Performance of the contract (Terms of Service) |
+| Sign-up, sign-in, account protection | Performance of the contract |
+| Plan payment, automatic renewal, refunds | Performance of the contract (Pro plan offer) |
+| Emails about an upcoming charge | Performance of the contract |
+| Security logs, incident investigation | The Operator's legitimate interest |
+| Proof of consents given | Requirement of Federal Law No. 152-FZ |
+| Visit statistics for public pages | Consent in the banner; withdrawn via the “Cookie settings” link or in the Privacy section |
+
+The purposes and legal grounds for processing the data in section 4 are
+determined by the user as its operator.
+
+## 4. Viewer and guest data: processing on behalf of the user
+
+4.1. Some data enters the service not from the user but from people the user
+works with on stream. **The operator of this data is the user**, and we process
+it on the user's behalf under section 13 of the Terms of Service (Part 3 of
+Article 6 of Federal Law No. 152-FZ):
+
+- **event participants** from services connected by the user (donations,
+  subscriptions, raids): name or nickname, message text, amount and currency,
+  time. Stored in the user's event history. The Top donors widget shows names on
+  the widget page, which the user adds to the stream;
+- **Twitch chat viewers**: username and message text. Pass through the service
+  in real time and are **not stored**;
+- **private room guests**: name, image and voice. Transmitted in real time and
+  **not recorded**. The decision to show a guest on stream is made by the user,
+  who also obtains the guest's consent to it.
+
+4.2. We use this data only to run the user's widgets, event history and video
+calls, and for no purposes of our own.
+
+4.3. If you are a donor, viewer or guest and want to learn about, correct or
+delete your data, contact the streamer: they are the operator and respond to
+such requests. A request sent to us at {{SELLER_EMAIL}} will be forwarded to the
+streamer within 3 business days, and on the streamer's instruction we will
+correct or delete the data within 5 business days.
+
+## 5. Where the data is stored
+
+Databases and the media server are hosted on Yandex Cloud servers in the Russian
+Federation, in accordance with Part 5 of Article 18 of Federal Law No. 152-FZ.
+
+## 6. Who the data is shared with
+
+We do not sell personal data. Data is shared only with:
+
+- **Yandex.Cloud LLC** — hosting of the service, including visit statistics
+  (Umami on the Operator's servers in Yandex Cloud), and sending service emails
+  (Yandex Cloud Postbox), on the Operator's behalf, in the Russian Federation;
+- **YooMoney NCO LLC** (YooKassa) — processing payments and refunds: payment
+  amount, email address for the receipt;
+- **Twitch and Google (YouTube)** — only if the user has connected the platform:
+  the service calls their APIs with the tokens these platforms issued to the
+  user in order to obtain channel metrics. These companies' servers are located
+  outside the Russian Federation; we do not share any other user data with them;
+- authorized public authorities on request — in cases expressly provided for by
+  law.
+
+## 7. Retention periods
+
+| Data | Period |
+|---|---|
+| Account | Until the account is deleted |
+| Donation events | Until the account is deleted, then anonymized |
+| Security log (audit), including staff actions | 180 days |
+| Sign-in sessions | Until sign-out or expiry, no more than 30 days |
+| Platform channel metrics | 90 days |
+| Platform tokens | Until the platform is disconnected or the account is deleted |
+| Saved payment method | Until the account is deleted; earlier if access to it is revoked or the card expires |
+| Payment and refund history | 5 years from the payment date |
+| Users' consent log | 3 years after processing ends |
+| Room guests' consent log | 180 days |
+| Visit statistics | 13 months |
+| Consent log of visitors without an account | 3 years from the date of consent |
+| Guest image, sound and name | Not stored |
+| Twitch chat messages | Not stored |
+
+## 8. Your rights
+
+You have the right to receive information about the processing of your data, to
+demand its correction, blocking or destruction, to withdraw consent, and to
+export your data in a machine-readable format.
+
+You can export your data, withdraw optional consents and delete your account
+yourself in the Privacy section of your dashboard. Send other requests to
+{{SELLER_EMAIL}}; we respond within no more than 10 business days.
+
+Requests about data we process on behalf of the user are handled as described
+in clause 4.3.
+
+## 9. Account deletion
+
+Deletion is confirmed with the password. The email address and display name are
+anonymized, the password and the second factor are deleted, sessions are ended,
+widget links are revoked, platform connections with their tokens and metrics are
+deleted, rooms and invites are deleted, auto-renewal is turned off, and the
+saved payment method is erased. Donors' names and messages are anonymized.
+Event amounts and dates and the payment history are kept in anonymized form for
+the periods in section 7 — for accounting and dispute resolution.
+
+## 10. Data protection
+
+Passwords are stored as argon2id hashes. Platform tokens, two-factor
+authentication secrets and payment method identifiers are encrypted with
+AES-256-GCM. Session tokens and widget and room links are stored only as
+hashes. Connections are protected with TLS. Access to servers is restricted by
+keys and logged.
+
+The operator's staff work with accounts through the admin panel. Access to it
+is role-based: support sees account data and can end sessions and revoke widget
+links and room invites; an administrator can in addition suspend access,
+anonymize an account and assign roles. Signing in to the panel requires
+two-factor authentication. Every view of an account and every staff action is
+recorded in the security log with the staff member's identity and kept for 180
+days.
+
+Data we process on behalf of the user (section 4) — event participants' names
+and messages, guests' names — is not shown in the panel: staff see only the
+number of events.
+
+## 11. Cookies
+
+The cookies used by the service are described in the Cookie Policy
+(https://stream-kit.ru/legal/cookies).
+
+## 12. Changes to this Policy
+
+When the text changes, a new version is published with its date. If the changes
+affect the purposes or scope of processing, we will ask for consent again:
+consent previously given applies to a specific version of the document.

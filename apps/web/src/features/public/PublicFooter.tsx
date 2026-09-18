@@ -2,8 +2,9 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { resetVisitorCookieChoice } from '@/components/CookieBanner';
+import { LanguageSwitch } from '@/components/LanguageSwitch';
 import { useIsAuthenticated } from '@/lib/auth-store';
-import { MISSING, useSeller } from './seller';
+import { missingValue, useSeller } from './seller';
 
 const DOCUMENTS = [
   { to: '/legal/terms', label: 'public.footer.terms' },
@@ -56,15 +57,18 @@ export function PublicFooter(): React.JSX.Element {
                 </button>
               )}
             </li>
+            <li>
+              <LanguageSwitch />
+            </li>
           </ul>
         </nav>
         <p data-testid="seller-requisites">
           {t('public.footer.seller', {
-            name: seller.data?.name ?? MISSING,
-            inn: seller.data?.inn ?? MISSING,
+            name: seller.data?.name ?? missingValue(),
+            inn: seller.data?.inn ?? missingValue(),
           })}
           <span aria-hidden="true"> · </span>
-          <span className="whitespace-nowrap">{seller.data?.email ?? MISSING}</span>
+          <span className="whitespace-nowrap">{seller.data?.email ?? missingValue()}</span>
         </p>
       </div>
     </footer>

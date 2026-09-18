@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button, Card, Input } from '@streamkit/app-kit';
 import { useCreateOverlayToken, useOverlayTokens, useRevokeOverlayToken } from './queries';
+import { intlLocale } from '@/lib/locale';
 
 /**
  * Управление публичными ссылками виджета.
@@ -84,7 +85,7 @@ export function OverlayTokens({ widgetId }: { widgetId: string }): React.JSX.Ele
               <p className="text-xs text-muted">
                 {t('widgets.tokens.lastSeen')}:{' '}
                 {token.lastSeenAt
-                  ? new Date(token.lastSeenAt).toLocaleString('ru-RU')
+                  ? new Date(token.lastSeenAt).toLocaleString(intlLocale())
                   : t('widgets.tokens.never')}
               </p>
             </div>

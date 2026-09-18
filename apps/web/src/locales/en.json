@@ -1,0 +1,627 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "create": "Create",
+    "copy": "Copy",
+    "copied": "Copied",
+    "loading": "Loading…",
+    "back": "Back",
+    "error": "Something went wrong",
+    "newTab": " (opens in a new tab)",
+    "skipToContent": "Skip to content",
+    "deleteNamed": "Delete “{{name}}”",
+    "openNamed": "Open “{{name}}”",
+    "editNamed": "Set up “{{name}}”",
+    "noData": "no data"
+  },
+  "nav": {
+    "widgets": "Widgets",
+    "events": "Events",
+    "sources": "Sources",
+    "privacy": "Privacy",
+    "logout": "Sign out",
+    "analytics": "Analytics",
+    "rooms": "Rooms",
+    "billing": "Plan",
+    "main": "Sections",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "home": "StreamKit — home"
+  },
+  "auth": {
+    "loginTitle": "Sign in",
+    "registerTitle": "Sign up",
+    "email": "Email",
+    "password": "Password",
+    "displayName": "Display name",
+    "totpCode": "Code from the app",
+    "totpRequired": "Enter your two-factor authentication code",
+    "submitLogin": "Sign in",
+    "submitRegister": "Create account",
+    "toRegister": "No account? Sign up",
+    "toLogin": "Already have an account? Sign in",
+    "passwordHint": "At least 12 characters",
+    "consentTerms": "I accept the Terms of Service",
+    "consentPrivacy": "I have read the Privacy Policy",
+    "consentPersonalData": "I consent to the processing of my personal data",
+    "consentRequired": "You cannot sign up without these consents",
+    "consentsLegend": "Consents"
+  },
+  "widgets": {
+    "title": "Widgets",
+    "empty": "No widgets yet. Create your first one and get a link for OBS.",
+    "create": "New widget",
+    "namePlaceholder": "Widget name",
+    "enabled": "On",
+    "disabled": "Off",
+    "edit": "Set up",
+    "testAlert": "Test alert",
+    "testSent": "Test alert sent",
+    "deleteConfirm": "Delete the widget? All its links will stop working.",
+    "editorTitle": "Widget settings",
+    "preview": "Preview",
+    "section": {
+      "behavior": "Behavior",
+      "text": "Text",
+      "sound": "Sound",
+      "links": "Links for OBS",
+      "goal": "Goal",
+      "timer": "Timer",
+      "topDonors": "Top donors",
+      "appearance": "Appearance",
+      "state": "Controls",
+      "chat": "Chat",
+      "guests": "Guests"
+    },
+    "field": {
+      "layout": "Layout",
+      "durationMs": "Display time, ms",
+      "gapMs": "Pause between alerts, ms",
+      "minAmount": "Minimum amount",
+      "titleTemplate": "Title",
+      "messageTemplate": "Message",
+      "fontSize": "Font size",
+      "color": "Text color",
+      "highlightColor": "Accent color",
+      "strokeWidth": "Outline width",
+      "animationIn": "Entrance animation",
+      "animationOut": "Exit animation",
+      "imageUrl": "Image (https)",
+      "soundEnabled": "Play a sound",
+      "soundUrl": "Sound link (https)",
+      "volume": "Volume",
+      "type": "Widget type",
+      "currency": "Currency",
+      "countTypes": "What counts toward it",
+      "showAmounts": "Show amounts",
+      "goalTitle": "Goal title",
+      "targetMinor": "Goal",
+      "barColor": "Bar color",
+      "trackColor": "Bar background color",
+      "offsetMinor": "Starting amount",
+      "timerTitle": "Label above the timer",
+      "initialSeconds": "Starting time, s",
+      "maxSeconds": "Maximum, s",
+      "secondsPerUnit": "Seconds per unit ({{currency}})",
+      "showHours": "Show hours",
+      "topDonorsTitle": "List title",
+      "period": "Period",
+      "limit": "Number of rows",
+      "channel": "Twitch channel",
+      "maxMessages": "Messages on screen",
+      "messageLifetime": "Message fades after, s",
+      "hiddenUsers": "Hidden usernames",
+      "hideCommands": "Hide bot commands",
+      "showBadges": "Show badges",
+      "showEmotes": "Show emotes",
+      "newestFirst": "Newest on top",
+      "useAuthorColors": "Username colors as on Twitch",
+      "guestsLayout": "Layout",
+      "maxTiles": "Guests in frame",
+      "showNames": "Show names",
+      "showWithoutVideo": "Show guests without a camera",
+      "tileGap": "Gap between tiles, px",
+      "cornerRadius": "Corner radius, px",
+      "room": "Room"
+    },
+    "templateHint": "Available variables: {{vars}}",
+    "tokens": {
+      "title": "Browser source links",
+      "empty": "No links yet",
+      "create": "Create link",
+      "revoke": "Revoke",
+      "revokeConfirm": "Revoke the link? The source open in OBS will stop working immediately.",
+      "oneTimeWarning": "The link is shown only once — save it now. It cannot be recovered later; you can only issue a new one.",
+      "lastSeen": "Last activity",
+      "never": "never connected",
+      "urlLabel": "New link for OBS",
+      "revokeNamed": "Revoke link {{name}}"
+    },
+    "type": {
+      "alerts": "Alerts",
+      "goal": "Donation goal",
+      "timer": "Timer",
+      "top-donors": "Top donors",
+      "chat": "Chat",
+      "guests": "Room guests"
+    },
+    "period": {
+      "24h": "Last 24 hours",
+      "7d": "Last week",
+      "30d": "Last month",
+      "all": "All time"
+    },
+    "hint": {
+      "goalCurrency": "The goal is counted in a single currency. Donations in other currencies do not count toward it — we won't add them up at an exchange rate, or the raised amount would change after the fact.",
+      "secondsPerUnit": "How many seconds one unit of currency adds ({{currency}}). Zero means donations add no time.",
+      "offsetMinor": "Added to the raised amount. Use it when part of the sum was raised before you set up the widget.",
+      "countTypes": "You can pick several. Only events with an amount count — a subscription without an amount adds nothing.",
+      "minAmount": "Compared with the donation amount as is, without currency conversion: a threshold of 100 filters out both 100 ₽ and 100 $.",
+      "channel": "The channel login from twitch.tv/YOUR_CHANNEL. The chat is read anonymously: no need to connect the platform.",
+      "channelConnected": "Connected channel: {{channel}}. You can enter any other one too — the chat is read anonymously.",
+      "messageLifetime": "0 means messages stay on screen until newer ones push them out.",
+      "hiddenUsers": "Comma-separated. Common bots are hidden by default.",
+      "showWithoutVideo": "Otherwise a guest with the camera off disappears from the frame while still talking.",
+      "room": "This widget's OBS link opens the video and audio of the room's guests. Keep it as safe as a password.",
+      "noRooms": "Create a room in the Rooms section first.",
+      "roomMissing": "No room selected — this widget will show nothing in OBS. Pick a room and save.",
+      "roomDeleted": "This widget's room was deleted — it will show nothing in OBS. Pick another room and save."
+    },
+    "state": {
+      "raised": "Raised",
+      "start": "Start",
+      "pause": "Pause",
+      "reset": "Reset",
+      "addTenMinutes": "+10 minutes",
+      "paused": "paused",
+      "topEmpty": "No donations in the selected period yet",
+      "until": "until"
+    },
+    "guestsLayout": {
+      "grid": "Grid",
+      "row": "Row",
+      "column": "Column"
+    },
+    "roomNotSelected": "— not selected —",
+    "defaultTitle": {
+      "goal": "Goal",
+      "topDonors": "Top donors"
+    }
+  },
+  "sources": {
+    "title": "Donation sources",
+    "lead": "Connect the service your viewers donate through: donations will appear in the event feed and in on-stream alerts.",
+    "state": {
+      "on": "Connected",
+      "broken": "Not working",
+      "off": "Not connected"
+    },
+    "notConfigured": "Connecting this service is not available yet.",
+    "donationalerts": {
+      "description": "You will sign in to DonationAlerts and allow StreamKit to receive your donations. We never see your DonationAlerts password and do not store the account email.",
+      "check": "To check, send yourself a test donation on DonationAlerts: it will appear in the event feed within a few seconds."
+    },
+    "connect": "Connect {{service}}",
+    "reconnect": "Reconnect",
+    "disconnect": "Disconnect",
+    "disconnectNamed": "Disconnect {{service}}",
+    "disconnectTitle": "Disconnect {{service}}?",
+    "disconnectText": "New donations will stop reaching your alerts. Donations already received stay in the event feed.",
+    "disconnected": "Service disconnected",
+    "connected": "DonationAlerts is connected. Donations will start arriving within a few seconds.",
+    "connectFailed": "Could not connect the service. Please try again.",
+    "account": "Account",
+    "lastEvent": "Last donation",
+    "lastEventAt": "Last event: {{date}}",
+    "noEvents": "No donations yet",
+    "brokenFallback": "The service stopped responding. Reconnect it.",
+    "webhookTitle": "For developers: your own webhook",
+    "webhookDescription": "If you have your own bot or service, it can send donations directly. Each request is signed with HMAC-SHA256 using the secret below — this cannot be set up without programming; for regular donations, connect a service above.",
+    "createWebhook": "Create webhook",
+    "rotate": "Issue a new secret",
+    "rotateWarning": "The old secret will stop working immediately.",
+    "secretShownOnce": "The secret is shown only once — save it in your program.",
+    "urlLabel": "Webhook URL",
+    "secretLabel": "Webhook secret"
+  },
+  "events": {
+    "title": "Recent events",
+    "empty": "No events yet",
+    "test": "test",
+    "type": {
+      "donation": "Donation",
+      "follow": "Follow",
+      "subscription": "Paid subscription",
+      "resubscription": "Resubscription",
+      "cheer": "Bits",
+      "raid": "Raid",
+      "reward": "Channel points reward"
+    },
+    "feedLabel": "Event feed"
+  },
+  "privacy": {
+    "title": "Privacy and data",
+    "consents": "Consents",
+    "accepted": "Accepted on {{date}}",
+    "notAccepted": "Not accepted",
+    "needsRenewal": "The document has been updated — please confirm",
+    "renew": "Confirm",
+    "grant": "Give consent",
+    "revoke": "Withdraw",
+    "export": "Download my data",
+    "exportDescription": "Everything the service stores about you, in a single JSON file.",
+    "deleteTitle": "Delete account",
+    "deleteDescription": "Your personal data will be anonymized, OBS links revoked and integrations disconnected. This cannot be undone.",
+    "deleteConfirmLabel": "Type {{word}} to confirm",
+    "deletePasswordLabel": "Current password",
+    "deleteButton": "Delete account",
+    "revokeNamed": "Withdraw: {{name}}",
+    "grantNamed": "Give consent: {{name}}",
+    "renewNamed": "Confirm: {{name}}",
+    "totp": {
+      "title": "Two-factor sign-in",
+      "on": "On",
+      "off": "Off",
+      "description": "When you sign in, you will need a code from an authenticator app in addition to your password. Staff cannot sign in to the admin panel without it.",
+      "enable": "Turn on",
+      "stepApp": "Install an authenticator app: Google Authenticator, Yandex Key or any app that supports TOTP.",
+      "stepScan": "Scan the QR code with the app or enter the key manually.",
+      "stepCode": "Enter the six-digit code the app shows.",
+      "qrAlt": "QR code for the authenticator app",
+      "manual": "Key for manual entry:",
+      "codeHint": "The code changes every 30 seconds.",
+      "confirm": "Confirm and turn on",
+      "enabled": "Two-factor sign-in is on",
+      "enabledDescription": "A code from the app is requested at every sign-in. Enter your password to turn it off.",
+      "disable": "Turn off two-factor sign-in",
+      "disabled": "Two-factor sign-in is off"
+    },
+    "deleteWord": "DELETE",
+    "documents": {
+      "TERMS": "Terms of Service",
+      "PRIVACY": "Privacy Policy",
+      "PERSONAL_DATA": "Consent to personal data processing",
+      "COOKIE_ANALYTICS": "Visit statistics (cookies)",
+      "MARKETING": "Marketing emails",
+      "SUBSCRIPTION_OFFER": "Pro plan offer and recurring charges"
+    }
+  },
+  "cookies": {
+    "message": "We use strictly necessary cookies. Visit statistics — on our own server, without cookies or ad networks — are collected only with your consent.",
+    "acceptAll": "Accept all",
+    "onlyNecessary": "Necessary only",
+    "more": "Learn more",
+    "label": "Cookie choice",
+    "moreAbout": "More about cookies and statistics"
+  },
+  "analytics": {
+    "title": "Platform analytics",
+    "empty": "No platforms connected. Connect a channel and metrics will be collected automatically.",
+    "connectTitle": "Connect a platform",
+    "connect": "Connect {{platform}}",
+    "notConfigured": "This platform has not been set up by the administrator",
+    "connected": "{{platform}} is connected",
+    "connectFailed": "Could not connect the platform. Please try again.",
+    "disconnect": "Disconnect",
+    "live": "Live",
+    "viewersNow": "Viewers",
+    "subscribers": "Subscribers",
+    "followers": "Followers",
+    "liveHours": "Live",
+    "hoursSuffix": "h",
+    "noValue": "—",
+    "noData": "No data yet",
+    "noLiveData": "No streams in this period",
+    "chartViewers": "Viewers",
+    "chartSubscribers": "Subscribers",
+    "donationsTitle": "Donations in the period",
+    "donationsCount_one": "{{count}} donation",
+    "donationsCount_other": "{{count}} donations",
+    "range": {
+      "24h": "Day",
+      "7d": "Week",
+      "30d": "Month"
+    },
+    "platform": {
+      "twitch": "Twitch",
+      "youtube": "YouTube"
+    },
+    "syncState": {
+      "auth-expired": "Access to the platform has expired. Reconnect it to resume collecting metrics.",
+      "rate-limited": "The platform's daily request limit is used up. Collection will resume automatically.",
+      "error": "The last metrics collection failed. We'll try again in a few minutes."
+    },
+    "rangeLabel": "Period",
+    "chartSummary": "{{title}}: from {{min}} to {{max}}, latest value {{last}}.",
+    "disconnectNamed": "Disconnect {{name}}"
+  },
+  "rooms": {
+    "title": "Private rooms",
+    "description": "Bring guests on stream: a guest joins by link without signing up, and the Room guests widget puts their video and audio into OBS.",
+    "namePlaceholder": "Room name",
+    "create": "New room",
+    "empty": "No rooms yet",
+    "open": "Open",
+    "deleteConfirm": "Delete the room? Everyone in it now will be disconnected, and invite links will stop working.",
+    "notConfigured": "Private rooms are not configured on this server.",
+    "lobby": {
+      "title": "You are not in the room",
+      "hint": "Listen to the room with headphones. Sound from speakers gets into your microphone and goes on stream as an echo.",
+      "join": "Join the room",
+      "withCamera": "Turn on camera"
+    },
+    "stage": {
+      "leave": "Leave",
+      "mic": "Microphone",
+      "camera": "Camera",
+      "empty": "Nobody here yet. Send a guest an invite link.",
+      "you": "you",
+      "host": "streamer",
+      "mute": "Mute microphone",
+      "remove": "Remove",
+      "removeAndRevoke": "Remove and revoke link",
+      "removeConfirm": "Remove the guest from the room? The link stays valid — they can come back.",
+      "revokeConfirm": "Remove the guest and revoke their link? They won't be able to come back with it.",
+      "on": "on",
+      "off": "off",
+      "allowMic": "Allow microphone",
+      "micBlocked": "Microphone turned off by the streamer",
+      "cameraFailed": "The camera didn't turn on: no access to the device, or another program is using it.",
+      "microphoneFailed": "The microphone didn't turn on: no access to the device, or another program is using it.",
+      "participants": "Participants",
+      "guestActions": "Actions for guest {{name}}"
+    },
+    "invites": {
+      "title": "Invites",
+      "labelPlaceholder": "Who the link is for, e.g. “Alex”",
+      "create": "Create link",
+      "empty": "No invites yet",
+      "oneTimeWarning": "The link is shown only once — send it to your guest now. One link, one guest: that way you can revoke it without affecting the others.",
+      "lastUsed": "Last joined",
+      "never": "never joined",
+      "revoke": "Revoke",
+      "revokeConfirm": "Revoke the link? A guest who is in the room with it now will be disconnected.",
+      "revokeNamed": "Revoke invite “{{name}}”"
+    },
+    "obs": {
+      "title": "Guests in OBS",
+      "hint": "The widget puts the video and audio of this room's guests into an OBS browser source. The streamer isn't in it: your camera and microphone are already in OBS.",
+      "empty": "No widgets for this room yet.",
+      "create": "Create a widget for this room",
+      "open": "Set up"
+    },
+    "microphone": {
+      "title": "Voice processing",
+      "presets": {
+        "full": {
+          "label": "Full",
+          "hint": "Built-in microphone, headset, speakers. The browser removes noise and echo and evens out the volume."
+        },
+        "light": {
+          "label": "Light",
+          "hint": "A good microphone without headphones. Only the speaker echo is removed; your voice stays as is."
+        },
+        "off": {
+          "label": "No processing",
+          "hint": "Studio microphone and headphones. Sound goes out as is, in higher quality."
+        }
+      },
+      "fields": {
+        "noiseSuppression": {
+          "label": "Noise suppression",
+          "hint": "Removes hum, keyboard and fan noise — but also breathing and quiet word endings."
+        },
+        "echoCancellation": {
+          "label": "Echo cancellation",
+          "hint": "Keeps the room's sound from your speakers out of the microphone."
+        },
+        "autoGainControl": {
+          "label": "Automatic gain",
+          "hint": "Evens out the volume. On a good microphone the volume “drifts” between phrases."
+        },
+        "highQuality": {
+          "label": "High transmission quality",
+          "hint": "96 kbps instead of 48, and silence is sent as is: without it, quiet word beginnings get cut off."
+        }
+      },
+      "custom": "Custom setting: doesn't match any level.",
+      "headphones": "Echo cancellation is off — listen to the room with headphones only. Otherwise sound from the speakers gets into the microphone, and others hear themselves with a delay."
+    }
+  },
+  "join": {
+    "title": "Join the room",
+    "lead": "You've been invited to a streamer's private room. No sign-up needed.",
+    "name": "Your name",
+    "namePlaceholder": "How to label you on stream",
+    "camera": "Camera",
+    "microphone": "Microphone",
+    "noDevice": "Not found",
+    "previewOff": "Camera is off",
+    "cameraDenied": "No access to the camera or microphone. Allow access in your browser settings — or join without them.",
+    "terms": "I accept the",
+    "termsLink": "room participation terms",
+    "termsHint": "The streamer and guests will see and hear your name, image and voice, and the streamer may put them on stream. The platform does not record them.",
+    "submit": "Join",
+    "invalid": "This link is not valid. The streamer may have revoked it — ask for a new one.",
+    "full": "The room is full. Please try later.",
+    "unavailable": "Rooms are unavailable right now. Please try later.",
+    "noToken": "The link has no invite in it. Open the full link the streamer sent you.",
+    "removed": "The streamer removed you from the room.",
+    "closed": "The room is closed.",
+    "left": "You left the room.",
+    "rejoin": "Join again",
+    "inRoom": "You are in the room “{{room}}”",
+    "ownerUnavailable": "The streamer's room is unavailable right now. Contact the streamer.",
+    "preview": "Your camera image"
+  },
+  "billing": {
+    "title": "Plan",
+    "description": "Widgets, alerts, chat and analytics are free. Private rooms are part of the Pro plan: guest video goes through our media server.",
+    "notConfigured": "Payments are not configured on this server — private rooms are available for free.",
+    "choosePeriod": "Billing period",
+    "period": {
+      "month": "Month",
+      "year": "Year"
+    },
+    "periodHint": {
+      "month": "Renews every month",
+      "year": "Two months free compared to paying monthly"
+    },
+    "plan": {
+      "name": "Pro plan",
+      "includes": "Private rooms: guests join by link without signing up, plus a guests widget for OBS."
+    },
+    "pay": "Pay {{amount}}",
+    "offer": {
+      "accept": "I accept the",
+      "link": "Pro plan offer",
+      "recurring": {
+        "month": "and agree to an automatic charge of {{amount}} once a month. We will email you about every charge at least three days in advance. You can turn off renewal on this page at any time — access stays until the end of the paid period.",
+        "year": "and agree to an automatic charge of {{amount}} once a year. We will email you about every charge at least three days in advance. You can turn off renewal on this page at any time — access stays until the end of the paid period."
+      }
+    },
+    "status": {
+      "renews": "Active until {{date}}, then renews automatically.",
+      "endsOn": "Active until {{date}}. Auto-renewal is off.",
+      "grace": "The period ended on {{date}}, but the renewal charge failed. Rooms stay open for a few more days while we retry.",
+      "expired": "Your subscription has ended. Subscribe again to get your rooms back."
+    },
+    "paymentMethod": "Payment method: {{title}}",
+    "nextPeriod": "Next renewal:",
+    "disableAutoRenew": "Turn off auto-renewal",
+    "disableAutoRenewHint": "Nothing more will be charged. Rooms stay available until the end of the paid period.",
+    "enableAutoRenew": "Turn on auto-renewal",
+    "returned": {
+      "succeeded": "Payment complete — the Pro plan is active.",
+      "canceled": "The payment did not go through. No money was taken — try again or use another card.",
+      "pending": "The payment is still processing. This usually takes less than a minute; the page will update by itself once YooKassa confirms the payment."
+    },
+    "paywall": {
+      "title": "Private rooms are part of the Pro plan",
+      "expiredTitle": "Your Pro plan subscription has ended",
+      "hint": "Your rooms and invites are saved. You can call guests and put them into OBS after paying.",
+      "action": "Choose a plan"
+    },
+    "history": {
+      "title": "Payments",
+      "date": "Date",
+      "what": "Item",
+      "amount": "Amount",
+      "status": "Status",
+      "kind": {
+        "initial": "Subscription",
+        "renewal": "Renewal"
+      },
+      "state": {
+        "pending": "Processing",
+        "succeeded": "Paid",
+        "canceled": "Failed"
+      },
+      "refunded": "Refunded {{amount}}"
+    }
+  },
+  "public": {
+    "nav": {
+      "pricing": "Pricing",
+      "delivery": "How it works",
+      "contacts": "Contacts",
+      "label": "Home page sections"
+    },
+    "openDashboard": "Open dashboard",
+    "hero": {
+      "title": "Alerts, widgets and guests on stream — in one link for OBS",
+      "lead": "StreamKit collects donations from external services, shows alerts, goals and chat on screen, tracks channel analytics and brings guests on stream by link, no sign-up needed.",
+      "register": "Create account",
+      "pricing": "Plans and pricing"
+    },
+    "features": {
+      "title": "What it does",
+      "alerts": {
+        "title": "Donation alerts",
+        "text": "Events from DonationAlerts, DonatePay and your own webhook — on your stream."
+      },
+      "widgets": {
+        "title": "Goal, timer, top donors",
+        "text": "A donation goal, a subathon timer and a top donors list, with live preview."
+      },
+      "chat": {
+        "title": "Twitch chat on screen",
+        "text": "Chat messages over your stream, no Twitch sign-in needed."
+      },
+      "analytics": {
+        "title": "Channel analytics",
+        "text": "YouTube and Twitch viewers and subscribers on charts in your dashboard."
+      },
+      "rooms": {
+        "title": "Private rooms",
+        "text": "Guests join by link without signing up; their video and audio go into OBS. Pro plan."
+      },
+      "obs": {
+        "title": "One link for OBS",
+        "text": "Every widget is a browser source behind a revocable link, nothing to install."
+      }
+    },
+    "pricing": {
+      "title": "Plans and pricing",
+      "free": {
+        "name": "Free",
+        "text": "All widgets, donation alerts, Twitch chat and channel analytics. No time limit."
+      },
+      "pro": {
+        "name": "Pro plan",
+        "month": "{{amount}} per month",
+        "year": "or {{amount}} per year",
+        "text": "Everything in Free plus private rooms: up to {{guests}} guests by link without signing up, and a guests widget for OBS."
+      },
+      "note": "Prices are in Russian rubles and are final. Full terms are in the",
+      "offer": "Pro plan offer."
+    },
+    "delivery": {
+      "title": "How you get the service",
+      "digital": "The service is digital and is provided online through your account on this website. There is no physical delivery — nothing needs to be sent or received.",
+      "instant": "Access to the Pro plan opens automatically right after the payment is confirmed, usually within a minute. No email or call is needed.",
+      "term": "The service is provided for the whole paid period: a calendar month or year from the date of payment.",
+      "requirements": "You need a browser and streaming software with a browser source, such as OBS Studio. Nothing from us needs to be installed."
+    },
+    "payment": {
+      "title": "Payment and refunds",
+      "methods": "Pay by bank card, via SBP (Faster Payments System), SberPay, T-Pay or YooMoney on the secure YooKassa payment page.",
+      "card": "Card details are entered on the YooKassa side and are never passed to us. The receipt is issued automatically at the time of payment.",
+      "renewal": "The plan renews automatically using the saved payment method. We email you about every charge at least three days in advance. You can turn off renewal with one button in the Plan section — access stays until the end of the paid period.",
+      "refund": "You can cancel the plan at any time: we refund the remaining full days of the period within 10 days of your email to the support address in the Contacts section. See the Pro plan offer for details."
+    },
+    "contacts": {
+      "title": "Contacts and business details",
+      "seller": "Seller",
+      "status": "Status",
+      "selfEmployed": "Professional income tax payer (self-employed)",
+      "inn": "Taxpayer ID (INN)",
+      "email": "Email",
+      "phone": "Phone"
+    },
+    "footer": {
+      "documents": "Documents",
+      "terms": "Terms of Service",
+      "offer": "Pro plan offer",
+      "privacy": "Privacy Policy",
+      "personalData": "Personal data consent",
+      "cookies": "Cookies",
+      "cookieSettings": "Cookie settings",
+      "seller": "{{name}}, self-employed, Taxpayer ID (INN) {{inn}}"
+    },
+    "missing": "‹not specified›"
+  },
+  "legal": {
+    "back": "Home",
+    "notFound": "Document not found",
+    "unavailable": "The document is unavailable",
+    "table": "Table, scrolls horizontally"
+  },
+  "language": {
+    "switch": "Русский",
+    "switchLang": "ru",
+    "label": "Interface language"
+  }
+}

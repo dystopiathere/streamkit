@@ -1,6 +1,8 @@
-import { formatMoney, PLAN_PRICES, type SellerInfo } from '@streamkit/contracts';
+import { PLAN_PRICES, type SellerInfo } from '@streamkit/contracts';
 import { useQuery } from '@tanstack/react-query';
+import i18n from 'i18next';
 import { api } from '@/lib/api';
+import { formatMoney } from '@/lib/locale';
 
 /**
  * Реквизиты продавца для публичных страниц.
@@ -17,7 +19,9 @@ export function useSeller() {
 }
 
 /** Заглушка на месте незаполненного поля: пустое место прятало бы, что реквизитов нет. */
-export const MISSING = '‹не указано›';
+export function missingValue(): string {
+  return i18n.t('public.missing');
+}
 
 /**
  * Подставить реквизиты и цены в текст юридического документа.
@@ -41,7 +45,7 @@ export function fillDocumentDetails(
     PRICE_YEAR: formatMoney(PLAN_PRICES.year),
   };
   return text.replace(/\{\{((?:SELLER|PRICE)_[A-Z]+)\}\}/g, (token, key: string) =>
-    key in values ? escape(values[key] ?? MISSING) : token,
+    key in values ? escape(values[key] ?? missingValue()) : token,
   );
 }
 

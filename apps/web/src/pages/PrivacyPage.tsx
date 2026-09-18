@@ -7,6 +7,7 @@ import { TwoFactorCard } from '@/features/auth/TwoFactorCard';
 import { useConsents, useGrantConsent, useRevokeConsent } from '@/features/privacy/queries';
 import { ApiError, api } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
+import { intlLocale } from '@/lib/locale';
 
 /**
  * Страница управления данными: что о пользователе хранится, какие согласия даны,
@@ -24,10 +25,16 @@ export function PrivacyPage(): React.JSX.Element {
   const consents = useConsents();
   const grant = useGrantConsent();
   const revoke = useRevokeConsent();
+  // Название документа — из словаря: сервер отдаёт его по-русски.
+  const documentTitle = (document: string, fallback: string): string =>
+    t(`privacy.documents.${document}`, { defaultValue: fallback });
   usePageTitle(t('privacy.title'));
 
   const deleteAccount = useMutation({
-    mutationFn: () => api.delete<void>('/privacy/account', { confirmation: 'УДАЛИТЬ', password }),
+    mutationFn: () =>
+      // Сервер ждёт русское слово при любом языке интерфейса: вводимое на экране
+      // сверяется со словом языка, а в запрос уходит слово из контракта.
+      api.delete<void>('/privacy/account', { confirmation: 'УДАЛИТЬ', password }),
     onSuccess: () => {
       clearSession();
       window.location.href = '/login';
@@ -65,13 +72,13 @@ export function PrivacyPage(): React.JSX.Element {
             >
               <div>
                 <a href={consent.path} target="_blank" rel="noreferrer" className="underline">
-                  {consent.title}
+                  {documentTitle(consent.document, consent.title)}
                   <NewTabHint />
                 </a>
                 <p className="text-xs text-muted">
                   {consent.acceptedAt
                     ? t('privacy.accepted', {
-                        date: new Date(consent.acceptedAt).toLocaleDateString('ru-RU'),
+                        date: new Date(consent.acceptedAt).toLocaleDateString(intlLocale()),
                       })
                     : t('privacy.notAccepted')}
                 </p>
@@ -84,7 +91,9 @@ export function PrivacyPage(): React.JSX.Element {
                 consent.required ? null : (
                   <Button
                     variant="ghost"
-                    aria-label={t('privacy.revokeNamed', { name: consent.title })}
+                    aria-label={t('privacy.revokeNamed', {
+                      name: documentTitle(consent.document, consent.title),
+                    })}
                     onClick={() =>
                       revoke.mutate(consent.document, {
                         onError: (error) =>
@@ -103,7 +112,7 @@ export function PrivacyPage(): React.JSX.Element {
                   aria-label={t(
                     consent.needsRenewal ? 'privacy.renewNamed' : 'privacy.grantNamed',
                     {
-                      name: consent.title,
+                      name: documentTitle(consent.document, consent.title),
                     },
                   )}
                   onClick={() => grant.mutate(consent.document)}
@@ -131,7 +140,9 @@ export function PrivacyPage(): React.JSX.Element {
         <p className="text-sm text-muted">{t('privacy.deleteDescription')}</p>
 
         <div className="max-w-xs">
-          <Label htmlFor="confirmation">{t('privacy.deleteConfirmLabel')}</Label>
+          <Label htmlFor="confirmation">
+            {t('privacy.deleteConfirmLabel', { word: t('privacy.deleteWord') })}
+          </Label>
           <Input
             id="confirmation"
             autoComplete="off"
@@ -153,7 +164,7 @@ export function PrivacyPage(): React.JSX.Element {
 
         <Button
           variant="danger"
-          disabled={confirmation !== 'УДАЛИТЬ' || password.length === 0}
+          disabled={confirmation !== t('privacy.deleteWord') || password.length === 0}
           isLoading={deleteAccount.isPending}
           onClick={() => deleteAccount.mutate()}
         >
