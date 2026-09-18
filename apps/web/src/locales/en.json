@@ -28,7 +28,8 @@
     "main": "Sections",
     "openMenu": "Open menu",
     "closeMenu": "Close menu",
-    "home": "StreamKit — home"
+    "home": "StreamKit — home",
+    "stream": "Live"
   },
   "auth": {
     "loginTitle": "Sign in",
@@ -623,5 +624,47 @@
     "switch": "Русский",
     "switchLang": "ru",
     "label": "Interface language"
+  },
+  "stream": {
+    "title": "Live",
+    "live": "Live",
+    "offline": "Offline",
+    "duration": "Stream time",
+    "viewersTotal": "Total viewers",
+    "viewers_one": "{{formatted}} viewer",
+    "viewers_other": "{{formatted}} viewers",
+    "liveNoViewers": "live",
+    "platformOffline": "offline",
+    "platforms": "Platforms",
+    "statusLabel": "Stream status",
+    "syncProblem": "metrics are not updating",
+    "noPlatforms": "Connect Twitch or YouTube to see stream time and viewers here.",
+    "connectPlatform": "Connect a platform",
+    "openWindow": "Open in a separate window",
+    "obsDock": "You can add this window to OBS: Docks → Custom Browser Docks, URL {{url}}. Sign in inside the dock itself.",
+    "chat": {
+      "title": "Chat",
+      "label": "Chat messages",
+      "source": {
+        "connected": "twitch.tv/{{channel}} — connected channel",
+        "widget": "twitch.tv/{{channel}} — channel from the chat widget"
+      },
+      "none": "No chat: connect Twitch or set a channel in the chat widget.",
+      "waiting": "Messages will appear here within ten seconds of opening the window.",
+      "notStored": "Chat is not stored: you only see messages that arrive while this window is open."
+    },
+    "events": {
+      "title": "Recent events",
+      "all": "All events"
+    },
+    "widgets": {
+      "title": "Widgets",
+      "all": "All widgets",
+      "inObs": "in OBS",
+      "inObsCount": "in OBS: {{count}}",
+      "notConnected": "not open in OBS",
+      "noLinks": "no link",
+      "disabled": "off"
+    }
   }
 }

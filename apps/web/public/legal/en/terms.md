@@ -1,6 +1,6 @@
 # StreamKit Terms of Service
 
-Version No. 4 of 17.09.2026
+Version No. 5 of 19.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/terms?lang=ru); if the two
@@ -31,6 +31,8 @@ processing of the user's viewers' and guests' data is described in section 13.
 - public links for showing widgets in streaming software (for example, OBS);
 - receiving events from external services connected by the user;
 - channel analytics on connected platforms (Twitch, YouTube);
+- a stream window: chat, viewer count, recent events and widget status on one
+  screen;
 - private rooms for video calls with guests — in the Pro plan.
 
 2.2. The Service **is not** a payment agent, a payment system or a money
@@ -175,14 +177,16 @@ effect for as long as the user's account exists.
 - event participants from services connected by the user (donations,
   subscriptions, raids and other alerts): name or nickname, message text, amount
   and currency, date and time;
-- Twitch chat viewers on the channel specified by the user in the chat widget:
-  username and message text;
+- Twitch chat viewers on the channel specified by the user in the chat widget
+  and on the Twitch channel the user has connected to the Service: username and
+  message text;
 - guests of the user's private rooms: the name entered before joining, image and
   voice.
 
 13.3. Purposes of processing: showing alerts and widgets on the pages whose links
-the user has issued; the account's event history; calculating the donation goal
-and top donors; the user's video calls with guests.
+the user has issued; showing chat messages and events to the user in the stream
+window of their dashboard; the account's event history; calculating the donation
+goal and top donors; the user's video calls with guests.
 
 13.4. Actions with the data: collection, recording, systematization,
 accumulation, storage, correction, retrieval, use, transfer (giving access to

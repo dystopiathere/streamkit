@@ -51,7 +51,9 @@ describe('нормализация метрик YouTube', () => {
     const stats = normalizeStats({
       channel: CHANNEL,
       broadcast: { id: 'abc123', snippet: { title: 'Прямой эфир' } },
-      video: { liveStreamingDetails: { concurrentViewers: '842' } },
+      video: {
+        liveStreamingDetails: { concurrentViewers: '842', actualStartTime: '2026-09-12T09:15:00Z' },
+      },
       capturedAt,
     });
 
@@ -64,6 +66,7 @@ describe('нормализация метрик YouTube', () => {
       totalViews: 271_398_936,
       title: 'Прямой эфир',
       category: null,
+      liveSince: '2026-09-12T09:15:00.000Z',
     });
   });
 

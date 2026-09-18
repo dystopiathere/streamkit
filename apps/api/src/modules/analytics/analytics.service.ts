@@ -77,7 +77,9 @@ export class AnalyticsService {
     return {
       channel: toContractChannel(channel),
       range,
-      current: latest ? toContractStats(latest) : null,
+      // Начало эфира живёт на канале, а не в снимке: истории оно не нужно, и
+      // относится оно только к последнему снимку, если канал сейчас в эфире.
+      current: latest ? toContractStats(latest, latest.isLive ? channel.liveSince : null) : null,
       deltas: {
         // Дельта считается только когда известны ОБА конца. Подставлять ноль за
         // неизвестное начало значит нарисовать рост с нуля там, где его не было.
@@ -225,16 +227,19 @@ export class AnalyticsService {
   }
 }
 
-function toContractStats(row: {
-  capturedAt: Date;
-  isLive: boolean;
-  viewers: number | null;
-  followers: number | null;
-  subscribers: number | null;
-  totalViews: bigint | null;
-  title: string | null;
-  category: string | null;
-}): ChannelStats {
+function toContractStats(
+  row: {
+    capturedAt: Date;
+    isLive: boolean;
+    viewers: number | null;
+    followers: number | null;
+    subscribers: number | null;
+    totalViews: bigint | null;
+    title: string | null;
+    category: string | null;
+  },
+  liveSince: Date | null = null,
+): ChannelStats {
   return {
     capturedAt: row.capturedAt.toISOString(),
     isLive: row.isLive,
@@ -244,6 +249,7 @@ function toContractStats(row: {
     totalViews: toNumber(row.totalViews),
     title: row.title,
     category: row.category,
+    liveSince: liveSince?.toISOString() ?? null,
   };
 }
 

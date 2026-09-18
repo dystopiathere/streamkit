@@ -3,6 +3,7 @@ import { chatMessageSchema, chatWidgetConfigSchema, type ChatMessage } from '@st
 import { RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { RedisLock } from '../../common/redis/lock.service';
+import { PresenceService } from '../../common/redis/presence.service';
 import { TwitchChatSource } from './twitch-chat.source';
 
 /**
@@ -46,6 +47,7 @@ export class ChatManager implements OnApplicationShutdown {
     private readonly source: TwitchChatSource,
     private readonly bus: RealtimeBus,
     private readonly lock: RedisLock,
+    private readonly presence: PresenceService,
   ) {}
 
   /** Один такт: подтвердить владение и свести состав каналов. */
@@ -89,7 +91,9 @@ export class ChatManager implements OnApplicationShutdown {
   }
 
   /**
-   * Состав каналов = логины из настроек всех включённых виджетов чата.
+   * Состав каналов = логины из настроек всех включённых виджетов чата плюс
+   * каналы открытых окон эфира (отметки `PresenceService.watchChat`). Окно
+   * закрыли — отметка истекает, и канал отпускается на следующем такте.
    *
    * Разные стримеры вполне могут смотреть один канал — множество схлопывает
    * такие пары само, и соединение слушает его один раз.
@@ -111,7 +115,7 @@ export class ChatManager implements OnApplicationShutdown {
       select: { config: true },
     });
 
-    const channels = new Set<string>();
+    const channels = await this.presence.watchedChats();
     for (const widget of widgets) {
       const config = chatWidgetConfigSchema.safeParse(widget.config);
       // Пустой канал — виджет создали, но ещё не настроили. Это не ошибка.

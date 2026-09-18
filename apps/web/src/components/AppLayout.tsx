@@ -13,6 +13,7 @@ import {
 } from '@streamkit/app-kit';
 
 const NAV_ITEMS = [
+  { to: '/stream', label: 'nav.stream' },
   { to: '/widgets', label: 'nav.widgets' },
   { to: '/events', label: 'nav.events' },
   { to: '/analytics', label: 'nav.analytics' },

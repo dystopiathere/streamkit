@@ -17,6 +17,7 @@ import { PrivacyPage } from './pages/PrivacyPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { RoomsPage } from './pages/RoomsPage';
 import { SourcesPage } from './pages/SourcesPage';
+import { StreamPage, StreamWindowPage } from './pages/StreamPage';
 import { WidgetEditorPage } from './pages/WidgetEditorPage';
 import { WidgetsPage } from './pages/WidgetsPage';
 
@@ -116,7 +117,10 @@ export function App(): React.JSX.Element {
           />
 
           <Route element={<RequireAuth />}>
+            {/* Окно эфира без меню: отдельное окно браузера или док OBS. */}
+            <Route path="/stream/window" element={<StreamWindowPage />} />
             <Route element={<AppLayout />}>
+              <Route path="/stream" element={<StreamPage />} />
               <Route path="/widgets" element={<WidgetsPage />} />
               <Route path="/widgets/:id" element={<WidgetEditorPage />} />
               <Route path="/events" element={<EventsPage />} />

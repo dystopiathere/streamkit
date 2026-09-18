@@ -4,6 +4,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { WebSocketServer, type WebSocket as ServerSocket } from 'ws';
 import { RealtimeBus, type BusMessage } from '../src/common/bus/realtime-bus.service';
+import { PresenceService } from '../src/common/redis/presence.service';
 import { ChatManager } from '../src/modules/chat/chat-manager.service';
 import { ChatModule } from '../src/modules/chat/chat.module';
 import { createHarness, registrationPayload, type TestHarness } from './harness';
@@ -131,6 +132,21 @@ describe('Чат Twitch (feature)', () => {
     // изменение настроек приходит следующим тактом, а не перезапуском.
     await chat.tick();
     await waitFor(() => received.includes('PART #shroud'));
+  });
+
+  it('заходит в канал открытого окна эфира и выходит, когда отметка истекла', async () => {
+    // Окно эфира отмечает канал в Redis; воркер берёт его в состав вместе с
+    // каналами виджетов. Виджета чата здесь нет вовсе.
+    const presence = harness.app.get(PresenceService);
+    await presence.watchChat('streamer_login');
+
+    await chat.tick();
+    await waitFor(() => received.includes('JOIN #streamer_login'));
+
+    // Окно закрыли: отметку никто не продлил, срок вышел.
+    await harness.redis.zadd('streamkit:presence:chat-watch', Date.now() - 1, 'streamer_login');
+    await chat.tick();
+    await waitFor(() => received.includes('PART #streamer_login'));
   });
 
   it('не подключается, пока канал не вписан', async () => {

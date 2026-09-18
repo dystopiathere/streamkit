@@ -1,5 +1,10 @@
 import { Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
-import { type OnGatewayConnection, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
+import {
+  type OnGatewayConnection,
+  type OnGatewayDisconnect,
+  WebSocketGateway,
+  WebSocketServer,
+} from '@nestjs/websockets';
 import {
   SOCKET_EVENTS,
   chatRoom,
@@ -12,6 +17,7 @@ import {
 } from '@streamkit/contracts';
 import type { Server, Socket } from 'socket.io';
 import { RealtimeBus, type BusMessage } from '../../common/bus/realtime-bus.service';
+import { PRESENCE_REFRESH_MS, PresenceService } from '../../common/redis/presence.service';
 import { WidgetStateService } from '../widgets/widget-state.service';
 import { WidgetsService } from '../widgets/widgets.service';
 
@@ -33,9 +39,12 @@ function chatChannelOf(widget: WidgetConfig): string | null {
  * как `null`-origin. Единственный секрет здесь — сам токен.
  */
 @WebSocketGateway({ namespace: '/overlay', cors: { origin: true, credentials: false } })
-export class OverlayGateway implements OnGatewayConnection, OnModuleInit, OnModuleDestroy {
+export class OverlayGateway
+  implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit, OnModuleDestroy
+{
   private readonly logger = new Logger(OverlayGateway.name);
   private unsubscribe?: () => Promise<void>;
+  private presenceTimer?: NodeJS.Timeout;
 
   @WebSocketServer()
   private readonly server!: Server;
@@ -44,16 +53,45 @@ export class OverlayGateway implements OnGatewayConnection, OnModuleInit, OnModu
     private readonly widgets: WidgetsService,
     private readonly widgetState: WidgetStateService,
     private readonly bus: RealtimeBus,
+    private readonly presence: PresenceService,
   ) {}
 
   async onModuleInit(): Promise<void> {
     this.unsubscribe = await this.bus.subscribe((message) => {
       void this.handleBusMessage(message);
     });
+    // «Подключён к OBS» в окне эфира — это отметка с коротким сроком, которую
+    // продлевает реплика, держащая сокет. `lastSeenAt` на это не годится: он
+    // пишется при подключении и не знает, что OBS давно закрыт.
+    this.presenceTimer = setInterval(() => void this.refreshPresence(), PRESENCE_REFRESH_MS);
+    this.presenceTimer.unref();
   }
 
   async onModuleDestroy(): Promise<void> {
+    clearInterval(this.presenceTimer);
     await this.unsubscribe?.();
+  }
+
+  async handleDisconnect(client: Socket): Promise<void> {
+    const tokenId = (client.data as { tokenId?: string }).tokenId;
+    if (!tokenId) return;
+    await this.presence
+      .dropOverlay(tokenId)
+      .catch((error: unknown) => this.logger.warn({ err: error }, 'Отметка оверлея не снята'));
+  }
+
+  private async refreshPresence(): Promise<void> {
+    try {
+      const sockets = await this.server.local.fetchSockets();
+      const tokenIds = new Set<string>();
+      for (const socket of sockets) {
+        const tokenId = (socket.data as { tokenId?: string }).tokenId;
+        if (tokenId) tokenIds.add(tokenId);
+      }
+      await this.presence.markOverlays([...tokenIds]);
+    } catch (error) {
+      this.logger.warn({ err: error }, 'Отметки оверлеев не продлены');
+    }
   }
 
   async handleConnection(client: Socket): Promise<void> {
@@ -71,6 +109,7 @@ export class OverlayGateway implements OnGatewayConnection, OnModuleInit, OnModu
       return;
     }
 
+    (client.data as { tokenId?: string }).tokenId = resolved.tokenId;
     await client.join(overlayRoom(resolved.tokenId));
     await client.join(widgetRoom(resolved.widgetId));
 
@@ -92,6 +131,9 @@ export class OverlayGateway implements OnGatewayConnection, OnModuleInit, OnModu
     client.emit(SOCKET_EVENTS.bootstrap, bootstrap);
 
     await this.widgets.touchOverlayToken(resolved.tokenId);
+    await this.presence
+      .markOverlays([resolved.tokenId])
+      .catch((error: unknown) => this.logger.warn({ err: error }, 'Отметка оверлея не поставлена'));
     this.logger.debug({ widgetId: resolved.widgetId }, 'Оверлей подключился');
   }
 
