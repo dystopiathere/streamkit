@@ -265,6 +265,21 @@ failed». Администратор входит на ВМ как `ops`.
 - **Twitch** и **Google Cloud (YouTube)**: redirect URI
   `https://api.stream-kit.ru/api/integrations/twitch/callback` и
   `https://api.stream-kit.ru/api/integrations/youtube/callback`.
+  Публикацию приложения Google не пропустит, пока домен не подтверждён
+  («The website of your home page URL … is not registered to you»):
+  1. [Search Console](https://search.google.com/search-console) → «Добавить
+     ресурс» → **Доменный ресурс** `stream-kit.ru` — тем же аккаунтом Google,
+     что владеет проектом в Google Cloud (роль Owner или Editor).
+  2. Search Console покажет TXT-запись `google-site-verification=…`. Её — в
+     `terraform.tfvars`: `root_txt_records = ["google-site-verification=…"]`,
+     затем `terraform apply`. В консоли DNS руками не заводить: следующий
+     `apply` её не увидит, а запись корня у зоны одна на тип.
+  3. Проверить, что запись опубликована, и нажать «Подтвердить» в Search
+     Console: `dig +short TXT stream-kit.ru @ns1.yandexcloud.net`.
+  4. В Google Cloud → Google Auth Platform → «Брендинг»: главная
+     `https://stream-kit.ru/`, политика `https://stream-kit.ru/legal/privacy`,
+     в «Авторизованных доменах» — `stream-kit.ru`. Затем повторная отправка
+     на проверку.
 
 ## 8. Проверка
 

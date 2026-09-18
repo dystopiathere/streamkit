@@ -69,6 +69,23 @@ resource "yandex_dns_recordset" "postbox_dkim" {
   }
 }
 
+# TXT в корне домена: подтверждение владения для Google Search Console, без
+# которого Google не публикует OAuth-приложение YouTube («home page URL is not
+# registered to you»). Все значения корня — одной записью: Cloud DNS хранит набор
+# записей по имени и типу, и вторая такая же запись, заведённая руками в консоли,
+# перетёрлась бы при следующем apply.
+resource "yandex_dns_recordset" "root_txt" {
+  count = length(var.root_txt_records) == 0 ? 0 : 1
+
+  zone_id = yandex_dns_zone.main.id
+  name    = "${var.domain}."
+  type    = "TXT"
+  ttl     = 3600
+  # Кавычки обязательны по той же причине, что у DKIM: без них пробел или «;»
+  # в значении разбирается как синтаксис зоны.
+  data = [for value in var.root_txt_records : "\"${value}\""]
+}
+
 # TURN — на своём адресе: он занимает там порт 443.
 resource "yandex_dns_recordset" "turn" {
   zone_id = yandex_dns_zone.main.id
