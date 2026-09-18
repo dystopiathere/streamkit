@@ -25,6 +25,8 @@ x-app-environment: &app-environment
   TWITCH_CLIENT_SECRET: ${TWITCH_CLIENT_SECRET:-}
   YOUTUBE_CLIENT_ID: ${YOUTUBE_CLIENT_ID:-}
   YOUTUBE_CLIENT_SECRET: ${YOUTUBE_CLIENT_SECRET:-}
+  DONATIONALERTS_CLIENT_ID: ${DONATIONALERTS_CLIENT_ID:-}
+  DONATIONALERTS_CLIENT_SECRET: ${DONATIONALERTS_CLIENT_SECRET:-}
   # Два адреса LiveKit, и это разные значения: API ходит внутри сети compose,
   # браузеры — на опубликованный порт или домен с TLS.
   LIVEKIT_URL: http://livekit:7880

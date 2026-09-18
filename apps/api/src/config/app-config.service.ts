@@ -104,6 +104,31 @@ export class AppConfig {
   }
 
   /**
+   * DonationAlerts: приложение и адреса, либо null — сервис не настроен.
+   * Адреса по умолчанию — боевые; переопределяются только в тестах.
+   */
+  get donationAlerts(): {
+    clientId: string;
+    clientSecret: string;
+    baseUrl: string;
+    socketUrl: string;
+  } | null {
+    const clientId = this.config.get<string>('DONATIONALERTS_CLIENT_ID');
+    const clientSecret = this.config.get<string>('DONATIONALERTS_CLIENT_SECRET');
+    if (!clientId || !clientSecret) return null;
+    return {
+      clientId,
+      clientSecret,
+      baseUrl: (
+        this.config.get<string>('DONATIONALERTS_BASE_URL') ?? 'https://www.donationalerts.com'
+      ).replace(/\/+$/, ''),
+      socketUrl:
+        this.config.get<string>('DONATIONALERTS_SOCKET_URL') ??
+        'wss://centrifugo.donationalerts.com/connection/websocket',
+    };
+  }
+
+  /**
    * Подключение к LiveKit, либо null — комнаты не настроены.
    *
    * Через `get`, а не `value`, по той же причине, что и у площадок: без LiveKit

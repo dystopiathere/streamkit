@@ -97,7 +97,9 @@ yc lockbox secret add-version --id <external_secret_id> --payload '[
   {"key": "TWITCH_CLIENT_ID",    "text_value": "..."},
   {"key": "TWITCH_CLIENT_SECRET","text_value": "..."},
   {"key": "YOUTUBE_CLIENT_ID",   "text_value": "..."},
-  {"key": "YOUTUBE_CLIENT_SECRET","text_value": "..."}
+  {"key": "YOUTUBE_CLIENT_SECRET","text_value": "..."},
+  {"key": "DONATIONALERTS_CLIENT_ID",    "text_value": "..."},
+  {"key": "DONATIONALERTS_CLIENT_SECRET","text_value": "..."}
 ]'
 ```
 
@@ -265,6 +267,19 @@ failed». Администратор входит на ВМ как `ops`.
 - **Twitch** и **Google Cloud (YouTube)**: redirect URI
   `https://api.stream-kit.ru/api/integrations/twitch/callback` и
   `https://api.stream-kit.ru/api/integrations/youtube/callback`.
+- **DonationAlerts** — без приложения кнопки «Подключить DonationAlerts» на
+  странице «Источники» нет:
+  1. `https://www.donationalerts.com/application/clients` → «Создать
+     приложение»: название StreamKit, redirect URI
+     `https://api.stream-kit.ru/api/integrations/donations/donationalerts/callback`
+     (посимвольно, иначе DonationAlerts откажет на шаге входа).
+  2. ID и секрет приложения — в `streamkit-external` новой версией секрета
+     (`add-version` заменяет список целиком — перенесите и прежние ключи):
+     `DONATIONALERTS_CLIENT_ID`, `DONATIONALERTS_CLIENT_SECRET`. Затем выкатка.
+  3. Проверка: подключите свой аккаунт в «Источниках» и отправьте себе
+     тестовый донат на DonationAlerts — он появится в «Событиях». Если нет,
+     причина — в журнале воркера:
+     `sudo -u deploy docker compose logs worker | grep -i donationalerts`.
 
 ## 8. Проверка
 
