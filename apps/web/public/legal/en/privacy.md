@@ -1,6 +1,6 @@
 # StreamKit Privacy Policy
 
-Version No. 6 of 18.09.2026
+Version No. 7 of 18.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/privacy?lang=ru); if the two
@@ -30,11 +30,13 @@ secret, if it is enabled.
 
 **Connected platforms** (Twitch, YouTube, DonationAlerts): access tokens issued
 by these services (stored encrypted and not shown even to the owner), the
-channel ID, name and image, numeric channel metrics (viewers, subscribers,
-whether the channel is live), and for DonationAlerts, the account ID and name.
-We do not store or use the email address of the platform account.
-DonationAlerts sends it together with the profile, without which donations
-cannot be connected — we discard it immediately without storing it.
+channel ID, handle, name and image, channel metrics (viewers, subscribers, total
+views, whether the channel is live), the title and category of the current
+stream, and for DonationAlerts, the account ID and name. We do not store or use
+the email address of the platform account. DonationAlerts sends it together with
+the profile, without which donations cannot be connected — we discard it
+immediately without storing it. What exactly we receive from Google and how we
+use it is described in section 5.
 
 **Payment for the Pro plan:** amount and billing period, payment and refund
 history, the encrypted identifier of the saved payment method and its label such
@@ -99,12 +101,45 @@ such requests. A request sent to us at {{SELLER_EMAIL}} will be forwarded to the
 streamer within 3 business days, and on the streamer's instruction we will
 correct or delete the data within 5 business days.
 
-## 5. Where the data is stored
+## 5. Data from Google (YouTube)
+
+5.1. When connecting a YouTube channel, the user grants the service a single
+Google permission — `youtube.readonly`, viewing YouTube data. Through the
+YouTube Data API we receive the channel ID, handle, name and image, the number
+of subscribers and total views, and whether a stream is live, its title and the
+number of its concurrent viewers. We do not request the email address, name or
+any other Google account data. The service never publishes, changes or deletes
+anything on the channel.
+
+5.2. This data is used only to show the user the analytics of their own channel
+in their dashboard. We do not use it for advertising, do not sell it, do not use
+it to train artificial intelligence models, and do not transfer it to third
+parties — except for hosting of the service (section 7) and cases expressly
+provided for by law.
+
+5.3. People do not read this data, with two exceptions. Staff see the channel
+handle and name and the metrics collection status in the admin panel — to
+resolve a failure at the user's request and for security purposes; the metrics
+themselves and stream titles are not shown in the panel. The second exception
+is when required by law.
+
+5.4. Google access tokens are stored encrypted until the channel is disconnected
+or the account is deleted; metrics are kept for 90 days. Disconnecting the
+channel in the Analytics section immediately deletes the tokens, the channel
+details and all collected metrics. Access can also be revoked on the Google side
+at https://myaccount.google.com/permissions.
+
+5.5. StreamKit's use and transfer of information received from Google APIs to
+any other app will adhere to the
+[Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy),
+including the Limited Use requirements.
+
+## 6. Where the data is stored
 
 Databases and the media server are hosted on Yandex Cloud servers in the Russian
 Federation, in accordance with Part 5 of Article 18 of Federal Law No. 152-FZ.
 
-## 6. Who the data is shared with
+## 7. Who the data is shared with
 
 We do not sell personal data. Data is shared only with:
 
@@ -116,11 +151,12 @@ We do not sell personal data. Data is shared only with:
 - **Twitch and Google (YouTube)** — only if the user has connected the platform:
   the service calls their APIs with the tokens these platforms issued to the
   user in order to obtain channel metrics. These companies' servers are located
-  outside the Russian Federation; we do not share any other user data with them;
+  outside the Russian Federation; we do not share any other user data with them.
+  How we handle data received from Google is described in section 5;
 - authorized public authorities on request — in cases expressly provided for by
   law.
 
-## 7. Retention periods
+## 8. Retention periods
 
 | Data | Period |
 |---|---|
@@ -139,7 +175,7 @@ We do not sell personal data. Data is shared only with:
 | Guest image, sound and name | Not stored |
 | Twitch chat messages | Not stored |
 
-## 8. Your rights
+## 9. Your rights
 
 You have the right to receive information about the processing of your data, to
 demand its correction, blocking or destruction, to withdraw consent, and to
@@ -152,7 +188,7 @@ yourself in the Privacy section of your dashboard. Send other requests to
 Requests about data we process on behalf of the user are handled as described
 in clause 4.3.
 
-## 9. Account deletion
+## 10. Account deletion
 
 Deletion is confirmed with the password. The email address and display name are
 anonymized, the password and the second factor are deleted, sessions are ended,
@@ -160,9 +196,9 @@ widget links are revoked, platform connections with their tokens and metrics are
 deleted, rooms and invites are deleted, auto-renewal is turned off, and the
 saved payment method is erased. Donors' names and messages are anonymized.
 Event amounts and dates and the payment history are kept in anonymized form for
-the periods in section 7 — for accounting and dispute resolution.
+the periods in section 8 — for accounting and dispute resolution.
 
-## 10. Data protection
+## 11. Data protection
 
 Passwords are stored as argon2id hashes. Platform tokens, two-factor
 authentication secrets and payment method identifiers are encrypted with
@@ -182,12 +218,12 @@ Data we process on behalf of the user (section 4) — event participants' names
 and messages, guests' names — is not shown in the panel: staff see only the
 number of events.
 
-## 11. Cookies
+## 12. Cookies
 
 The cookies used by the service are described in the Cookie Policy
 (https://stream-kit.ru/legal/cookies).
 
-## 12. Changes to this Policy
+## 13. Changes to this Policy
 
 When the text changes, a new version is published with its date. If the changes
 affect the purposes or scope of processing, we will ask for consent again:
