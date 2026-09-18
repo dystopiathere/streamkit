@@ -1,6 +1,11 @@
-import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  type OnApplicationBootstrap,
+  type OnApplicationShutdown,
+} from '@nestjs/common';
+import { Interval } from '@nestjs/schedule';
 import type { IncomingAlertEvent } from '@streamkit/contracts';
-import { PlatformAuthError } from '../../common/http/platform-errors';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { EventsService } from '../events/events.service';
 import type { DonationConnector } from './donation-provider';
@@ -8,18 +13,43 @@ import { DonationAlertsConnector } from './donationalerts.connector';
 import { PlatformTokenService, type CredentialProvider } from './platform-token.service';
 
 /**
- * Менеджер живых подключений к площадкам.
+ * Как часто воркер сверяет живые соединения с источниками в БД.
  *
- * Отвечает за жизненный цикл: поднять коннекторы для включённых источников при
- * старте, остановить их при завершении процесса, не дать одному упавшему
- * коннектору утащить за собой остальные.
+ * Стример подключил DonationAlerts и ждёт донат сейчас, а не после деплоя:
+ * раньше коннекторы поднимались один раз на старте, и новый источник начинал
+ * работать только с перезапуском воркера. Команд воркеру в проекте нет, и
+ * лёгкий запрос раз в десять секунд дешевле, чем заводить их ради сверки.
+ */
+export const CONNECTOR_TICK_MS = 10_000;
+
+/** Провайдеры с живым соединением. Вебхук сюда не входит: он приходит к нам сам. */
+const CONNECTED_PROVIDERS = ['DONATIONALERTS'] as const;
+
+/**
+ * Менеджер живых подключений к донат-сервисам.
+ *
+ * Держит по соединению на включённый источник: поднимает новые, закрывает
+ * отключённые, выключает источник с причиной, когда доступ потерян. Один
+ * упавший коннектор не утаскивает за собой остальные.
+ *
+ * Аренды на кластер здесь нет, в отличие от чата, — и это осознанно: две
+ * реплики воркера получат один донат дважды, и дубль отбросит дедупликация по
+ * идентификатору события. Пропущенный донат не восстановится, а дубль ничего
+ * не стоит.
  */
 @Injectable()
-export class ConnectorManager implements OnModuleInit, OnApplicationShutdown {
+export class ConnectorManager implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger(ConnectorManager.name);
   private readonly connectors = new Map<string, DonationConnector>();
-  /** Активные подключения: ключ — `${userId}:${provider}`. */
-  private readonly active = new Map<string, () => Promise<void>>();
+  /**
+   * Активные подключения. Ключ включает аккаунт у сервиса: стример, подключивший
+   * другой аккаунт, получает новое соединение, а не старое, слушающее прежний.
+   */
+  private readonly active = new Map<
+    string,
+    { userId: string; provider: string; stop: () => Promise<void> }
+  >();
+  private reconciling = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -30,106 +60,137 @@ export class ConnectorManager implements OnModuleInit, OnApplicationShutdown {
     this.connectors.set(donationAlerts.provider, donationAlerts);
   }
 
-  async onModuleInit(): Promise<void> {
-    await this.startAll();
+  /** Первая сверка — сразу при старте, не дожидаясь такта. Старт процесса она не держит. */
+  onApplicationBootstrap(): void {
+    void this.reconcile().catch((error: unknown) =>
+      this.logger.error({ err: error }, 'Сверка источников донатов не выполнена'),
+    );
   }
 
   async onApplicationShutdown(): Promise<void> {
-    await Promise.allSettled([...this.active.values()].map((stop) => stop()));
+    await Promise.allSettled([...this.active.values()].map((entry) => entry.stop()));
     this.active.clear();
   }
 
-  /**
-   * Поднимает подключения для всех включённых источников.
-   *
-   * Каждый коннектор стартует изолированно: если у одного пользователя протух
-   * токен, это не должно оставить без алертов всех остальных.
-   */
-  async startAll(): Promise<void> {
-    const sources = await this.prisma.donationSource.findMany({
-      where: { isEnabled: true, provider: { in: ['DONATIONALERTS', 'DONATEPAY'] } },
-    });
-
-    for (const source of sources) {
-      await this.start(source.userId, source.provider.toLowerCase()).catch((error: unknown) => {
-        this.logger.error(
-          { err: error, userId: source.userId, provider: source.provider },
-          'Не удалось подключить источник',
-        );
-      });
-    }
-
-    this.logger.log({ count: this.active.size }, 'Коннекторы запущены');
+  /** Сколько соединений держит процесс. Для тестов и журнала. */
+  get activeCount(): number {
+    return this.active.size;
   }
 
-  async start(userId: string, provider: string): Promise<void> {
+  /**
+   * Свести живые соединения с включёнными источниками.
+   *
+   * Такт не перекрывается сам с собой: старт соединения ходит в сеть, и второй
+   * такт, начатый поверх первого, поднял бы то же соединение дважды.
+   */
+  async reconcile(): Promise<void> {
+    if (this.reconciling) return;
+    this.reconciling = true;
+    try {
+      const sources = await this.prisma.donationSource.findMany({
+        where: { isEnabled: true, provider: { in: [...CONNECTED_PROVIDERS] } },
+        select: { userId: true, provider: true, externalAccountId: true },
+      });
+      const wanted = new Map(
+        sources.map((source) => {
+          const provider = source.provider.toLowerCase();
+          const key = `${source.userId}:${provider}:${source.externalAccountId ?? ''}`;
+          return [key, { userId: source.userId, provider }];
+        }),
+      );
+
+      for (const key of [...this.active.keys()]) {
+        if (!wanted.has(key)) await this.stopKey(key);
+      }
+      for (const [key, source] of wanted) {
+        if (this.active.has(key)) continue;
+        await this.start(key, source.userId, source.provider).catch((error: unknown) => {
+          this.logger.error(
+            { err: error, userId: source.userId, provider: source.provider },
+            'Не удалось подключить источник',
+          );
+        });
+      }
+    } finally {
+      this.reconciling = false;
+    }
+  }
+
+  private async start(key: string, userId: string, provider: string): Promise<void> {
     const connector = this.connectors.get(provider);
     if (!connector) {
       this.logger.warn({ provider }, 'Коннектор не зарегистрирован');
       return;
     }
 
-    const key = `${userId}:${provider}`;
-    // Повторный запуск без остановки оставил бы два соединения и удвоил алерты.
-    await this.stop(userId, provider);
-
-    // Токен берётся через общий сервис, а не расшифровывается здесь: тот
-    // проверяет срок и обновляет при необходимости. Раньше `expiresAt` не
-    // смотрели вовсе — протухший токен уезжал в коннектор, площадка отвечала
-    // 401, и источник молча умирал, оставаясь «включённым» в дашборде.
-    let accessToken: string;
-    try {
-      accessToken = await this.tokens.getAccessToken(userId, provider as CredentialProvider);
-    } catch (error) {
-      if (error instanceof PlatformAuthError) {
-        await this.disable(userId, provider, 'Срок доступа истёк, подключите площадку заново');
-        this.logger.warn({ userId, provider }, 'Доступ к площадке истёк, источник выключен');
-        return;
-      }
-      throw error;
-    }
-
     const stop = await connector.connect({
       userId,
-      accessToken,
+      // Токен — через общий сервис: тот проверяет срок и продлевает доступ.
+      // Раньше коннектор получал токен один раз, и протухший молча уезжал в
+      // сервис, а источник умирал, оставаясь «включённым» в дашборде.
+      getAccessToken: () => this.tokens.getAccessToken(userId, provider as CredentialProvider),
       emit: async (event: IncomingAlertEvent) => {
         await this.events.ingest(event);
       },
       reportFailure: (reason) => {
-        this.logger.warn({ userId, provider, reason }, 'Сбой соединения с площадкой');
+        this.logger.warn({ userId, provider, reason }, 'Сбой соединения с донат-сервисом');
+      },
+      onAccessLost: (reason) => {
+        void this.disable(userId, provider, reason);
       },
     });
 
-    this.active.set(key, stop);
+    this.active.set(key, { userId, provider, stop });
+    this.logger.log({ userId, provider }, 'Источник донатов подключён');
   }
 
   /**
    * Источник с мёртвым доступом выключается, а не остаётся «включённым».
    *
-   * Иначе он переподключается при каждом старте воркера, каждый раз получает
-   * 401 — и в дашборде при этом выглядит рабочим.
-   *
-   * Причина записывается рядом: выключенный нами источник в данных не должен
-   * быть неотличим от выключенного самим стримером. Продлить доступ у донат-
-   * площадок пока нечем — провайдера обновления для них нет, — поэтому такой
-   * источник чинится только повторным подключением, и повод об этом сказать
-   * обязан сохраниться.
+   * Иначе он переподключался бы на каждом такте, каждый раз получал бы 401 —
+   * и в дашборде выглядел бы рабочим. Причину видит стример на странице
+   * «Источники»; чинится повторным подключением.
    */
   private async disable(userId: string, provider: string, reason: string): Promise<void> {
+    this.logger.warn({ userId, provider, reason }, 'Доступ к донат-сервису потерян');
+    for (const [key, entry] of [...this.active]) {
+      if (entry.userId === userId && entry.provider === provider) await this.stopKey(key);
+    }
     await this.prisma.donationSource
       .updateMany({
-        where: { userId, provider: provider.toUpperCase() as never },
+        where: { userId, provider: provider.toUpperCase() as never, isEnabled: true },
         data: { isEnabled: false, disabledReason: reason },
       })
-      .catch(() => undefined);
+      .catch((error: unknown) =>
+        this.logger.error({ err: error, userId, provider }, 'Источник не выключен'),
+      );
   }
 
-  async stop(userId: string, provider: string): Promise<void> {
-    const key = `${userId}:${provider}`;
-    const stop = this.active.get(key);
-    if (!stop) return;
-
-    await stop().catch(() => undefined);
+  private async stopKey(key: string): Promise<void> {
+    const entry = this.active.get(key);
+    if (!entry) return;
     this.active.delete(key);
+    await entry.stop().catch(() => undefined);
+  }
+}
+
+/**
+ * Такт сверки — отдельным классом, как у чата и опроса аналитики: так его
+ * можно вызвать из теста, не дожидаясь таймера. Живёт только в воркере: в API
+ * `ScheduleModule` не поднят.
+ */
+@Injectable()
+export class ConnectorScheduler {
+  private readonly logger = new Logger(ConnectorScheduler.name);
+
+  constructor(private readonly manager: ConnectorManager) {}
+
+  @Interval(CONNECTOR_TICK_MS)
+  async tick(): Promise<void> {
+    try {
+      await this.manager.reconcile();
+    } catch (error) {
+      this.logger.error({ err: error }, 'Сверка источников донатов не выполнена');
+    }
   }
 }

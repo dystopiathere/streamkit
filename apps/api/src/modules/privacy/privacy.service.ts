@@ -163,6 +163,7 @@ export class PrivacyService {
           isEnabled: true,
           disabledReason: true,
           externalAccountId: true,
+          accountName: true,
           lastEventAt: true,
         },
       }),
@@ -317,7 +318,7 @@ export class PrivacyService {
       // выше их уже не застанет, оно выполнилось раньше.
       await tx.donationSource.updateMany({
         where: { userId },
-        data: { isEnabled: false, webhookSecretEncrypted: null },
+        data: { isEnabled: false, webhookSecretEncrypted: null, accountName: null },
       });
 
       // Каналы площадок: без учётных данных они бесполезны, а строка мешала бы

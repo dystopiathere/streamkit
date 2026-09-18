@@ -97,7 +97,9 @@ yc lockbox secret add-version --id <external_secret_id> --payload '[
   {"key": "TWITCH_CLIENT_ID",    "text_value": "..."},
   {"key": "TWITCH_CLIENT_SECRET","text_value": "..."},
   {"key": "YOUTUBE_CLIENT_ID",   "text_value": "..."},
-  {"key": "YOUTUBE_CLIENT_SECRET","text_value": "..."}
+  {"key": "YOUTUBE_CLIENT_SECRET","text_value": "..."},
+  {"key": "DONATIONALERTS_CLIENT_ID",    "text_value": "..."},
+  {"key": "DONATIONALERTS_CLIENT_SECRET","text_value": "..."}
 ]'
 ```
 
@@ -265,21 +267,22 @@ failed». Администратор входит на ВМ как `ops`.
 - **Twitch** и **Google Cloud (YouTube)**: redirect URI
   `https://api.stream-kit.ru/api/integrations/twitch/callback` и
   `https://api.stream-kit.ru/api/integrations/youtube/callback`.
-  Публикацию приложения Google не пропустит, пока домен не подтверждён
-  («The website of your home page URL … is not registered to you»):
-  1. [Search Console](https://search.google.com/search-console) → «Добавить
-     ресурс» → **Доменный ресурс** `stream-kit.ru` — тем же аккаунтом Google,
-     что владеет проектом в Google Cloud (роль Owner или Editor).
-  2. Search Console покажет TXT-запись `google-site-verification=…`. Её — в
-     `terraform.tfvars`: `root_txt_records = ["google-site-verification=…"]`,
-     затем `terraform apply`. В консоли DNS руками не заводить: следующий
-     `apply` её не увидит, а запись корня у зоны одна на тип.
-  3. Проверить, что запись опубликована, и нажать «Подтвердить» в Search
-     Console: `dig +short TXT stream-kit.ru @ns1.yandexcloud.net`.
-  4. В Google Cloud → Google Auth Platform → «Брендинг»: главная
-     `https://stream-kit.ru/`, политика `https://stream-kit.ru/legal/privacy`,
-     в «Авторизованных доменах» — `stream-kit.ru`. Затем повторная отправка
-     на проверку.
+- **DonationAlerts** — без приложения кнопки «Подключить DonationAlerts» на
+  странице «Источники» нет:
+  1. `https://www.donationalerts.com/application/clients` → «Создать
+     приложение»: название StreamKit, redirect URI
+     `https://api.stream-kit.ru/api/integrations/donations/donationalerts/callback`
+     (посимвольно, иначе DonationAlerts откажет на шаге входа).
+     Адрес возврата у приложения один: для локальной разработки заводится
+     второе приложение с `http://localhost:3000/...`, его ключи — только в
+     локальный `.env`.
+  2. ID и секрет приложения — в `streamkit-external` новой версией секрета
+     (`add-version` заменяет список целиком — перенесите и прежние ключи):
+     `DONATIONALERTS_CLIENT_ID`, `DONATIONALERTS_CLIENT_SECRET`. Затем выкатка.
+  3. Проверка: подключите свой аккаунт в «Источниках» и отправьте себе
+     тестовый донат на DonationAlerts — он появится в «Событиях». Если нет,
+     причина — в журнале воркера:
+     `sudo -u deploy docker compose logs worker | grep -i donationalerts`.
 
 ## 8. Проверка
 

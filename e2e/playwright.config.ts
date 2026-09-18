@@ -8,6 +8,7 @@ const OVERLAY_URL = process.env.E2E_OVERLAY_URL ?? 'http://localhost:5174';
 const ADMIN_URL = process.env.E2E_ADMIN_URL ?? 'http://localhost:5175';
 const API_URL = process.env.E2E_API_URL ?? 'http://localhost:3000';
 const FAKE_YOOKASSA_PORT = process.env.FAKE_YOOKASSA_PORT ?? '3099';
+const FAKE_DONATIONALERTS_PORT = process.env.FAKE_DONATIONALERTS_PORT ?? '3098';
 
 /**
  * Сквозные тесты гоняются по СОБРАННЫМ приложениям, а не по dev-серверам.
@@ -76,7 +77,20 @@ export default defineConfig({
         SELLER_NAME: 'Тестов Тест Тестович',
         SELLER_INN: '500100732259',
         SELLER_EMAIL: 'support@streamkit.test',
+        // DonationAlerts — фальшивый, ниже: вход и профиль. Возврат из него
+        // приходит на API, поэтому адрес возврата — адрес этого API.
+        OAUTH_REDIRECT_BASE_URL: API_URL,
+        DONATIONALERTS_CLIENT_ID: 'e2e-da-client',
+        DONATIONALERTS_CLIENT_SECRET: 'e2e-da-secret',
+        DONATIONALERTS_BASE_URL: `http://127.0.0.1:${FAKE_DONATIONALERTS_PORT}`,
       },
+    },
+    {
+      command: 'node fake-donationalerts.mjs',
+      url: `http://127.0.0.1:${FAKE_DONATIONALERTS_PORT}/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 10_000,
+      env: { FAKE_DONATIONALERTS_PORT },
     },
     {
       command: 'node fake-yookassa.mjs',

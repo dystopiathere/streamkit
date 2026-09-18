@@ -37,6 +37,10 @@ for (const key of [
   'TWITCH_CLIENT_SECRET',
   'YOUTUBE_CLIENT_ID',
   'YOUTUBE_CLIENT_SECRET',
+  'DONATIONALERTS_CLIENT_ID',
+  'DONATIONALERTS_CLIENT_SECRET',
+  'DONATIONALERTS_BASE_URL',
+  'DONATIONALERTS_SOCKET_URL',
   // ЮKassa — по той же причине: с ключами оплата настроена и комнаты платные,
   // без них бесплатны. Тест оплаты выставляет ключи сам.
   'YOOKASSA_SHOP_ID',

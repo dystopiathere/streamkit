@@ -115,6 +115,19 @@ export const envSchema = z.object({
   TWITCH_IRC_URL: optionalValue(),
 
   /**
+   * Приложение DonationAlerts (`donationalerts.com/application/clients`).
+   * Без него сервис не предлагается к подключению — как и площадки.
+   */
+  DONATIONALERTS_CLIENT_ID: optionalValue(),
+  DONATIONALERTS_CLIENT_SECRET: optionalValue(),
+  /**
+   * Адреса DonationAlerts: сайт (OAuth и API) и сокет Centrifugo. Переопределяются
+   * только в тестах — те поднимают поддельный сервер вместо сети, как для чата.
+   */
+  DONATIONALERTS_BASE_URL: optionalValue(),
+  DONATIONALERTS_SOCKET_URL: optionalValue(),
+
+  /**
    * LiveKit — медиасервер приватных комнат. Все четыре необязательны: без них
    * приложение стартует, а комнаты отвечают «не настроены».
    *

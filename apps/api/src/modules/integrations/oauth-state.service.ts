@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Platform } from '@streamkit/contracts';
+import type { DonationService, Platform } from '@streamkit/contracts';
 import type { Redis } from 'ioredis';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
@@ -10,9 +10,12 @@ import { REDIS_CLIENT } from '../../common/redis/redis.module';
  */
 const STATE_TTL_SECONDS = 600;
 
+/** Куда ведёт подключение: площадка аналитики или донат-сервис. */
+export type OAuthTarget = Platform | DonationService;
+
 export interface OAuthState {
   userId: string;
-  platform: Platform;
+  platform: OAuthTarget;
 }
 
 /**
@@ -36,7 +39,7 @@ export class OAuthStateService {
     private readonly crypto: CryptoService,
   ) {}
 
-  async issue(userId: string, platform: Platform): Promise<string> {
+  async issue(userId: string, platform: OAuthTarget): Promise<string> {
     const state = this.crypto.generateToken(32);
     await this.redis.set(
       this.key(state),
@@ -53,7 +56,7 @@ export class OAuthStateService {
    * `GETDEL` — одна операция: прочитать и удалить двумя командами значит
    * оставить окно, в котором один и тот же state принимается дважды.
    */
-  async consume(state: string, platform: Platform): Promise<OAuthState | null> {
+  async consume(state: string, platform: OAuthTarget): Promise<OAuthState | null> {
     if (!state) return null;
 
     const raw = await this.redis.getdel(this.key(state));
@@ -65,6 +68,26 @@ export class OAuthStateService {
     if (parsed.platform !== platform) return null;
 
     return parsed;
+  }
+
+  /**
+   * State из адреса возврата — только если его вернул тот же браузер.
+   *
+   * Иначе чужой state, подсунутый ссылкой, подключил бы аккаунт жертвы к
+   * аккаунту того, кто этот state выпустил. Сверка ДО расходования: подсунутая
+   * ссылка не должна сжигать state настоящего владельца.
+   */
+  async consumeFromBrowser(
+    rawState: string,
+    browserState: string | undefined,
+    platform: OAuthTarget,
+  ): Promise<{ state: OAuthState | null; boundToBrowser: boolean }> {
+    const boundToBrowser =
+      browserState !== undefined && this.crypto.safeCompare(browserState, rawState);
+    return {
+      state: boundToBrowser ? await this.consume(rawState, platform) : null,
+      boundToBrowser,
+    };
   }
 
   private key(state: string): string {
