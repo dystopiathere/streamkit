@@ -115,6 +115,17 @@ variable "valkey" {
   }
 }
 
+variable "root_txt_records" {
+  description = "Значения TXT в корне домена, например google-site-verification=... из Google Search Console. Пусто — записи нет"
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for v in var.root_txt_records : !strcontains(v, "\"") && length(v) > 0 && length(v) <= 255])
+    error_message = "root_txt_records — значения как их показывает Google, без кавычек и не длиннее 255 символов."
+  }
+}
+
 variable "postbox_dkim" {
   description = "Запись DKIM из консоли Postbox для домена отправителя: полное имя (точку в конце dns.tf добавит сам) и значение TXT. null — запись ещё не заведена"
   type = object({
