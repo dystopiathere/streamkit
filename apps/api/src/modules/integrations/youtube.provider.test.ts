@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeIdentity, normalizeStats } from './youtube.provider';
+import type { HttpClient } from '../../common/http/http-client.service';
+import type { AppConfig } from '../../config/app-config.service';
+import { normalizeIdentity, normalizeStats, YouTubeProvider } from './youtube.provider';
 
 /** Записано с настоящего ответа `channels.list?part=snippet,statistics&mine=true`. */
 const CHANNEL = {
@@ -131,5 +133,22 @@ describe('нормализация метрик YouTube', () => {
 
     expect(stats.subscribers).toBeNull();
     expect(stats.totalViews).toBeNull();
+  });
+});
+
+describe('разрешения Google', () => {
+  it('просит у Google только youtube.readonly', () => {
+    // Политика конфиденциальности (раздел 5) обещает ровно одно разрешение и
+    // ни почты, ни профиля аккаунта Google. Лишний scope — это новая редакция
+    // политики и новая проверка приложения в Google, а не строчка в коде.
+    const config = {
+      oauthCredentials: () => ({ clientId: 'client', clientSecret: 'secret' }),
+      oauthRedirectBaseUrl: 'https://api.example.test',
+    } as unknown as AppConfig;
+    const provider = new YouTubeProvider({} as HttpClient, config);
+
+    const url = new URL(provider.buildAuthorizeUrl('state'));
+
+    expect(url.searchParams.get('scope')).toBe('https://www.googleapis.com/auth/youtube.readonly');
   });
 });
