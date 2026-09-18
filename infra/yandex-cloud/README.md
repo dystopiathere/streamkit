@@ -273,6 +273,9 @@ failed». Администратор входит на ВМ как `ops`.
      приложение»: название StreamKit, redirect URI
      `https://api.stream-kit.ru/api/integrations/donations/donationalerts/callback`
      (посимвольно, иначе DonationAlerts откажет на шаге входа).
+     Адрес возврата у приложения один: для локальной разработки заводится
+     второе приложение с `http://localhost:3000/...`, его ключи — только в
+     локальный `.env`.
   2. ID и секрет приложения — в `streamkit-external` новой версией секрета
      (`add-version` заменяет список целиком — перенесите и прежние ключи):
      `DONATIONALERTS_CLIENT_ID`, `DONATIONALERTS_CLIENT_SECRET`. Затем выкатка.
