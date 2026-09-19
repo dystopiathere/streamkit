@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   adminAuditQuerySchema,
+  adminChannelSchema,
   adminLoginSchema,
   adminStatsBucket,
   adminUserListQuerySchema,
@@ -41,5 +42,28 @@ describe('контракты админки', () => {
     expect(adminStatsBucket('30d')).toBe('day');
     expect(adminStatsBucket('90d')).toBe('day');
     expect(adminStatsBucket('365d')).toBe('week');
+  });
+});
+
+describe('канал в админке', () => {
+  it('без показателей и названий эфиров — только адрес, название и состояние сбора', () => {
+    // Политика (раздел 5.3) обещает: данные из Google сотрудник видит только
+    // такие. Новое поле здесь — сначала вопрос к политике, потом к схеме.
+    expect(Object.keys(adminChannelSchema.shape).sort()).toEqual(
+      [
+        'displayName',
+        'id',
+        'isEnabled',
+        'lastSyncedAt',
+        'login',
+        'nextAttemptAt',
+        'ownerEmail',
+        'platform',
+        'syncAttempts',
+        'syncError',
+        'syncState',
+        'userId',
+      ].sort(),
+    );
   });
 });
