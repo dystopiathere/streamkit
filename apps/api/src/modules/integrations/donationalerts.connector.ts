@@ -280,6 +280,7 @@ export function normalizeDonation(raw: DonationAlertsMessage, userId: string): I
       amountMinor !== null && amountMinor >= 0 && knownCurrency
         ? { amountMinor, currency: currency as Currency }
         : null,
+    count: null,
     isTest: false,
   };
 }

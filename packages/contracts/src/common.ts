@@ -18,13 +18,6 @@ export type Money = z.infer<typeof moneySchema>;
 /** Количество минорных единиц в мажорной. Все поддерживаемые валюты — сотенные. */
 export const MINOR_UNITS_PER_MAJOR = 100;
 
-export function toMinor(major: number, currency: Currency): Money {
-  return {
-    amountMinor: Math.round(major * MINOR_UNITS_PER_MAJOR),
-    currency,
-  };
-}
-
 /**
  * Строка из поля ввода в рублях → целые копейки.
  *

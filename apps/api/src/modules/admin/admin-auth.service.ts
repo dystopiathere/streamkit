@@ -1,12 +1,10 @@
-import { ForbiddenException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import type { User } from '@prisma/client';
 import type { AdminAuthResult, AdminLoginInput, AdminMe } from '@streamkit/contracts';
-import type { Redis } from 'ioredis';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { PasswordService } from '../../common/crypto/password.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { toPublicUser } from '../auth/auth.service';
 import { TokenService } from '../auth/token.service';
 import { TotpService } from '../auth/totp.service';
@@ -22,15 +20,6 @@ import { toStaffRole } from './admin.mappers';
 const LOGIN_FAILED =
   'Вход не выполнен: неверна почта, пароль или код, либо у аккаунта нет доступа к админке';
 
-/**
- * Код TOTP принимается один раз.
- *
- * Код действует полторы минуты с допуском часов, и подсмотренный за плечом или
- * перехваченный вместе с паролем открывал бы вторую сессию сотрудника. Отметка
- * живёт дольше окна действия кода.
- */
-const TOTP_REPLAY_TTL_SECONDS = 120;
-
 type AdminAuthWithRefresh = AdminAuthResult & { refreshToken: string };
 
 @Injectable()
@@ -42,7 +31,6 @@ export class AdminAuthService {
     private readonly totp: TotpService,
     private readonly crypto: CryptoService,
     private readonly audit: AuditService,
-    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
   /**
@@ -82,14 +70,8 @@ export class AdminAuthService {
     }
 
     if (!this.verifyTotp(user.totpSecretEncrypted, input.totpCode)) return fail('totp');
-    const fresh = await this.redis.set(
-      `admin:totp-used:${user.id}:${input.totpCode}`,
-      '1',
-      'EX',
-      TOTP_REPLAY_TTL_SECONDS,
-      'NX',
-    );
-    if (fresh !== 'OK') return fail('totp-replay');
+    // Код принимается один раз — и здесь, и во входе в дашборд.
+    if (!(await this.totp.consume(user.id, input.totpCode))) return fail('totp-replay');
 
     await this.audit.record('admin.login.success', user.id, context);
     const issued = await this.tokens.startSession(user, context, 'ADMIN');

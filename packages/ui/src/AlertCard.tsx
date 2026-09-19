@@ -1,20 +1,21 @@
 import {
   type AlertEvent,
-  type AlertWidgetConfig,
+  type AlertScenarioConfig,
   formatMoney,
   renderTemplate,
 } from '@streamkit/contracts';
 import type { CSSProperties } from 'react';
 
 export interface AlertCardProps {
-  event: Pick<AlertEvent, 'username' | 'message' | 'amount' | 'type'>;
-  config: AlertWidgetConfig;
+  event: Pick<AlertEvent, 'username' | 'message' | 'amount' | 'count' | 'type'>;
+  /** Сценарий типа этого события — у каждого свои текст, картинка и оформление. */
+  config: AlertScenarioConfig;
   /** Отключает анимацию входа — нужно в превью редактора, где карточка статична. */
   animate?: boolean;
 }
 
 /** Переменные, которые выделяются цветом акцента: на них смотрит зритель. */
-const HIGHLIGHTED_VARS = new Set(['username', 'amount']);
+const HIGHLIGHTED_VARS = new Set(['username', 'amount', 'count']);
 
 /**
  * Разбирает шаблон на части и подсвечивает имя донатера и сумму.
@@ -46,7 +47,7 @@ function renderHighlighted(
   });
 }
 
-const LAYOUT_STYLES: Record<AlertWidgetConfig['layout'], CSSProperties> = {
+const LAYOUT_STYLES: Record<AlertScenarioConfig['layout'], CSSProperties> = {
   banner: { alignItems: 'center', justifyContent: 'flex-start', textAlign: 'center' },
   center: { alignItems: 'center', justifyContent: 'center', textAlign: 'center' },
   side: { alignItems: 'flex-start', justifyContent: 'center', textAlign: 'left' },
@@ -66,6 +67,9 @@ export function AlertCard({ event, config, animate = true }: AlertCardProps): Re
   const vars = {
     username: event.username,
     amount,
+    // Количество — биты, зрители рейда, месяцы, подарки — числом с разрядами:
+    // «10 000 битов» читается, «10000» — нет.
+    count: event.count === null ? '' : new Intl.NumberFormat('ru-RU').format(event.count),
     message: event.message,
     type: event.type,
   };

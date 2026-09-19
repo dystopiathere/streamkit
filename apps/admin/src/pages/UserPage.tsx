@@ -74,6 +74,9 @@ function UserCard({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
   const isAdmin = staff ? roleAllows(staff.role, 'admin') : false;
   const isSelf = staff?.id === detail.user.id;
   const { user } = detail;
+  // Сессии и второй фактор сотрудника меняет только администратор: сервер
+  // ответит поддержке отказом, и кнопка, которая заведомо не сработает, не нужна.
+  const canManageAccess = isAdmin || user.role === 'user';
   const name = user.displayName;
   const dialog = useConfirm<Dialog>();
   const [days, setDays] = useState(7);
@@ -131,7 +134,7 @@ function UserCard({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
 
         {!anonymized && !isSelf ? (
           <div className="flex flex-wrap gap-2" aria-label={t('user.actions')} role="group">
-            {user.isTotpEnabled ? (
+            {user.isTotpEnabled && canManageAccess ? (
               <Button variant="secondary" onClick={() => dialog.open('resetTotp')}>
                 {t('user.resetTotp')}
               </Button>
@@ -250,7 +253,7 @@ function UserCard({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
       <Section
         title={t('user.sessions')}
         actions={
-          detail.sessions.length > 0 && !isSelf ? (
+          detail.sessions.length > 0 && !isSelf && canManageAccess ? (
             <Button variant="secondary" onClick={() => dialog.open('revokeAll')}>
               {t('user.revokeAll')}
             </Button>
@@ -293,16 +296,19 @@ function UserCard({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
               key: 'actions',
               header: <span className="sr-only">{t('user.actions')}</span>,
               align: 'end',
-              cell: (row) => (
-                <Button
-                  variant="ghost"
-                  isLoading={revokeSessions.isPending && revokeSessions.variables === row.id}
-                  aria-label={t('user.revokeSessionNamed', { date: formatDateTime(row.createdAt) })}
-                  onClick={() => revokeSessions.mutate(row.id)}
-                >
-                  {t('user.revokeSession')}
-                </Button>
-              ),
+              cell: (row) =>
+                canManageAccess ? (
+                  <Button
+                    variant="ghost"
+                    isLoading={revokeSessions.isPending && revokeSessions.variables === row.id}
+                    aria-label={t('user.revokeSessionNamed', {
+                      date: formatDateTime(row.createdAt),
+                    })}
+                    onClick={() => revokeSessions.mutate(row.id)}
+                  >
+                    {t('user.revokeSession')}
+                  </Button>
+                ) : null,
             },
           ]}
         />

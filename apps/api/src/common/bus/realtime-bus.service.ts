@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type {
+  ChatChannelRef,
   AlertEvent,
   ChannelStats,
   ChatMessage,
@@ -24,6 +25,9 @@ export type BusMessage =
   // Чат адресуется КАНАЛОМ, а не пользователем: комната доставки общая на
   // канал, и раскладывать сообщение по виджетам на каждой реплике не нужно.
   | { kind: 'chat'; message: ChatMessage }
+  // Каналы чата пользователя сменились: подключили другой аккаунт площадки или
+  // отключили её. Оверлеи его виджетов чата переходят в новые комнаты.
+  | { kind: 'chat-channel'; userId: string; channels: ChatChannelRef[] }
   | { kind: 'overlay-revoked'; tokenId: string; reason: OverlayRevokeReason }
   | { kind: 'analytics'; userId: string; channelId: string; stats: ChannelStats }
   // Аккаунт заблокирован: открытые вкладки дашборда отключаются, а не

@@ -108,14 +108,39 @@ describe('Приватность и удаление аккаунта (feature)'
     expect(await harness.prisma.alertEvent.count()).toBe(1);
   });
 
-  it('удаление аккаунта стирает секрет источника, а не только выключает его', async () => {
+  it('удаление аккаунта стирает источники донатов вместе с секретом, а не только выключает их', async () => {
     await request(server()).post('/api/events/webhook/secret').set(auth()).expect(201);
     await deleteAccount();
 
-    const sources = await harness.prisma.donationSource.findMany();
-    expect(sources).toHaveLength(1);
-    expect(sources[0]?.isEnabled).toBe(false);
-    expect(sources[0]?.webhookSecretEncrypted).toBeNull();
+    expect(await harness.prisma.donationSource.count()).toBe(0);
+  });
+
+  it('удаление аккаунта стирает виджеты: в настройках ники зрителей', async () => {
+    const user = await harness.prisma.user.findFirstOrThrow({ where: { status: 'ACTIVE' } });
+    await harness.prisma.channel.create({
+      data: {
+        userId: user.id,
+        platform: 'TWITCH',
+        externalId: '1',
+        login: 'streamer',
+        displayName: 'Стример',
+      },
+    });
+    const widget = await request(server())
+      .post('/api/widgets')
+      .set(auth())
+      .send({ name: 'Чат', type: 'chat', config: { hiddenUsers: ['viewer'] } })
+      .expect(201);
+    await request(server())
+      .post(`/api/widgets/${(widget.body as { id: string }).id}/tokens`)
+      .set(auth())
+      .send({})
+      .expect(201);
+
+    await deleteAccount();
+
+    expect(await harness.prisma.widget.count()).toBe(0);
+    expect(await harness.prisma.overlayToken.count()).toBe(0);
   });
 
   it('удаление аккаунта освобождает подключённый канал площадки', async () => {

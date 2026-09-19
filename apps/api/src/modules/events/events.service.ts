@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type {
   AlertEvent,
+  AlertEventType,
   CursorPagination,
   IncomingAlertEvent,
   Language,
@@ -15,10 +16,43 @@ import { DedupService } from './dedup.service';
 import { toContractEvent, toPrismaEventType, toPrismaProvider } from './event.mappers';
 
 /** Подпись тестового алерта: он уходит в OBS, поэтому на языке дашборда стримера. */
-const TEST_EVENT_TEXT: Record<Language, { username: string; message: string }> = {
-  ru: { username: 'Тестовый зритель', message: 'Проверка оповещения' },
-  en: { username: 'Test viewer', message: 'Checking the alert' },
+const TEST_EVENT_TEXT: Record<Language, { username: string; message: string; reward: string }> = {
+  ru: { username: 'Тестовый зритель', message: 'Проверка оповещения', reward: 'Выбрать игру' },
+  en: { username: 'Test viewer', message: 'Checking the alert', reward: 'Pick the game' },
 };
+
+/**
+ * Пример события для проверки сценария: у каждого типа — то, что у него
+ * бывает на самом деле. Сумма только у доната, количество — у подарков,
+ * продлений, битов и рейда: шаблон проверяется с теми же переменными, что
+ * придут в эфире.
+ */
+function testSample(
+  type: AlertEventType,
+  text: (typeof TEST_EVENT_TEXT)[Language],
+): Pick<IncomingAlertEvent, 'message' | 'amount' | 'count'> {
+  switch (type) {
+    case 'donation':
+      return {
+        message: text.message,
+        amount: { amountMinor: 50_000, currency: 'RUB' },
+        count: null,
+      };
+    case 'gift':
+      return { message: '', amount: null, count: 5 };
+    case 'resubscription':
+      return { message: text.message, amount: null, count: 12 };
+    case 'cheer':
+      return { message: text.message, amount: null, count: 500 };
+    case 'raid':
+      return { message: '', amount: null, count: 42 };
+    case 'reward':
+      return { message: text.reward, amount: null, count: null };
+    case 'follow':
+    case 'subscription':
+      return { message: '', amount: null, count: null };
+  }
+}
 
 export type IngestResult =
   { status: 'created'; event: AlertEvent } | { status: 'duplicate'; event: null };
@@ -67,6 +101,7 @@ export class EventsService {
           message: incoming.message,
           amountMinor: incoming.amount?.amountMinor ?? null,
           currency: incoming.amount?.currency ?? null,
+          count: incoming.count,
           isTest: incoming.isTest,
           occurredAt: incoming.occurredAt ? new Date(incoming.occurredAt) : new Date(),
         },
@@ -119,16 +154,19 @@ export class EventsService {
    * Тестовый алерт из дашборда. Отдельный `externalId` на каждый вызов — иначе
    * дедупликация отбросит вторую проверку, и стример решит, что всё сломалось.
    */
-  async createTestEvent(userId: string, language: Language = 'ru'): Promise<AlertEvent> {
+  async createTestEvent(
+    userId: string,
+    type: AlertEventType = 'donation',
+    language: Language = 'ru',
+  ): Promise<AlertEvent> {
     const text = TEST_EVENT_TEXT[language];
     const result = await this.ingest({
       userId,
-      type: 'donation',
+      type,
       provider: 'manual',
       externalId: `test-${randomUUID()}`,
       username: text.username,
-      message: text.message,
-      amount: { amountMinor: 50_000, currency: 'RUB' },
+      ...testSample(type, text),
       isTest: true,
       occurredAt: new Date().toISOString(),
     });

@@ -13,7 +13,7 @@ Playwright, Chromium.
 Тесты гоняются по **собранным** приложениям, а не по dev-серверам. Переменные
 `VITE_*` вшиваются в бандл при сборке, и проверять надо именно тот артефакт,
 который поедет в прод — иначе ошибка конфигурации сборки обнаружится после
-деплоя. Playwright сам поднимает серверы: API, фальшивые ЮKassa и DonationAlerts, дашборд,
+деплоя. Playwright сам поднимает серверы: API, фальшивые ЮKassa, DonationAlerts, Twitch и YouTube, дашборд,
 оверлей и админку.
 
 ## Правила
@@ -52,6 +52,18 @@ Playwright, Chromium.
   прогоне не запускается, его путь — в `donation-sources.int.test.ts`. Этот
   сценарий — единственная проверка OAuth в настоящем браузере (cookie state на
   переходе с чужого домена).
+- **Twitch — фальшивый** (`fake-twitch.mjs`, порт `FAKE_TWITCH_PORT`, 3097):
+  вход, обмен кода, пользователь и канал Helix. Каждый вход выдаёт НОВЫЙ канал
+  `e2e_streamer_N`, поэтому логин тест не задаёт, а читает с карточки
+  (`connectTwitch` в `tests/platforms.ts`) — так же проверяется и
+  переподключение другого аккаунта. EventSub в прогоне нет — нет воркера; его
+  путь закрыт `twitch-events.int.test.ts`.
+- **YouTube — фальшивый** (`fake-youtube.mjs`, порт `FAKE_YOUTUBE_PORT`, 3096):
+  вход Google, обмен кода и `channels.list`. Каждый вход — новый канал
+  `UCe2e_yt_…N`; `connectYouTube` возвращает его id и название. Потока чата
+  `streamList` в прогоне нет — его путь закрыт `youtube-chat.int.test.ts`.
+  Чат и виджет чата без подключённой площадки не работают, так что сценарии
+  чата начинаются с `connectTwitch` или `connectYouTube`.
 - **Окно эфира** (`stream.spec.ts`): чат кладётся в шину напрямую, как в
   сценарии чата оверлея, — воркера в прогоне нет. Площадки с зрителями и
   временем эфира закрыты интеграционным тестом: снимки пишет опрос, а его в
@@ -66,16 +78,23 @@ Playwright, Chromium.
 - **Рядом с запущенным `pnpm dev`** его API не знает про фальшивую ЮKassa, и
   сценарий оплаты пропускается (в CI пропуск — падение). Отдельный стенд — на
   соседних портах: `E2E_WEB_URL`, `E2E_API_URL`, `E2E_OVERLAY_URL`,
-  `FAKE_YOOKASSA_PORT`. Дашборд для него собирается с `VITE_API_URL` своего
-  API, а API запускается из каталога без `.env`: иначе файл перетрёт порт.
+  `E2E_ADMIN_URL`, `FAKE_YOOKASSA_PORT`, `FAKE_TWITCH_PORT`, `FAKE_YOUTUBE_PORT`. Дашборд, оверлей и админка для него
+  собираются с `VITE_API_URL` своего API — админка из `pnpm dev` ходит в API
+  разработки, и сценарий админки с ней упадёт. API запускается из каталога без
+  `.env`: иначе файл перетрёт порт.
   `pnpm build` при этом не запускать — он роняет `pnpm dev` (грабли в CLAUDE.md).
 
 ## Запуск
 
+Собирать — с `VITE_API_URL`, как в CI. Vite не читает корневой `.env`, и без
+переменной HTTP дашборда идёт через прокси `vite preview`, а сокет — в сам
+preview, где socket.io нет: падает только сценарий окна эфира, и выглядит это как
+поломка чата.
+
 ```bash
-pnpm build                          # обязательно: тесты идут по dist
-pnpm --filter @streamkit/e2e test
-pnpm --filter @streamkit/e2e test:ui   # интерактивный режим
+VITE_API_URL=http://localhost:3000 pnpm build   # обязательно: тесты идут по dist
+pnpm --filter @streamkit/e2e test:e2e
+pnpm --filter @streamkit/e2e test:e2e:ui   # интерактивный режим
 ```
 
 Нужны запущенные PostgreSQL и Redis и накатанные миграции.

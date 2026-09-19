@@ -44,6 +44,13 @@ export function RecentEvents({ events }: { events: AlertEvent[] }): React.JSX.El
                   <p className="font-medium text-success tabular-nums">
                     {formatMoney(event.amount)}
                   </p>
+                ) : event.count !== null ? (
+                  <p className="font-medium tabular-nums">
+                    {t(`events.count.${event.type}`, {
+                      count: event.count,
+                      formatted: new Intl.NumberFormat(intlLocale()).format(event.count),
+                    })}
+                  </p>
                 ) : null}
                 <p className="text-xs text-muted tabular-nums">
                   {new Date(event.createdAt).toLocaleTimeString(intlLocale(), {

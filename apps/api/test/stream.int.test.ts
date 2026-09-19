@@ -1,3 +1,4 @@
+import { JwtService } from '@nestjs/jwt';
 import type { ChannelStats } from '@streamkit/contracts';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -7,6 +8,8 @@ import { PresenceService } from '../src/common/redis/presence.service';
 import { AnalyticsPoller } from '../src/modules/analytics/analytics-poller.service';
 import type { PlatformProvider } from '../src/modules/integrations/platform-provider';
 import { PlatformRegistry } from '../src/modules/integrations/platform-registry.service';
+import { type BusMessage, RealtimeBus } from '../src/common/bus/realtime-bus.service';
+import { PlatformConnectionService } from '../src/modules/integrations/platform-connection.service';
 import { DashboardGateway } from '../src/modules/realtime/dashboard.gateway';
 import { createHarness, registrationPayload, type TestHarness } from './harness';
 
@@ -72,6 +75,21 @@ describe('Окно эфира (feature)', () => {
     return channel.id;
   }
 
+  const YOUTUBE_ID = 'UC' + 'y'.repeat(22);
+
+  async function connectYouTube(syncState: 'OK' | 'AUTH_EXPIRED' = 'OK'): Promise<void> {
+    await harness.prisma.channel.create({
+      data: {
+        userId,
+        platform: 'YOUTUBE',
+        externalId: YOUTUBE_ID,
+        login: '@streamer',
+        displayName: 'Стример на YouTube',
+        syncState,
+      },
+    });
+  }
+
   function liveStats(overrides: Partial<ChannelStats> = {}): ChannelStats {
     return {
       capturedAt: new Date().toISOString(),
@@ -102,7 +120,7 @@ describe('Окно эфира (feature)', () => {
 
   it('без площадок и виджетов окно пустое, но отвечает', async () => {
     const response = await request(server()).get('/api/stream').set(auth()).expect(200);
-    expect(response.body).toEqual({ channels: [], chat: null, widgets: [] });
+    expect(response.body).toEqual({ channels: [], chats: [], widgets: [] });
   });
 
   it('показывает зрителей и начало эфира, снятые опросом площадки', async () => {
@@ -142,28 +160,53 @@ describe('Окно эфира (feature)', () => {
     });
   });
 
-  it('чат — подключённого Twitch, а без него — канала из виджета чата', async () => {
-    await request(server())
-      .post('/api/widgets')
-      .set(auth())
-      .send({ name: 'Чат', type: 'chat', config: { channel: 'from_widget' } })
-      .expect(201);
-
-    const fromWidget = await request(server()).get('/api/stream').set(auth()).expect(200);
-    expect(fromWidget.body.chat).toEqual({
-      platform: 'twitch',
-      channel: 'from_widget',
-      source: 'widget',
-    });
+  it('чат — только подключённых площадок: без подключения его нет', async () => {
+    const none = await request(server()).get('/api/stream').set(auth()).expect(200);
+    expect(none.body.chats).toEqual([]);
 
     await connectTwitch('Streamer_Login');
+    await connectYouTube();
     const connected = await request(server()).get('/api/stream').set(auth()).expect(200);
     // IRC различает регистр в имени канала, логин Twitch — всегда строчными.
-    expect(connected.body.chat).toEqual({
-      platform: 'twitch',
-      channel: 'streamer_login',
-      source: 'connected',
-    });
+    // YouTube без отметки воркера — «ждём эфира»: чат у него есть только у эфира.
+    expect(connected.body.chats).toEqual([
+      { platform: 'twitch', channel: 'streamer_login', title: 'Стример', state: 'ok' },
+      { platform: 'youtube', channel: YOUTUBE_ID, title: 'Стример на YouTube', state: 'waiting' },
+    ]);
+  });
+
+  it('состояние чата YouTube — по отметке воркера, отозванный доступ — сразу «переподключите»', async () => {
+    await connectYouTube();
+    await harness.app
+      .get(PresenceService)
+      .setChatStates([[{ platform: 'youtube', channel: YOUTUBE_ID }, 'quota']]);
+    const quota = await request(server()).get('/api/stream').set(auth()).expect(200);
+    expect(quota.body.chats[0].state).toBe('quota');
+
+    await harness.prisma.channel.updateMany({ data: { syncState: 'AUTH_EXPIRED' } });
+    const expired = await request(server()).get('/api/stream').set(auth()).expect(200);
+    expect(expired.body.chats[0].state).toBe('auth');
+  });
+
+  it('отключение Twitch сообщает оверлеям чата, что канала больше нет', async () => {
+    await connectTwitch();
+    const messages: BusMessage[] = [];
+    const unsubscribe = await harness.app
+      .get(RealtimeBus)
+      .subscribe((message) => void messages.push(message));
+    try {
+      await connectYouTube();
+      await harness.app.get(PlatformConnectionService).disconnect(userId, 'twitch');
+      await waitUntil(() => messages.some((message) => message.kind === 'chat-channel'));
+      // Остаётся YouTube: оверлей переходит на оставшиеся каналы, а не замолкает.
+      expect(messages.find((message) => message.kind === 'chat-channel')).toEqual({
+        kind: 'chat-channel',
+        userId,
+        channels: [{ platform: 'youtube', channel: YOUTUBE_ID }],
+      });
+    } finally {
+      await unsubscribe();
+    }
   });
 
   it('виджеты: сколько ссылок и сколько из них подключено к OBS сейчас', async () => {
@@ -198,28 +241,72 @@ describe('Окно эфира (feature)', () => {
     expect(after.body.widgets[0].connected).toBe(0);
   });
 
-  it('окно подписывается на чат своего канала и отмечает его для воркера', async () => {
+  it('окно подписывается на чаты своих каналов и отмечает их для воркера', async () => {
     await connectTwitch('streamer_login');
+    await connectYouTube();
     const { socket, rooms } = fakeSocket(userId);
     rooms.add('chat:twitch:old_channel');
 
     const ack = await harness.app.get(DashboardGateway).watchStream(socket);
 
-    expect(ack.chat?.channel).toBe('streamer_login');
+    expect(ack.chats.map((chat) => chat.channel)).toEqual(['streamer_login', YOUTUBE_ID]);
     expect(rooms.has('chat:twitch:streamer_login')).toBe(true);
+    expect(rooms.has(`chat:youtube:${YOUTUBE_ID}`)).toBe(true);
     // Прежний канал отпущен: чат чужого канала в окно не течёт.
     expect(rooms.has('chat:twitch:old_channel')).toBe(false);
-    expect(await harness.app.get(PresenceService).watchedChats()).toEqual(
-      new Set(['streamer_login']),
-    );
+    expect(await harness.app.get(PresenceService).watchedChats()).toEqual([
+      { platform: 'twitch', channel: 'streamer_login' },
+      { platform: 'youtube', channel: YOUTUBE_ID },
+    ]);
+  });
+
+  it('YouTube с отозванным доступом окно показывает, но воркеру не отмечает: квота не тратится впустую', async () => {
+    await connectYouTube('AUTH_EXPIRED');
+    const { socket } = fakeSocket(userId);
+    const ack = await harness.app.get(DashboardGateway).watchStream(socket);
+
+    expect(ack.chats).toEqual([expect.objectContaining({ platform: 'youtube', state: 'auth' })]);
+    expect(await harness.app.get(PresenceService).watchedChats()).toEqual([]);
+  });
+
+  it('сокет дашборда закрывается, когда истекает токен, по которому он открыт', async () => {
+    // Иначе окно эфира переживало бы выход и смену пароля: токен проверяется
+    // только при подключении, а сокет живёт весь стрим.
+    const token = await harness.app
+      .get(JwtService)
+      .signAsync({ sub: userId, email: 'streamer@example.com' }, { expiresIn: 1 });
+    let disconnected = false;
+    const client = {
+      handshake: { auth: { token } },
+      data: {},
+      join: async () => undefined,
+      disconnect: () => {
+        disconnected = true;
+      },
+    } as unknown as Socket;
+    const gateway = harness.app.get(DashboardGateway);
+
+    await gateway.handleConnection(client);
+    expect(disconnected).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    expect(disconnected).toBe(true);
+    gateway.handleDisconnect(client);
   });
 
   it('без канала чата окно ни на что не подписывается', async () => {
     const { socket, rooms } = fakeSocket(userId);
     const ack = await harness.app.get(DashboardGateway).watchStream(socket);
 
-    expect(ack).toEqual({ chat: null });
+    expect(ack).toEqual({ chats: [] });
     expect([...rooms].some((room) => room.startsWith('chat:'))).toBe(false);
-    expect((await harness.app.get(PresenceService).watchedChats()).size).toBe(0);
+    expect(await harness.app.get(PresenceService).watchedChats()).toEqual([]);
   });
 });
+
+async function waitUntil(check: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (check()) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error('Условие не выполнилось');
+}

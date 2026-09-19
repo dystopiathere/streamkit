@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import type { AvailablePlatform, Platform } from '@streamkit/contracts';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
+import { RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { chatChannelsOf, toChannelRefs } from '../chat/chat-channel';
 import { OAuthStateService } from './oauth-state.service';
 import { PlatformRegistry } from './platform-registry.service';
 import { PlatformTokenService } from './platform-token.service';
@@ -24,6 +26,7 @@ export class PlatformConnectionService {
     private readonly tokens: PlatformTokenService,
     private readonly state: OAuthStateService,
     private readonly audit: AuditService,
+    private readonly bus: RealtimeBus,
   ) {}
 
   async listAvailable(userId: string): Promise<AvailablePlatform[]> {
@@ -108,6 +111,7 @@ export class PlatformConnectionService {
     });
 
     await this.tokens.save(state.userId, platform, tokens);
+    await this.announceChatChannels(state.userId);
     await this.audit.record('integration.connected', state.userId, {
       ...context,
       metadata: { platform, externalId: identity.externalId },
@@ -123,9 +127,27 @@ export class PlatformConnectionService {
       where: { userId, platform: toPrismaPlatform(platform) },
     });
     await this.tokens.remove(userId, platform);
+    await this.announceChatChannels(userId);
     await this.audit.record('integration.disconnected', userId, {
       ...context,
       metadata: { platform },
     });
+  }
+
+  /**
+   * Каналы чата пользователя — подключённые площадки. Сменился аккаунт или
+   * площадку отключили — открытые оверлеи чата переходят на новые каналы или
+   * замолкают сразу, а не после перезагрузки сцены в OBS.
+   */
+  private async announceChatChannels(userId: string): Promise<void> {
+    await this.bus
+      .publish({
+        kind: 'chat-channel',
+        userId,
+        channels: toChannelRefs(await chatChannelsOf(this.prisma, userId)),
+      })
+      .catch((error: unknown) =>
+        this.logger.warn({ err: error }, 'Смена канала чата не разослана'),
+      );
   }
 }

@@ -11,7 +11,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { PlatformRegistry } from '../integrations/platform-registry.service';
 import { PlatformTokenService } from '../integrations/platform-token.service';
 import { ANALYTICS_PLATFORMS, toContractPlatform } from '../integrations/platform.mappers';
-import { QuotaService } from './quota.service';
+import { nextQuotaReset, QuotaService } from './quota.service';
 
 /** Как часто опрашивается канал в эфире. Зрители меняются поминутно. */
 export const LIVE_INTERVAL_MS = 60_000;
@@ -74,13 +74,6 @@ export function isDue(channel: PollCandidate, now: number): boolean {
   return now - channel.lastSyncedAt.getTime() >= interval;
 }
 
-/** Ближайшая полночь по UTC — когда Google обнуляет суточную квоту проекта. */
-export function nextQuotaReset(now: Date): Date {
-  const reset = new Date(now);
-  reset.setUTCHours(24, 0, 0, 0);
-  return reset;
-}
-
 /**
  * Сбор метрик подключённых каналов.
  *
@@ -141,7 +134,7 @@ export class AnalyticsPoller {
     // Бюджет резервируется ДО запроса: списание после означало бы, что
     // превышение обнаруживается уже потраченным.
     if (!(await this.quota.reserve(platform, provider.statsQuotaCost))) {
-      // Ждать до обнуления квоты, а не минуту: до полуночи по UTC ни одна
+      // Ждать до обнуления квоты, а не минуту: до полуночи по часам Google ни одна
       // попытка не может получиться, а каждая стоит запроса в Redis и записи в БД.
       await this.markState(channel.id, 'RATE_LIMITED', 'Суточная квота площадки исчерпана', {
         nextAttemptAt: nextQuotaReset(new Date()),

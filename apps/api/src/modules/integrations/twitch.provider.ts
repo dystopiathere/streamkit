@@ -12,10 +12,6 @@ import {
   type RawTokenResponse,
 } from './platform-provider';
 
-const AUTHORIZE_URL = 'https://id.twitch.tv/oauth2/authorize';
-const TOKEN_URL = 'https://id.twitch.tv/oauth2/token';
-const HELIX = 'https://api.twitch.tv/helix';
-
 /**
  * Запрашиваемые права.
  *
@@ -26,7 +22,22 @@ const HELIX = 'https://api.twitch.tv/helix';
  * не читалась и не хранилась. Право, которое не нужно, — это данные, которые
  * можно получить, и строка в политике, которую пришлось бы объяснять.
  */
-const SCOPES = ['moderator:read:followers', 'channel:read:subscriptions'];
+export const TWITCH_SCOPES = [
+  'moderator:read:followers',
+  'channel:read:subscriptions',
+  // Оповещения о битах и баллах канала (EventSub `channel.cheer` и
+  // `channel.channel_points_custom_reward_redemption.add`). Рейду права не нужны.
+  'bits:read',
+  'channel:read:redemptions',
+];
+
+/** Подписка EventSub: что и на каком канале слушать. */
+export interface EventSubSubscriptionRequest {
+  type: string;
+  version: string;
+  condition: Record<string, string>;
+  transport: { method: 'websocket'; session_id: string };
+}
 
 interface TwitchUser {
   id: string;
@@ -93,11 +104,11 @@ export class TwitchProvider implements PlatformProvider {
   ) {}
 
   buildAuthorizeUrl(state: string): string {
-    const url = new URL(AUTHORIZE_URL);
+    const url = new URL(`${this.config.twitchEndpoints.auth}/authorize`);
     url.searchParams.set('client_id', this.credentials().clientId);
     url.searchParams.set('redirect_uri', this.redirectUri());
     url.searchParams.set('response_type', 'code');
-    url.searchParams.set('scope', SCOPES.join(' '));
+    url.searchParams.set('scope', TWITCH_SCOPES.join(' '));
     url.searchParams.set('state', state);
     // Экран подтверждения показывается даже при повторном подключении: иначе
     // сменить аккаунт невозможно — Twitch молча переиспользует текущий.
@@ -110,7 +121,7 @@ export class TwitchProvider implements PlatformProvider {
     return normalizeTokens(
       await this.http.json<RawTokenResponse>({
         platform: this.platform,
-        url: TOKEN_URL,
+        url: `${this.config.twitchEndpoints.auth}/token`,
         method: 'POST',
         form: {
           client_id: clientId,
@@ -128,7 +139,7 @@ export class TwitchProvider implements PlatformProvider {
     return normalizeTokens(
       await this.http.json<RawTokenResponse>({
         platform: this.platform,
-        url: TOKEN_URL,
+        url: `${this.config.twitchEndpoints.auth}/token`,
         method: 'POST',
         form: {
           client_id: clientId,
@@ -141,7 +152,7 @@ export class TwitchProvider implements PlatformProvider {
   }
 
   async fetchIdentity(accessToken: string): Promise<ChannelIdentity> {
-    const response = await this.get<TwitchList<TwitchUser>>(`${HELIX}/users`, accessToken);
+    const response = await this.get<TwitchList<TwitchUser>>(`${this.helix}/users`, accessToken);
     const user = response.data[0];
     if (!user) {
       throw new Error('Twitch не вернул профиль пользователя');
@@ -159,13 +170,16 @@ export class TwitchProvider implements PlatformProvider {
     // `total`, сам список не нужен, а страница по умолчанию тянет двадцать
     // записей с персональными данными, которые нам незачем даже получать.
     const [stream, followers, subscribers] = await Promise.all([
-      this.get<TwitchList<TwitchStream>>(`${HELIX}/streams?user_id=${broadcaster}`, accessToken),
-      this.get<TwitchList<never>>(
-        `${HELIX}/channels/followers?broadcaster_id=${broadcaster}&first=1`,
+      this.get<TwitchList<TwitchStream>>(
+        `${this.helix}/streams?user_id=${broadcaster}`,
         accessToken,
       ),
       this.get<TwitchList<never>>(
-        `${HELIX}/subscriptions?broadcaster_id=${broadcaster}&first=1`,
+        `${this.helix}/channels/followers?broadcaster_id=${broadcaster}&first=1`,
+        accessToken,
+      ),
+      this.get<TwitchList<never>>(
+        `${this.helix}/subscriptions?broadcaster_id=${broadcaster}&first=1`,
         accessToken,
       ),
     ]);
@@ -176,6 +190,31 @@ export class TwitchProvider implements PlatformProvider {
       subscribersTotal: subscribers.total,
       capturedAt: new Date(),
     });
+  }
+
+  /**
+   * Подписка на события канала для сокета EventSub.
+   *
+   * С транспортом WebSocket подписку создаёт токен самого стримера, а не
+   * токен приложения: события его канала получает только он. Подписка живёт,
+   * пока жив сокет, — после переподключения её создают заново.
+   */
+  async createEventSubSubscription(
+    accessToken: string,
+    request: EventSubSubscriptionRequest,
+  ): Promise<void> {
+    await this.http.json<unknown>({
+      platform: this.platform,
+      url: `${this.helix}/eventsub/subscriptions`,
+      method: 'POST',
+      accessToken,
+      headers: { 'Client-Id': this.credentials().clientId },
+      json: request,
+    });
+  }
+
+  private get helix(): string {
+    return this.config.twitchEndpoints.api;
   }
 
   /** Helix требует Client-Id на каждом запросе — без него отвечает 401. */

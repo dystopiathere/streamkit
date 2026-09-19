@@ -1,6 +1,6 @@
 # StreamKit Privacy Policy
 
-Version No. 8 of 19.09.2026
+Version No. 10 of 19.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/privacy?lang=ru); if the two
@@ -32,7 +32,12 @@ secret, if it is enabled.
 by these services (stored encrypted and not shown even to the owner), the
 channel ID, handle, name and image, channel metrics (viewers, subscribers, total
 views, whether the channel is live), the title, category and start time of the
-current stream, and for DonationAlerts, the account ID and name. We do not store or use
+current stream, and for DonationAlerts, the account ID and name. From Twitch the
+service also receives channel events for alerts — follows, subscriptions, gifted
+subscriptions, Bits, raids and Channel Points rewards — and from Twitch and
+YouTube, the channel's chat messages while the user has a chat widget or the
+stream window open; we process the data of their authors on behalf of the user
+(section 4). We do not store or use
 the email address of the platform account. DonationAlerts sends it together with
 the profile, without which donations cannot be connected — we discard it
 immediately without storing it. What exactly we receive from Google and how we
@@ -82,11 +87,14 @@ works with on stream. **The operator of this data is the user**, and we process
 it on the user's behalf under section 13 of the Terms of Service (Part 3 of
 Article 6 of Federal Law No. 152-FZ):
 
-- **event participants** from services connected by the user (donations,
-  subscriptions, raids): name or nickname, message text, amount and currency,
-  time. Stored in the user's event history. The Top donors widget shows names on
+- **event participants** from services connected by the user (donations;
+  follows, subscriptions, gifted subscriptions, Bits, raids and Channel Points
+  rewards on Twitch): name or nickname, message text, amount and currency or a
+  quantity (Bits, raid viewers, months subscribed, number of gifts), time. Stored in the user's event history. The Top donors widget shows names on
   the widget page, which the user adds to the stream;
-- **Twitch chat viewers**: username and message text. Pass through the service
+- **Twitch and YouTube chat viewers** on the channels the user has connected to
+  the service: username or name, for YouTube the author's channel ID, and message
+  text. Pass through the service
   in real time and are **not stored**;
 - **private room guests**: name, image and voice. Transmitted in real time and
   **not recorded**. The decision to show a guest on stream is made by the user,
@@ -108,12 +116,17 @@ correct or delete the data within 5 business days.
 Google permission — `youtube.readonly`, viewing YouTube data. Through the
 YouTube Data API we receive the channel ID, handle, name and image, the number
 of subscribers and total views, and whether a stream is live, when it started,
-its title and the number of its concurrent viewers. We do not request the email address, name or
+its title and the number of its concurrent viewers. During a stream, while the user
+has a chat widget or the stream window open, we receive that stream's chat
+messages through the YouTube Live Streaming API: the author's name and channel ID,
+badges (owner, moderator, member) and text. We do not request the email address, name or
 any other Google account data. The service never publishes, changes or deletes
 anything on the channel.
 
-5.2. This data is used only to show the user the analytics and live status of
-their own channel in their dashboard. We do not use it for advertising, do not sell it, do not use
+5.2. This data is used only to show the user the analytics, live status and chat
+of their own channel in their dashboard, and chat messages also in the chat widget
+that the user themselves adds to their stream. Chat messages pass through the
+service in real time and are not stored. We do not use it for advertising, do not sell it, do not use
 it to train artificial intelligence models, and do not transfer it to third
 parties — except for hosting of the service (section 7) and cases expressly
 provided for by law.
@@ -135,6 +148,11 @@ any other app will adhere to the
 [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy),
 including the Limited Use requirements.
 
+5.6. The service uses YouTube API Services. By connecting a YouTube channel, the
+user agrees to the YouTube Terms of Service (https://www.youtube.com/t/terms), and
+Google's own processing of data is governed by the Google Privacy Policy
+(https://policies.google.com/privacy).
+
 ## 6. Where the data is stored
 
 Databases and the media server are hosted on Yandex Cloud servers in the Russian
@@ -151,7 +169,7 @@ We do not sell personal data. Data is shared only with:
   amount, email address for the receipt;
 - **Twitch and Google (YouTube)** — only if the user has connected the platform:
   the service calls their APIs with the tokens these platforms issued to the
-  user in order to obtain channel metrics. These companies' servers are located
+  user in order to obtain channel metrics, events and chat messages. These companies' servers are located
   outside the Russian Federation; we do not share any other user data with them.
   How we handle data received from Google is described in section 5;
 - authorized public authorities on request — in cases expressly provided for by
@@ -174,7 +192,7 @@ We do not sell personal data. Data is shared only with:
 | Visit statistics | 13 months |
 | Consent log of visitors without an account | 3 years from the date of consent |
 | Guest image, sound and name | Not stored |
-| Twitch chat messages | Not stored |
+| Twitch and YouTube chat messages | Not stored |
 
 ## 9. Your rights
 

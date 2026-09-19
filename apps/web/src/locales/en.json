@@ -74,7 +74,8 @@
       "appearance": "Appearance",
       "state": "Controls",
       "chat": "Chat",
-      "guests": "Guests"
+      "guests": "Guests",
+      "media": "Image and sound"
     },
     "field": {
       "layout": "Layout",
@@ -110,7 +111,6 @@
       "topDonorsTitle": "List title",
       "period": "Period",
       "limit": "Number of rows",
-      "channel": "Twitch channel",
       "maxMessages": "Messages on screen",
       "messageLifetime": "Message fades after, s",
       "hiddenUsers": "Hidden usernames",
@@ -125,7 +125,13 @@
       "showWithoutVideo": "Show guests without a camera",
       "tileGap": "Gap between tiles, px",
       "cornerRadius": "Corner radius, px",
-      "room": "Room"
+      "room": "Room",
+      "scenarioEnabled": "Show this alert",
+      "minGifts": "Minimum gifted subs",
+      "minMonths": "Minimum months subscribed",
+      "minBits": "Minimum bits",
+      "minRaiders": "Minimum raid viewers",
+      "showPlatform": "Platform icon next to the name"
     },
     "templateHint": "Available variables: {{vars}}",
     "tokens": {
@@ -160,15 +166,16 @@
       "offsetMinor": "Added to the raised amount. Use it when part of the sum was raised before you set up the widget.",
       "countTypes": "You can pick several. Only events with an amount count — a subscription without an amount adds nothing.",
       "minAmount": "Compared with the donation amount as is, without currency conversion: a threshold of 100 filters out both 100 ₽ and 100 $.",
-      "channel": "The channel login from twitch.tv/YOUR_CHANNEL. The chat is read anonymously: no need to connect the platform.",
-      "channelConnected": "Connected channel: {{channel}}. You can enter any other one too — the chat is read anonymously.",
       "messageLifetime": "0 means messages stay on screen until newer ones push them out.",
-      "hiddenUsers": "Comma-separated. Common bots are hidden by default.",
+      "hiddenUsers": "Comma-separated: a Twitch login or a YouTube name. Common bots are hidden by default.",
       "showWithoutVideo": "Otherwise a guest with the camera off disappears from the frame while still talking.",
       "room": "This widget's OBS link opens the video and audio of the room's guests. Keep it as safe as a password.",
       "noRooms": "Create a room in the Rooms section first.",
       "roomMissing": "No room selected — this widget will show nothing in OBS. Pick a room and save.",
-      "roomDeleted": "This widget's room was deleted — it will show nothing in OBS. Pick another room and save."
+      "roomDeleted": "This widget's room was deleted — it will show nothing in OBS. Pick another room and save.",
+      "gapMs": "One queue for all scenarios: alerts follow each other with this pause.",
+      "minCount": "0 — show all.",
+      "imageUrl": "An https link to an image or GIF. Empty — no image."
     },
     "state": {
       "raised": "Raised",
@@ -189,6 +196,37 @@
     "defaultTitle": {
       "goal": "Goal",
       "topDonors": "Top donors"
+    },
+    "scenario": {
+      "title": "Scenarios",
+      "hint": "Each event has its own text, image, sound and style. All scenarios are saved together.",
+      "off": "off",
+      "test": "Test in OBS",
+      "testSent": "Test alert sent",
+      "copyDesign": "Copy the style to all scenarios",
+      "copied": "Style copied — save to apply",
+      "listen": "Listen",
+      "soundFailed": "The sound did not play — check the link"
+    },
+    "layout": {
+      "center": "Centered",
+      "banner": "Top banner",
+      "side": "Side"
+    },
+    "animation": {
+      "fade": "Fade",
+      "slide-up": "Slide up",
+      "slide-left": "Slide left",
+      "zoom": "Zoom",
+      "bounce": "Bounce"
+    },
+    "chat": {
+      "platformTwitch": "Twitch chat: twitch.tv/{{channel}}",
+      "platformYoutube": "YouTube chat: {{channel}}",
+      "notConnected": "{{platform}} is not connected.",
+      "none": "The widget shows only your own channels' chat. Connect Twitch or YouTube — otherwise OBS stays empty.",
+      "connect": "Connect in Analytics",
+      "youtubeHint": "YouTube chat appears within two minutes after your stream starts and uses the daily YouTube quota shared across the service. Untick it if you don't need it on screen."
     }
   },
   "sources": {
@@ -225,7 +263,15 @@
     "rotateWarning": "The old secret will stop working immediately.",
     "secretShownOnce": "The secret is shown only once — save it in your program.",
     "urlLabel": "Webhook URL",
-    "secretLabel": "Webhook secret"
+    "secretLabel": "Webhook secret",
+    "twitch": {
+      "title": "Twitch events",
+      "on": "arriving",
+      "off": "not arriving",
+      "lead": "Followers, subscriptions, gifted subs, Bits, raids and Channel Points rewards arrive on their own while Twitch is connected in Analytics. Style them in the alert widget scenarios.",
+      "connect": "Connect Twitch",
+      "fix": "Reconnect Twitch"
+    }
   },
   "events": {
     "title": "Recent events",
@@ -233,14 +279,25 @@
     "test": "test",
     "type": {
       "donation": "Donation",
-      "follow": "Follow",
-      "subscription": "Paid subscription",
+      "follow": "Follower",
+      "subscription": "Subscription",
       "resubscription": "Resubscription",
       "cheer": "Bits",
       "raid": "Raid",
-      "reward": "Channel points reward"
+      "reward": "Channel Points reward",
+      "gift": "Gifted subs"
     },
-    "feedLabel": "Event feed"
+    "feedLabel": "Event feed",
+    "count": {
+      "gift_one": "{{formatted}} sub",
+      "gift_other": "{{formatted}} subs",
+      "resubscription_one": "{{formatted}} month",
+      "resubscription_other": "{{formatted}} months",
+      "cheer_one": "{{formatted}} bit",
+      "cheer_other": "{{formatted}} bits",
+      "raid_one": "{{formatted}} viewer",
+      "raid_other": "{{formatted}} viewers"
+    }
   },
   "privacy": {
     "title": "Privacy and data",
@@ -336,7 +393,11 @@
     },
     "rangeLabel": "Period",
     "chartSummary": "{{title}}: from {{min}} to {{max}}, latest value {{last}}.",
-    "disconnectNamed": "Disconnect {{name}}"
+    "disconnectNamed": "Disconnect {{name}}",
+    "needsReconnect": "Reconnect Twitch: without the new permissions, Bits and Channel Points alerts will not arrive.",
+    "reconnect": "Reconnect",
+    "disconnectTitle": "Disconnect {{name}}?",
+    "disconnectText": "Tokens, channel details and all collected metrics will be deleted right away and cannot be restored. For Twitch, channel events and chat will stop."
   },
   "rooms": {
     "title": "Private rooms",
@@ -645,13 +706,16 @@
     "chat": {
       "title": "Chat",
       "label": "Chat messages",
-      "source": {
-        "connected": "twitch.tv/{{channel}} — connected channel",
-        "widget": "twitch.tv/{{channel}} — channel from the chat widget"
-      },
-      "none": "No chat: connect Twitch or set a channel in the chat widget.",
+      "none": "No chat: connect Twitch or YouTube to see your channels' chat here.",
       "waiting": "Messages will appear here within ten seconds of opening the window.",
-      "notStored": "Chat is not stored: you only see messages that arrive while this window is open."
+      "notStored": "Chat is not stored: you only see messages that arrive while this window is open.",
+      "state": {
+        "ok": "reading chat",
+        "waiting": "waiting for the stream to start",
+        "quota": "YouTube quota is used up for today — chat returns when Google resets it (midnight Pacific time)",
+        "auth": "access revoked — reconnect the channel in Analytics"
+      },
+      "channelTwitch": "twitch.tv/{{channel}}"
     },
     "events": {
       "title": "Recent events",

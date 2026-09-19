@@ -156,10 +156,18 @@ describe('Состояние виджетов (feature)', () => {
     expect(response.body.raisedMinor).toBe(0);
   });
 
+  /** Подключённый канал Twitch — без него виджет чата не создаётся. */
+  async function connectTwitch(login = 'shroud'): Promise<void> {
+    await harness.prisma.channel.create({
+      data: { userId, platform: 'TWITCH', externalId: 'ext-1', login, displayName: login },
+    });
+  }
+
   it('у чата состояния нет, и запрос это честно говорит', async () => {
     // «Состояние» чата — поток сообщений: накапливать нечего, восстанавливать
     // неоткуда. Дашборд по этому же признаку не рисует блок управления.
-    const widgetId = await createWidget('chat', { channel: 'shroud' });
+    await connectTwitch();
+    const widgetId = await createWidget('chat');
 
     const response = await request(server())
       .get(`/api/widgets/${widgetId}/state`)
@@ -168,16 +176,24 @@ describe('Состояние виджетов (feature)', () => {
     expect(response.body).toEqual({});
   });
 
-  it('приводит логин канала к нижнему регистру при создании', async () => {
-    // Иначе ключ комнаты доставки разошёлся бы с тегом канала в сообщении IRC,
-    // и чат просто не доходил бы до оверлея.
-    const widgetId = await createWidget('chat', { channel: 'Shroud' });
+  it('виджет чата — только с подключённым Twitch, и чужой канал в него не вписать', async () => {
+    // Без подключения виджету нечего показать: канал берётся только из входа
+    // на площадке, иначе в эфир можно было бы вывести чужой чат.
+    const refused = await request(server())
+      .post('/api/widgets')
+      .set(auth())
+      .send({ name: 'Чат', type: 'chat', config: { channel: 'someone_else' } })
+      .expect(400);
+    expect(refused.body.message).toContain('подключите Twitch');
 
+    await connectTwitch();
+    const widgetId = await createWidget('chat', { channel: 'someone_else' });
     const response = await request(server())
       .get(`/api/widgets/${widgetId}`)
       .set(auth())
       .expect(200);
-    expect(response.body.config.channel).toBe('shroud');
+    // Поле канала схема отбрасывает: ни сохранить, ни прочитать его нельзя.
+    expect(response.body.config).not.toHaveProperty('channel');
   });
 
   it('прибавляет стартовую сумму к собранному', async () => {

@@ -117,3 +117,53 @@ test('отозванная ссылка перестаёт работать', as
   await overlayPage.waitForTimeout(3000);
   await expect(overlayPage.getByTestId('alert-card')).toHaveCount(0);
 });
+
+test('у каждого события свой сценарий: текст фолловера и выключенный рейд', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/register');
+  await page.getByLabel('Отображаемое имя').fill('E2E Сценарии');
+  await page.getByLabel('Электронная почта').fill(`e2e-scenario-${Date.now()}@example.com`);
+  await page.getByLabel('Пароль').fill('очень-надёжный-пароль-1');
+  for (const checkbox of await page.locator('input[type="checkbox"]').all()) {
+    await checkbox.check();
+  }
+  await page.getByRole('button', { name: 'Создать аккаунт' }).click();
+  await expect(page).toHaveURL(/\/widgets$/);
+
+  await page.getByPlaceholder('Название виджета').fill('Оповещения');
+  await page.getByRole('button', { name: 'Новый виджет' }).click();
+  await page.getByRole('link', { name: 'Настроить' }).first().click();
+
+  // Свой заголовок у фолловера, рейд выключен. Сохраняются все сценарии сразу.
+  await page.getByRole('tab', { name: 'Фолловер' }).click();
+  await page.getByLabel('Заголовок').fill('Спасибо за фоллов, {username}!');
+  await page.getByRole('tab', { name: 'Рейд' }).click();
+  await page.getByLabel('Показывать это оповещение').uncheck();
+  const saved = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PATCH' && response.url().includes('/api/widgets/'),
+  );
+  await page.getByRole('button', { name: 'Сохранить' }).first().click();
+  expect((await saved).ok()).toBe(true);
+
+  await page.getByRole('button', { name: 'Создать ссылку' }).click();
+  const field = page.locator('input[readonly]').first();
+  await expect(field).toHaveValue(/token=/, { timeout: 10_000 });
+  const overlay = await context.newPage();
+  await overlay.goto(await field.inputValue());
+  await overlay.waitForTimeout(1500);
+
+  // Выключенный сценарий не показывает и проверку: стример видит то же, что зрители.
+  await page.getByRole('button', { name: 'Проверить в OBS' }).click();
+  await expect(page.getByText('Тестовое оповещение отправлено')).toBeVisible();
+  await overlay.waitForTimeout(2000);
+  await expect(overlay.getByTestId('alert-card')).toHaveCount(0);
+
+  await page.getByRole('tab', { name: 'Фолловер' }).click();
+  await page.getByRole('button', { name: 'Проверить в OBS' }).click();
+  const card = overlay.getByTestId('alert-card');
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await expect(card).toContainText('Спасибо за фоллов, Тестовый зритель!');
+});

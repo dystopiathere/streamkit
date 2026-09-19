@@ -107,7 +107,10 @@ export class AuthService {
       if (!input.totpCode) {
         return { status: 'totp-required' };
       }
-      if (!this.verifyTotpFor(user, input.totpCode)) {
+      if (
+        !this.verifyTotpFor(user, input.totpCode) ||
+        !(await this.totp.consume(user.id, input.totpCode))
+      ) {
         await this.audit.record('auth.login.totp_failed', user.id, context);
         throw new UnauthorizedException('Неверный код подтверждения');
       }
@@ -221,6 +224,9 @@ export class AuthService {
       where: { id: userId },
       data: { isTotpEnabled: false, totpSecretEncrypted: null },
     });
+    // Вход в админку — только со вторым фактором, и сессия, открытая с ним, без
+    // него жить не должна. Выданный админский access-токен закрывает AdminGuard.
+    await this.tokens.revokeAllForUser(userId, 'ADMIN');
     await this.audit.record('auth.totp.disabled', userId, context);
   }
 

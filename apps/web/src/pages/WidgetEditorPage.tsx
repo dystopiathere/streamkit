@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { configSchemaFor, hasWidgetState } from '@streamkit/contracts';
-import { useEffect } from 'react';
+import { type AlertEventType, configSchemaFor, hasWidgetState } from '@streamkit/contracts';
+import { useEffect, useState } from 'react';
 import { type FieldValues, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
@@ -29,6 +29,8 @@ export function WidgetEditorPage(): React.JSX.Element {
   const updateWidget = useUpdateWidget(id);
   const type = widget.data?.type ?? 'alerts';
   const state = useWidgetState(id, Boolean(widget.data) && hasWidgetState(type));
+  // Открытый сценарий оповещений: его поля в форме и его же пример в предпросмотре.
+  const [alertScenario, setAlertScenario] = useState<AlertEventType>('donation');
 
   const form = useForm<FieldValues>({
     resolver: localizedResolver(zodResolver(configSchemaFor(type))),
@@ -79,7 +81,12 @@ export function WidgetEditorPage(): React.JSX.Element {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
         <form onSubmit={onSubmit} className="space-y-5">
-          <WidgetConfigForm type={type} form={form} />
+          <WidgetConfigForm
+            type={type}
+            form={form}
+            alertScenario={alertScenario}
+            onAlertScenarioChange={setAlertScenario}
+          />
 
           <Button type="submit" isLoading={updateWidget.isPending}>
             {t('common.save')}
@@ -93,6 +100,7 @@ export function WidgetEditorPage(): React.JSX.Element {
               type={type}
               config={previewConfig as Record<string, unknown>}
               state={state.data ?? null}
+              alertScenario={alertScenario}
             />
           </Card>
 

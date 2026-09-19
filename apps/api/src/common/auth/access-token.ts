@@ -17,6 +17,8 @@ export interface AccessTokenPayload {
   sub: string;
   email: string;
   aud?: string | string[];
+  /** Срок в секундах эпохи — его ставит JwtService при выпуске. */
+  exp?: number;
 }
 
 export function audienceOf(payload: Pick<AccessTokenPayload, 'aud'>): TokenAudience {

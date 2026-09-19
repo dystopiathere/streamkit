@@ -9,6 +9,7 @@ import {
   useSendTestAlert,
   useWidgets,
 } from '@/features/widgets/queries';
+import { ApiError } from '@/lib/api';
 
 export function WidgetsPage(): React.JSX.Element {
   const { t } = useTranslation();
@@ -37,8 +38,15 @@ export function WidgetsPage(): React.JSX.Element {
         : type === 'top-donors'
           ? { title: t('widgets.defaultTitle.topDonors') }
           : {};
-    await createWidget.mutateAsync({ name: trimmed, type, config } as CreateWidgetInput);
-    setName('');
+    try {
+      await createWidget.mutateAsync({ name: trimmed, type, config } as CreateWidgetInput);
+      setName('');
+    } catch (error) {
+      // Отказ сервера объясняет, что сделать: виджет чата, например, просит
+      // сначала подключить Twitch. Проглоченная ошибка выглядела как кнопка,
+      // которая ничего не делает.
+      toast.error(error instanceof ApiError ? error.message : t('common.error'));
+    }
   };
 
   const handleDelete = async (id: string): Promise<void> => {
@@ -49,8 +57,12 @@ export function WidgetsPage(): React.JSX.Element {
   };
 
   const handleTest = async (): Promise<void> => {
-    await testAlert.mutateAsync();
-    toast.success(t('widgets.testSent'));
+    try {
+      await testAlert.mutateAsync();
+      toast.success(t('widgets.testSent'));
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : t('common.error'));
+    }
   };
 
   return (

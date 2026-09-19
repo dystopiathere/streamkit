@@ -1,46 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { ChatMessage } from '@streamkit/contracts';
 import { AppConfig } from '../../config/app-config.service';
+import { ChatRateLimiter, type ChatSource } from './chat-source';
 import { parseIrcLine, toChatMessage } from './irc';
-
-/**
- * Источник чата: ОДНО соединение, МНОГО каналов.
- *
- * Третья форма интеграции в проекте, и она не случайна (см. docs/adr/0009).
- * `DonationConnector` — подписка на пользователя: площадка присылает события
- * одного стримера, и соединение заводится на каждого. `PlatformProvider` —
- * опрос: спроси метрики, получи снимок, закрой соединение.
- *
- * Чат не похож ни на то, ни на другое. Единица работы здесь — КАНАЛ, а
- * соединение у всех каналов общее: анонимный IRC Twitch держит около сотни
- * каналов в одном сокете и ограничивает вход двадцатью JOIN за десять секунд.
- * Форма «соединение на стримера» дала бы полсотни сокетов к одному хосту вместо
- * одного, а поле с токеном осталось бы пустым — читать чат можно анонимно.
- */
-export interface ChatSource {
-  readonly platform: 'twitch';
-  /** На какие каналы подписаны сейчас. */
-  readonly channels: ReadonlySet<string>;
-  start(sink: (message: ChatMessage) => void): Promise<void>;
-  join(channel: string): Promise<void>;
-  leave(channel: string): Promise<void>;
-  stop(): Promise<void>;
-}
 
 const DEFAULT_IRC_URL = 'wss://irc-ws.chat.twitch.tv:443';
 
 /** Потолок паузы между попытками переподключения. */
 const MAX_RECONNECT_MS = 60_000;
-
-/**
- * Сколько сообщений в секунду публикуем с одного канала.
- *
- * Популярный канал даёт сотни сообщений в минуту, и каждое уходит в Redis и в
- * сокет каждого открытого браузер-сорса. Виджет всё равно показывает два
- * десятка строк. Это не защита от абьюза, а отказ превращать шину в узкое место
- * ради строк, которые никто не успеет прочитать.
- */
-const MAX_MESSAGES_PER_SECOND = 20;
 
 /**
  * Пауза между JOIN.
@@ -54,6 +21,11 @@ export const JOIN_INTERVAL_MS = 600;
 
 /**
  * Чтение чата Twitch по анонимному IRC поверх WebSocket.
+ *
+ * ОДНО соединение, МНОГО каналов: анонимный IRC Twitch держит около сотни
+ * каналов в одном сокете и ограничивает вход двадцатью JOIN за десять секунд.
+ * Соединение на стримера дало бы полсотни сокетов к одному хосту вместо одного,
+ * а токен не нужен вовсе — читать чат можно анонимно.
  *
  * Без единой зависимости: WebSocket входит в Node начиная с 22-й версии.
  */
@@ -72,8 +44,7 @@ export class TwitchChatSource implements ChatSource {
   private stopped = true;
   private attempts = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
-  /** Счётчики ограничителя: канал → [начало секунды, сколько пропущено]. */
-  private readonly rate = new Map<string, { second: number; count: number; dropped: number }>();
+  private readonly limiter = new ChatRateLimiter(this.logger);
 
   constructor(private readonly config: AppConfig) {}
 
@@ -91,6 +62,7 @@ export class TwitchChatSource implements ChatSource {
 
   async leave(channel: string): Promise<void> {
     if (!this.joined.delete(channel)) return;
+    this.limiter.forget(channel);
     const queued = this.joinQueue.indexOf(channel);
     if (queued >= 0) {
       // JOIN ещё не уходил — и PART слать незачем.
@@ -103,6 +75,7 @@ export class TwitchChatSource implements ChatSource {
   async stop(): Promise<void> {
     this.stopped = true;
     this.joined.clear();
+    this.limiter.clear();
     this.resetJoinQueue();
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
@@ -113,11 +86,6 @@ export class TwitchChatSource implements ChatSource {
   /** На какие каналы подписаны сейчас. Менять состав можно только join/leave. */
   get channels(): ReadonlySet<string> {
     return this.joined;
-  }
-
-  /** Открыто ли соединение прямо сейчас — для диагностики и тестов. */
-  get isConnected(): boolean {
-    return this.socket?.readyState === WebSocket.OPEN;
   }
 
   private connect(): void {
@@ -197,34 +165,13 @@ export class TwitchChatSource implements ChatSource {
 
       case 'PRIVMSG': {
         const message = toChatMessage(line);
-        if (message && this.allow(message.channel)) this.sink?.(message);
+        if (message && this.limiter.allow(message.channel)) this.sink?.(message);
         return;
       }
 
       default:
         return;
     }
-  }
-
-  /** Ограничитель потока: скользящая секунда на канал. */
-  private allow(channel: string): boolean {
-    const second = Math.floor(Date.now() / 1000);
-    const state = this.rate.get(channel);
-
-    if (!state || state.second !== second) {
-      if (state && state.dropped > 0) {
-        this.logger.debug({ channel, dropped: state.dropped }, 'Поток чата подрезан');
-      }
-      this.rate.set(channel, { second, count: 1, dropped: 0 });
-      return true;
-    }
-
-    if (state.count >= MAX_MESSAGES_PER_SECOND) {
-      state.dropped += 1;
-      return false;
-    }
-    state.count += 1;
-    return true;
   }
 
   private scheduleReconnect(): void {

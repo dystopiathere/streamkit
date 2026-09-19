@@ -99,10 +99,21 @@ export const envSchema = z.object({
    * Суточный бюджет запросов к YouTube Data API.
    *
    * Лимит Google — 10 000 единиц на проект в сутки, и это лимит НА ВСЕХ
-   * пользователей сразу, а не на каждого. Держим запас: остаток нужен на
-   * подключение новых каналов и на ручные проверки.
+   * пользователей сразу, а не на каждого. Делится на два бюджета — метрики и
+   * чат, — чтобы чат одного длинного эфира не остановил аналитику всем. Сумма
+   * держится с запасом: остаток нужен на подключение каналов и ручные проверки.
+   * После повышения квоты Google оба числа поднимаются здесь.
    */
-  YOUTUBE_DAILY_QUOTA: z.coerce.number().int().min(0).default(9000),
+  YOUTUBE_DAILY_QUOTA: z.coerce.number().int().min(0).default(7000),
+  /** Бюджет чата YouTube из того же лимита проекта (docs/adr/0014). */
+  YOUTUBE_CHAT_DAILY_QUOTA: z.coerce.number().int().min(0).default(2000),
+  /**
+   * Сколько единиц резервировать на открытие потока чата `streamList`.
+   *
+   * Google эту цену не публикует. 5 — осторожная оценка, пока она не измерена
+   * на живом эфире по графику квоты в Google Cloud Console.
+   */
+  YOUTUBE_CHAT_STREAM_COST: z.coerce.number().int().min(0).default(5),
 
   /**
    * Адрес IRC-шлюза Twitch. Переопределяется только в тестах.
@@ -113,6 +124,30 @@ export const envSchema = z.object({
    * иначе проверить весь путь «соединение → JOIN → сообщение» было бы нечем.
    */
   TWITCH_IRC_URL: optionalValue(),
+
+  /**
+   * Адреса Twitch: вход (OAuth), Helix и сокет EventSub. Переопределяются только
+   * в тестах — интеграционный и сквозной прогоны поднимают поддельный Twitch,
+   * как поддельный DonationAlerts.
+   */
+  TWITCH_AUTH_URL: optionalValue(),
+  TWITCH_API_URL: optionalValue(),
+  TWITCH_EVENTSUB_URL: optionalValue(),
+
+  /**
+   * Адреса Google: вход, обмен кода, YouTube Data API и gRPC-сервис чата
+   * (`хост:порт`). Переопределяются только в тестах — прогоны поднимают
+   * поддельный YouTube, как поддельный Twitch.
+   */
+  YOUTUBE_AUTH_URL: optionalValue(),
+  YOUTUBE_TOKEN_URL: optionalValue(),
+  YOUTUBE_API_URL: optionalValue(),
+  YOUTUBE_CHAT_GRPC_URL: optionalValue(),
+  /**
+   * gRPC без TLS — только для поддельного сервера в тестах. В production
+   * конфигурация с этим флагом не стартует: токен стримера ушёл бы открытым текстом.
+   */
+  YOUTUBE_CHAT_GRPC_INSECURE: optionalValue(),
 
   /**
    * Приложение DonationAlerts (`donationalerts.com/application/clients`).
@@ -229,8 +264,3 @@ export function validateEnv(raw: Record<string, unknown>): Env {
   }
   return result.data;
 }
-
-/** Типизированный доступ к конфигу: config.get('JWT_SECRET') вместо строк наугад. */
-export type TypedConfig = {
-  get<K extends keyof Env>(key: K): Env[K];
-};

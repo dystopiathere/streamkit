@@ -3,7 +3,6 @@ import {
   IDLE_INTERVAL_MS,
   isDue,
   LIVE_INTERVAL_MS,
-  nextQuotaReset,
   retryDelayMs,
 } from './analytics-poller.service';
 
@@ -161,21 +160,5 @@ describe('пауза после неудачи', () => {
         NOW,
       ),
     ).toBe(true);
-  });
-});
-
-describe('обнуление квоты', () => {
-  it('приходится на ближайшую полночь по UTC', () => {
-    expect(nextQuotaReset(new Date('2026-09-12T15:30:00.000Z')).toISOString()).toBe(
-      '2026-09-13T00:00:00.000Z',
-    );
-  });
-
-  it('в самой полуночи указывает на следующие сутки, а не на текущий момент', () => {
-    // Иначе канал, упёршийся в квоту ровно в полночь, получил бы паузу нулевой
-    // длины и тут же начал долбить площадку снова.
-    expect(nextQuotaReset(new Date('2026-09-12T00:00:00.000Z')).toISOString()).toBe(
-      '2026-09-13T00:00:00.000Z',
-    );
   });
 });

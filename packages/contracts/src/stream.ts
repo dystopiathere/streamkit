@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { channelSyncStateSchema, platformSchema } from './analytics.js';
+import { chatPlatformSchema } from './chat.js';
 import { isoDateSchema, uuidSchema } from './common.js';
 import { widgetTypeSchema } from './widgets.js';
 
@@ -27,15 +28,30 @@ export const streamChannelSchema = z.object({
 export type StreamChannel = z.infer<typeof streamChannelSchema>;
 
 /**
- * Откуда взят канал чата: подключённый в «Аналитике» Twitch или, если его нет,
- * канал из виджета чата. Стример должен видеть, почему чат именно этот.
+ * Что происходит с чтением чата канала.
+ *
+ * - `ok` — читаем (или вот-вот начнём, в пределах такта воркера);
+ * - `waiting` — эфира нет, а чат YouTube существует только у идущего эфира;
+ * - `quota` — суточный бюджет чата YouTube исчерпан до полуночи по
+ *   тихоокеанскому времени;
+ * - `auth` — площадка отозвала доступ, канал нужно переподключить.
  */
-export const STREAM_CHAT_SOURCES = ['connected', 'widget'] as const;
+export const CHAT_STATES = ['ok', 'waiting', 'quota', 'auth'] as const;
+export const chatStateSchema = z.enum(CHAT_STATES);
+export type ChatState = z.infer<typeof chatStateSchema>;
 
+/**
+ * Канал чата окна — только подключённые в «Аналитике» площадки: вход на
+ * площадке доказывает, что канал принадлежит стримеру. Канала из настроек
+ * виджета больше нет — через него в окно можно было вывести любой чужой чат.
+ */
 export const streamChatSchema = z.object({
-  platform: z.literal('twitch'),
+  platform: chatPlatformSchema,
+  /** Логин Twitch или id канала YouTube — ключ комнаты доставки. */
   channel: z.string().min(1),
-  source: z.enum(STREAM_CHAT_SOURCES),
+  /** Как канал называется у площадки: id YouTube человеку ничего не скажет. */
+  title: z.string(),
+  state: chatStateSchema,
 });
 export type StreamChat = z.infer<typeof streamChatSchema>;
 
@@ -53,13 +69,13 @@ export type StreamWidget = z.infer<typeof streamWidgetSchema>;
 
 export const streamOverviewSchema = z.object({
   channels: z.array(streamChannelSchema),
-  chat: streamChatSchema.nullable(),
+  chats: z.array(streamChatSchema),
   widgets: z.array(streamWidgetSchema),
 });
 export type StreamOverview = z.infer<typeof streamOverviewSchema>;
 
-/** Ответ на `stream:watch`: какой чат окно будет получать. */
-export const streamWatchAckSchema = z.object({ chat: streamChatSchema.nullable() });
+/** Ответ на `stream:watch`: чаты каких каналов окно будет получать. */
+export const streamWatchAckSchema = z.object({ chats: z.array(streamChatSchema) });
 export type StreamWatchAck = z.infer<typeof streamWatchAckSchema>;
 
 /**

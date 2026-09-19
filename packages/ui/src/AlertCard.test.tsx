@@ -7,21 +7,23 @@ const baseEvent = {
   username: 'Вася',
   message: 'Привет стриму!',
   amount: { amountMinor: 50_000, currency: 'RUB' as const },
+  count: null,
   type: 'donation' as const,
 };
 
+/** Сценарий доната по умолчанию — карточка рендерит сценарий, а не весь виджет. */
+const donation = () => defaultAlertWidgetConfig().scenarios.donation;
+
 describe('AlertCard', () => {
   it('показывает имя донатера и сообщение', () => {
-    render(<AlertCard event={baseEvent} config={defaultAlertWidgetConfig()} />);
+    render(<AlertCard event={baseEvent} config={donation()} />);
 
     expect(screen.getByText('Вася')).toBeDefined();
     expect(screen.getByText('Привет стриму!')).toBeDefined();
   });
 
   it('не выводит блок сообщения, если сообщения нет', () => {
-    render(
-      <AlertCard event={{ ...baseEvent, message: '   ' }} config={defaultAlertWidgetConfig()} />,
-    );
+    render(<AlertCard event={{ ...baseEvent, message: '   ' }} config={donation()} />);
 
     expect(screen.queryByText('Привет стриму!')).toBeNull();
   });
@@ -30,7 +32,7 @@ describe('AlertCard', () => {
     const { container } = render(
       <AlertCard
         event={{ ...baseEvent, username: '<img src=x onerror=alert(1)>' }}
-        config={defaultAlertWidgetConfig()}
+        config={donation()}
       />,
     );
 
@@ -41,7 +43,7 @@ describe('AlertCard', () => {
   });
 
   it('оставляет неизвестный плейсхолдер видимым, чтобы опечатка бросалась в глаза', () => {
-    const config = defaultAlertWidgetConfig();
+    const config = donation();
     render(
       <AlertCard event={baseEvent} config={{ ...config, titleTemplate: 'Дар от {nickname}' }} />,
     );
@@ -50,7 +52,7 @@ describe('AlertCard', () => {
   });
 
   it('подставляет отформатированную сумму', () => {
-    const config = defaultAlertWidgetConfig();
+    const config = donation();
     const { container } = render(
       <AlertCard event={baseEvent} config={{ ...config, titleTemplate: '{amount}' }} />,
     );
@@ -59,7 +61,7 @@ describe('AlertCard', () => {
   });
 
   it('рендерит картинку из конфига, когда она задана', () => {
-    const config = defaultAlertWidgetConfig();
+    const config = donation();
     const { container } = render(
       <AlertCard
         event={baseEvent}
@@ -70,5 +72,15 @@ describe('AlertCard', () => {
     expect(container.querySelector('img')?.getAttribute('src')).toBe(
       'https://cdn.example.com/a.gif',
     );
+  });
+
+  it('подставляет количество с разрядами — биты, зрители рейда', () => {
+    render(
+      <AlertCard
+        event={{ ...baseEvent, type: 'cheer', amount: null, count: 10_000 }}
+        config={defaultAlertWidgetConfig().scenarios.cheer}
+      />,
+    );
+    expect(screen.getByText(/10\s000/)).toBeTruthy();
   });
 });

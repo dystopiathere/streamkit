@@ -111,7 +111,12 @@ export class AdminUsersController {
     @CurrentStaff() staff: StaffUser,
     @Req() request: Request,
   ): Promise<void> {
-    return this.status.revokeSessions(id, body.familyId, staffContext(this.audit, request, staff));
+    return this.status.revokeSessions(
+      id,
+      body.familyId,
+      staff.role,
+      staffContext(this.audit, request, staff),
+    );
   }
 
   @RequireRole('support')
@@ -122,7 +127,7 @@ export class AdminUsersController {
     @CurrentStaff() staff: StaffUser,
     @Req() request: Request,
   ): Promise<void> {
-    return this.status.resetTotp(id, staffContext(this.audit, request, staff));
+    return this.status.resetTotp(id, staff.role, staffContext(this.audit, request, staff));
   }
 
   @HttpCode(HttpStatus.NO_CONTENT)

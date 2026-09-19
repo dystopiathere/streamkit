@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  chatChannelSchema,
+  chatBadgeSchema,
+  chatChannelKey,
+  chatChannelRefSchema,
   chatMessageSchema,
   emoteUrl,
   splitEmotes,
@@ -24,11 +26,6 @@ describe('логин канала', () => {
   it('отвергает то, что каналом быть не может', () => {
     expect(twitchLoginSchema.safeParse('два слова').success).toBe(false);
     expect(twitchLoginSchema.safeParse('../admin').success).toBe(false);
-  });
-
-  it('в настройках допускает пустоту — виджет создают раньше, чем настраивают', () => {
-    expect(chatChannelSchema.parse('')).toBe('');
-    expect(chatChannelSchema.safeParse('не логин').success).toBe(false);
   });
 });
 
@@ -114,7 +111,61 @@ describe('конфиг чата', () => {
     // Список значков Twitch открыт: неизвестные отбрасывает сервер при разборе,
     // а схема описывает ровно то, что виджет умеет нарисовать.
     const badges = ['moderator', 'glhf-pledge'];
-    expect(chatMessageSchema.shape.badges.safeParse(badges).success).toBe(false);
-    expect(chatMessageSchema.shape.badges.safeParse(['moderator']).success).toBe(true);
+    expect(chatBadgeSchema.array().safeParse(badges).success).toBe(false);
+    expect(chatBadgeSchema.array().safeParse(['moderator']).success).toBe(true);
+  });
+
+  it('скрытый ник: имя YouTube с «@» и регистром сводится к тому же, что логин', () => {
+    expect(
+      chatWidgetConfigSchema.parse({ hiddenUsers: ['@Nightbot', 'БотЧата'] }).hiddenUsers,
+    ).toEqual(['nightbot', 'ботчата']);
+    expect(chatWidgetConfigSchema.safeParse({ hiddenUsers: ['два слова'] }).success).toBe(false);
+  });
+});
+
+describe('сообщение и канал чата по площадкам', () => {
+  // С дефисом: из одних букв и цифр id YouTube был бы и допустимым логином Twitch.
+  const youtubeId = 'UC' + 'a-'.repeat(11);
+  const base = {
+    id: 'm1',
+    username: 'Зритель',
+    color: null,
+    badges: [],
+    parts: [{ kind: 'text' as const, value: 'привет' }],
+    sentAt: '2026-09-19T12:00:00.000Z',
+  };
+
+  it('канал проверяется схемой своей площадки', () => {
+    expect(
+      chatChannelRefSchema.safeParse({ platform: 'youtube', channel: youtubeId }).success,
+    ).toBe(true);
+    // Логин Twitch в канале YouTube и наоборот — ошибка, а не «какая-то строка».
+    expect(chatChannelRefSchema.safeParse({ platform: 'youtube', channel: 'shroud' }).success).toBe(
+      false,
+    );
+    expect(chatChannelRefSchema.safeParse({ platform: 'twitch', channel: youtubeId }).success).toBe(
+      false,
+    );
+  });
+
+  it('сообщение YouTube: автор — id канала, имя — как есть', () => {
+    const parsed = chatMessageSchema.parse({
+      ...base,
+      platform: 'youtube',
+      channel: youtubeId,
+      login: 'UC' + 'b'.repeat(22),
+      username: '@Зритель Канала',
+    });
+    expect(parsed.platform).toBe('youtube');
+    expect(
+      chatMessageSchema.safeParse({ ...base, platform: 'youtube', channel: youtubeId, login: 'x' })
+        .success,
+    ).toBe(false);
+  });
+
+  it('ключ канала различает площадки', () => {
+    expect(chatChannelKey({ platform: 'twitch', channel: 'abc' })).not.toBe(
+      chatChannelKey({ platform: 'youtube', channel: 'abc' }),
+    );
   });
 });

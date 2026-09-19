@@ -1,19 +1,30 @@
 import { Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
-import { chatMessageSchema, chatWidgetConfigSchema, type ChatMessage } from '@streamkit/contracts';
+import {
+  type ChatChannelRef,
+  type ChatMessage,
+  chatMessageSchema,
+  type ChatPlatform,
+  type ChatState,
+} from '@streamkit/contracts';
 import { RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { RedisLock } from '../../common/redis/lock.service';
 import { PresenceService } from '../../common/redis/presence.service';
+import { chatChannels } from './chat-channel';
+import type { ChatSource } from './chat-source';
 import { TwitchChatSource } from './twitch-chat.source';
+import { YouTubeChatSource } from './youtube-chat.source';
 
 /**
- * Ключ владения соединением с чатом.
+ * Ключ владения чтением чата — один на все площадки.
  *
- * Соединение обязано быть ОДНО на кластер. Две реплики воркера, подключённые к
+ * Чтение обязано быть ОДНО на кластер. Две реплики воркера, подключённые к
  * одному каналу, опубликовали бы каждое сообщение дважды, и зрители увидели бы
- * чат в двух экземплярах.
+ * чат в двух экземплярах; у YouTube вдобавок каждый лишний поток тратит квоту
+ * проекта. Одна аренда на все источники, а не на каждый: реплика, держащая
+ * Twitch, но не YouTube, ничего не выигрывает, а два ключа — это две гонки.
  */
-const OWNERSHIP_KEY = 'streamkit:owner:chat:twitch';
+const OWNERSHIP_KEY = 'streamkit:owner:chat';
 
 /**
  * Срок владения и шаг продления.
@@ -41,14 +52,18 @@ export class ChatManager implements OnApplicationShutdown {
   private readonly logger = new Logger(ChatManager.name);
   private ownership: string | null = null;
   private started = false;
+  private readonly sources: ChatSource[];
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly source: TwitchChatSource,
+    twitch: TwitchChatSource,
+    youtube: YouTubeChatSource,
     private readonly bus: RealtimeBus,
     private readonly lock: RedisLock,
     private readonly presence: PresenceService,
-  ) {}
+  ) {
+    this.sources = [twitch, youtube];
+  }
 
   /** Один такт: подтвердить владение и свести состав каналов. */
   async tick(): Promise<void> {
@@ -58,10 +73,13 @@ export class ChatManager implements OnApplicationShutdown {
     }
 
     if (!this.started) {
-      await this.source.start((message) => void this.publish(message));
+      for (const source of this.sources) {
+        await source.start((message) => void this.publish(message));
+      }
       this.started = true;
     }
     await this.reconcile();
+    await this.reportStates();
   }
 
   async onApplicationShutdown(): Promise<void> {
@@ -91,37 +109,80 @@ export class ChatManager implements OnApplicationShutdown {
   }
 
   /**
-   * Состав каналов = логины из настроек всех включённых виджетов чата плюс
-   * каналы открытых окон эфира (отметки `PresenceService.watchChat`). Окно
-   * закрыли — отметка истекает, и канал отпускается на следующем такте.
+   * Состав каналов = подключённые площадки владельцев виджетов чата, чей оверлей
+   * сейчас открыт в OBS, плюс каналы открытых окон эфира (отметки
+   * `PresenceService`). Сцену или окно закрыли — отметка истекает, и канал
+   * отпускается на следующем такте.
+   *
+   * Раньше в состав шли все включённые виджеты чата, открыты они или нет. Это
+   * значит читать чужие чаты, которые никто не показывает, — сообщения зрителей
+   * шли через платформу без всякой цели, — и копить каналы к потолку около
+   * сотни на одно анонимное соединение. У YouTube цена ещё и в квоте.
    *
    * Разные стримеры вполне могут смотреть один канал — множество схлопывает
-   * такие пары само, и соединение слушает его один раз.
+   * такие пары само, и канал слушается один раз.
    */
   private async reconcile(): Promise<void> {
     const wanted = await this.wantedChannels();
 
-    for (const channel of wanted) {
-      await this.source.join(channel);
-    }
-    for (const channel of this.source.channels) {
-      if (!wanted.has(channel)) await this.source.leave(channel);
+    for (const source of this.sources) {
+      const channels = wanted.get(source.platform) ?? new Set<string>();
+      for (const channel of channels) await source.join(channel);
+      for (const channel of source.channels) {
+        if (!channels.has(channel)) await source.leave(channel);
+      }
+      await source.tick?.();
     }
   }
 
-  private async wantedChannels(): Promise<Set<string>> {
+  private async wantedChannels(): Promise<Map<ChatPlatform, Set<string>>> {
     const widgets = await this.prisma.widget.findMany({
-      where: { type: 'CHAT', isEnabled: true },
-      select: { config: true },
+      where: { type: 'CHAT', isEnabled: true, tokens: { some: { revokedAt: null } } },
+      select: {
+        userId: true,
+        config: true,
+        tokens: { where: { revokedAt: null }, select: { id: true } },
+      },
     });
+    const online = await this.presence.onlineOverlays(
+      widgets.flatMap((widget) => widget.tokens.map((token) => token.id)),
+    );
+    const shown = widgets.filter((widget) => widget.tokens.some((token) => online.has(token.id)));
 
-    const channels = await this.presence.watchedChats();
-    for (const widget of widgets) {
-      const config = chatWidgetConfigSchema.safeParse(widget.config);
-      // Пустой канал — виджет создали, но ещё не настроили. Это не ошибка.
-      if (config.success && config.data.channel.length > 0) channels.add(config.data.channel);
+    const wanted = new Map<ChatPlatform, Set<string>>();
+    const add = (ref: ChatChannelRef) => {
+      const set = wanted.get(ref.platform) ?? new Set<string>();
+      set.add(ref.channel);
+      wanted.set(ref.platform, set);
+    };
+
+    // Каналы виджета — подключённые площадки его владельца, кроме тех, что
+    // выключены в настройках виджета: чат YouTube, который виджет не покажет,
+    // незачем читать за квоту проекта.
+    const connected = await chatChannels(this.prisma, [...new Set(shown.map((w) => w.userId))]);
+    for (const widget of shown) {
+      const platforms = (widget.config as { platforms?: Partial<Record<ChatPlatform, boolean>> })
+        .platforms;
+      for (const chat of connected.get(widget.userId) ?? []) {
+        if (chat.authExpired || platforms?.[chat.platform] === false) continue;
+        add(chat);
+      }
     }
-    return channels;
+    for (const ref of await this.presence.watchedChats()) add(ref);
+    return wanted;
+  }
+
+  /** Состояние каналов — окну эфира: «ждём эфира», «квота», «переподключите». */
+  private async reportStates(): Promise<void> {
+    const states: Array<[ChatChannelRef, ChatState]> = [];
+    for (const source of this.sources) {
+      for (const [channel, state] of source.states?.() ?? []) {
+        states.push([{ platform: source.platform, channel } as ChatChannelRef, state]);
+      }
+    }
+    await this.presence
+      .setChatStates(states)
+      .catch((error: unknown) => this.logger.warn({ err: error }, 'Состояние чата не записано'));
   }
 
   private async publish(message: ChatMessage): Promise<void> {
@@ -140,7 +201,7 @@ export class ChatManager implements OnApplicationShutdown {
 
   private async releaseSource(): Promise<void> {
     if (!this.started) return;
-    await this.source.stop();
+    for (const source of this.sources) await source.stop();
     this.started = false;
   }
 }

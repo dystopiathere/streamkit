@@ -11,6 +11,7 @@ import { EventsService } from '../events/events.service';
 import type { DonationConnector } from './donation-provider';
 import { DonationAlertsConnector } from './donationalerts.connector';
 import { PlatformTokenService, type CredentialProvider } from './platform-token.service';
+import { TwitchEventSubConnector } from './twitch-eventsub.connector';
 
 /**
  * Как часто воркер сверяет живые соединения с источниками в БД.
@@ -22,8 +23,14 @@ import { PlatformTokenService, type CredentialProvider } from './platform-token.
  */
 export const CONNECTOR_TICK_MS = 10_000;
 
-/** Провайдеры с живым соединением. Вебхук сюда не входит: он приходит к нам сам. */
+/** Донат-сервисы с живым соединением. Вебхук сюда не входит: он приходит к нам сам. */
 const CONNECTED_PROVIDERS = ['DONATIONALERTS'] as const;
+
+interface WantedConnection {
+  userId: string;
+  provider: string;
+  accountId: string | null;
+}
 
 /**
  * Менеджер живых подключений к донат-сервисам.
@@ -56,8 +63,10 @@ export class ConnectorManager implements OnApplicationBootstrap, OnApplicationSh
     private readonly tokens: PlatformTokenService,
     private readonly events: EventsService,
     donationAlerts: DonationAlertsConnector,
+    twitch: TwitchEventSubConnector,
   ) {
     this.connectors.set(donationAlerts.provider, donationAlerts);
+    this.connectors.set(twitch.provider, twitch);
   }
 
   /** Первая сверка — сразу при старте, не дожидаясь такта. Старт процесса она не держит. */
@@ -87,24 +96,14 @@ export class ConnectorManager implements OnApplicationBootstrap, OnApplicationSh
     if (this.reconciling) return;
     this.reconciling = true;
     try {
-      const sources = await this.prisma.donationSource.findMany({
-        where: { isEnabled: true, provider: { in: [...CONNECTED_PROVIDERS] } },
-        select: { userId: true, provider: true, externalAccountId: true },
-      });
-      const wanted = new Map(
-        sources.map((source) => {
-          const provider = source.provider.toLowerCase();
-          const key = `${source.userId}:${provider}:${source.externalAccountId ?? ''}`;
-          return [key, { userId: source.userId, provider }];
-        }),
-      );
+      const wanted = await this.wanted();
 
       for (const key of [...this.active.keys()]) {
         if (!wanted.has(key)) await this.stopKey(key);
       }
       for (const [key, source] of wanted) {
         if (this.active.has(key)) continue;
-        await this.start(key, source.userId, source.provider).catch((error: unknown) => {
+        await this.start(key, source).catch((error: unknown) => {
           this.logger.error(
             { err: error, userId: source.userId, provider: source.provider },
             'Не удалось подключить источник',
@@ -116,7 +115,43 @@ export class ConnectorManager implements OnApplicationBootstrap, OnApplicationSh
     }
   }
 
-  private async start(key: string, userId: string, provider: string): Promise<void> {
+  /**
+   * Что должно быть подключено: включённые донат-сервисы и каналы Twitch,
+   * доступ к которым жив. Twitch подключён ради аналитики, и события канала
+   * идут вместе с ним — отдельного включения у них нет.
+   */
+  private async wanted(): Promise<Map<string, WantedConnection>> {
+    const [sources, channels] = await Promise.all([
+      this.prisma.donationSource.findMany({
+        where: { isEnabled: true, provider: { in: [...CONNECTED_PROVIDERS] } },
+        select: { userId: true, provider: true, externalAccountId: true },
+      }),
+      this.prisma.channel.findMany({
+        where: { platform: 'TWITCH', isEnabled: true, syncState: { not: 'AUTH_EXPIRED' } },
+        select: { userId: true, externalId: true },
+      }),
+    ]);
+    const all: WantedConnection[] = [
+      ...sources.map((source) => ({
+        userId: source.userId,
+        provider: source.provider.toLowerCase(),
+        accountId: source.externalAccountId,
+      })),
+      ...channels.map((channel) => ({
+        userId: channel.userId,
+        provider: 'twitch',
+        accountId: channel.externalId,
+      })),
+    ];
+    return new Map(
+      all.map((entry) => [`${entry.userId}:${entry.provider}:${entry.accountId ?? ''}`, entry]),
+    );
+  }
+
+  private async start(
+    key: string,
+    { userId, provider, accountId }: WantedConnection,
+  ): Promise<void> {
     const connector = this.connectors.get(provider);
     if (!connector) {
       this.logger.warn({ provider }, 'Коннектор не зарегистрирован');
@@ -125,6 +160,7 @@ export class ConnectorManager implements OnApplicationBootstrap, OnApplicationSh
 
     const stop = await connector.connect({
       userId,
+      accountId,
       // Токен — через общий сервис: тот проверяет срок и продлевает доступ.
       // Раньше коннектор получал токен один раз, и протухший молча уезжал в
       // сервис, а источник умирал, оставаясь «включённым» в дашборде.
@@ -156,14 +192,21 @@ export class ConnectorManager implements OnApplicationBootstrap, OnApplicationSh
     for (const [key, entry] of [...this.active]) {
       if (entry.userId === userId && entry.provider === provider) await this.stopKey(key);
     }
-    await this.prisma.donationSource
-      .updateMany({
-        where: { userId, provider: provider.toUpperCase() as never, isEnabled: true },
-        data: { isEnabled: false, disabledReason: reason },
-      })
-      .catch((error: unknown) =>
-        this.logger.error({ err: error, userId, provider }, 'Источник не выключен'),
-      );
+    // У Twitch источник — канал «Аналитики»: мёртвый доступ там тот же, что
+    // видит опрос метрик, и чинится тем же повторным подключением.
+    const disabled =
+      provider === 'twitch'
+        ? this.prisma.channel.updateMany({
+            where: { userId, platform: 'TWITCH' },
+            data: { syncState: 'AUTH_EXPIRED', syncError: reason },
+          })
+        : this.prisma.donationSource.updateMany({
+            where: { userId, provider: provider.toUpperCase() as never, isEnabled: true },
+            data: { isEnabled: false, disabledReason: reason },
+          });
+    await disabled.catch((error: unknown) =>
+      this.logger.error({ err: error, userId, provider }, 'Источник не выключен'),
+    );
   }
 
   private async stopKey(key: string): Promise<void> {

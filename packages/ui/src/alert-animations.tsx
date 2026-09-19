@@ -1,4 +1,4 @@
-import type { AlertWidgetConfig } from '@streamkit/contracts';
+import type { AlertScenarioConfig } from '@streamkit/contracts';
 
 /**
  * Keyframes для анимаций появления и ухода алерта.
@@ -58,7 +58,7 @@ export const ALERT_KEYFRAMES = `
 /** Длительность анимации ухода. Учитывается в очереди показа. */
 export const ALERT_EXIT_DURATION_MS = 300;
 
-export function exitAnimationName(animation: AlertWidgetConfig['animationOut']): string {
+export function exitAnimationName(animation: AlertScenarioConfig['animationOut']): string {
   return `sk-out-${animation}`;
 }
 

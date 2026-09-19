@@ -147,6 +147,7 @@ describe('разрешения Google', () => {
     const config = {
       oauthCredentials: () => ({ clientId: 'client', clientSecret: 'secret' }),
       oauthRedirectBaseUrl: 'https://api.example.test',
+      youtubeEndpoints: { auth: 'https://accounts.google.com/o/oauth2/v2/auth' },
     } as unknown as AppConfig;
     const provider = new YouTubeProvider({} as HttpClient, config);
 

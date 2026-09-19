@@ -55,7 +55,8 @@ export class AnalyticsService {
       where: { userId, platform: { in: ANALYTICS_PLATFORMS } },
       orderBy: { createdAt: 'asc' },
     });
-    return rows.map(toContractChannel);
+    const scopes = await this.grantedScopes(userId);
+    return rows.map((row) => toContractChannel(row, scopes.get(row.platform)));
   }
 
   async summary(userId: string, channelId: string, range: AnalyticsRange): Promise<ChannelSummary> {
@@ -75,7 +76,7 @@ export class AnalyticsService {
     ]);
 
     return {
-      channel: toContractChannel(channel),
+      channel: toContractChannel(channel, (await this.grantedScopes(userId)).get(channel.platform)),
       range,
       // Начало эфира живёт на канале, а не в снимке: истории оно не нужно, и
       // относится оно только к последнему снимку, если канал сейчас в эфире.
@@ -210,6 +211,15 @@ export class AnalyticsService {
     `;
 
     return rows[0] ?? { peak_viewers: null, live_seconds: 0 };
+  }
+
+  /** Какие права выдала каждая площадка — по учётным данным пользователя. */
+  private async grantedScopes(userId: string): Promise<Map<string, string[]>> {
+    const credentials = await this.prisma.integrationCredential.findMany({
+      where: { userId, provider: { in: ['twitch', 'youtube'] } },
+      select: { provider: true, scopes: true },
+    });
+    return new Map(credentials.map((row) => [row.provider.toUpperCase(), row.scopes]));
   }
 
   /**

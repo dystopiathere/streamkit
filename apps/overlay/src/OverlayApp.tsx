@@ -1,10 +1,13 @@
 import {
   type AlertEvent,
+  type AlertScenarioConfig,
   type AlertWidgetConfig,
+  type ChatChannelRef,
   type ChatMessage,
   type ConfigUpdatedMessage,
   type OverlayBootstrap,
   type WidgetState,
+  chatChannelKey,
   defaultWidgetConfig,
   shouldShowAlert,
 } from '@streamkit/contracts';
@@ -19,7 +22,7 @@ import {
   exitAnimationName,
   useAlertQueue,
 } from '@streamkit/ui';
-import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { readTokenFromLocation, useOverlayConnection } from './useOverlayConnection';
 
 const token = readTokenFromLocation();
@@ -55,9 +58,15 @@ export function OverlayApp(): React.JSX.Element | null {
   const [widget, setWidget] = useState<OverlayBootstrap | null>(null);
   const [state, setState] = useState<WidgetState | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Ключи каналов `площадка:канал`: строка в множестве, а не объект, — чтобы
+  // сверять сообщение с каналами без перебора.
+  const [chatChannels, setChatChannels] = useState<ReadonlySet<string>>(new Set());
 
   const alertConfig = widget?.type === 'alerts' ? widget.config : DEFAULT_ALERT_CONFIG;
   const { current, enqueue } = useAlertQueue(alertConfig);
+  const scenario = current ? alertConfig.scenarios[current.event.type] : null;
+  // Звук живёт, пока алерт на экране, и обрывается вместе с ним.
+  useAlertSound(current?.event.id ?? null, scenario?.sound ?? null);
 
   const handleAlert = useCallback(
     (event: AlertEvent) => {
@@ -73,7 +82,13 @@ export function OverlayApp(): React.JSX.Element | null {
   const handleBootstrap = useCallback((bootstrap: OverlayBootstrap) => {
     setWidget(bootstrap);
     setState(bootstrap.state);
+    setChatChannels(new Set(bootstrap.chatChannels.map(chatChannelKey)));
   }, []);
+
+  const handleChatChannels = useCallback(
+    (channels: ChatChannelRef[]) => setChatChannels(new Set(channels.map(chatChannelKey))),
+    [],
+  );
 
   /**
    * Настройки поменялись — состояние остаётся прежним.
@@ -111,8 +126,9 @@ export function OverlayApp(): React.JSX.Element | null {
       onConfig: handleConfig,
       onState: handleState,
       onChat: handleChat,
+      onChatChannels: handleChatChannels,
     }),
-    [handleAlert, handleBootstrap, handleConfig, handleState, handleChat],
+    [handleAlert, handleBootstrap, handleConfig, handleState, handleChat, handleChatChannels],
   );
 
   const connection = useOverlayConnection(token, handlers);
@@ -127,22 +143,18 @@ export function OverlayApp(): React.JSX.Element | null {
       return (
         <>
           <AlertAnimationStyles />
-          {current ? (
+          {current && scenario ? (
             <div
               key={current.event.id}
               style={{
                 width: '100%',
                 height: '100%',
                 animation: current.isLeaving
-                  ? `${exitAnimationName(widget.config.animationOut)} ${ALERT_EXIT_DURATION_MS}ms ease-in both`
+                  ? `${exitAnimationName(scenario.animationOut)} ${ALERT_EXIT_DURATION_MS}ms ease-in both`
                   : undefined,
               }}
             >
-              <AlertCard
-                event={current.event}
-                config={widget.config}
-                animate={!current.isLeaving}
-              />
+              <AlertCard event={current.event} config={scenario} animate={!current.isLeaving} />
             </div>
           ) : null}
         </>
@@ -174,18 +186,35 @@ export function OverlayApp(): React.JSX.Element | null {
     // Сообщения приезжают отдельным потоком, а не состоянием: у чата нечего
     // пересчитывать, есть только лента, и накапливает её сам оверлей.
     //
-    // Буфер фильтруется по текущему каналу. Смена канала в настройках переселяет
-    // сокет в новую комнату, но строки старого канала остаются в буфере — и без
-    // фильтра висели бы под новым, а на тихом канале при негаснущих сообщениях
-    // часами.
-    case 'chat': {
-      const channel = widget.config.channel;
+    // Буфер фильтруется по текущим каналам — подключённым площадкам владельца.
+    // Смена подключения переселяет сокет в новые комнаты, но строки старого
+    // канала остаются в буфере — и без фильтра висели бы под новыми, а на тихом
+    // канале при негаснущих сообщениях часами.
+    case 'chat':
       return (
         <ChatBox
           config={widget.config}
-          messages={messages.filter((message) => message.channel === channel)}
+          messages={messages.filter((message) => chatChannels.has(chatChannelKey(message)))}
         />
       );
-    }
   }
+}
+
+/**
+ * Звук оповещения — один раз на показ, по сценарию типа события.
+ *
+ * Без взаимодействия пользователя браузер звук не играет, но браузер-сорс OBS
+ * автовоспроизведение разрешает — ради него звук и есть. Отказ (открыли
+ * ссылку в обычной вкладке) не ошибка: алерт показывается и без звука.
+ */
+function useAlertSound(eventId: string | null, sound: AlertScenarioConfig['sound'] | null): void {
+  const url = sound?.enabled ? sound.url : null;
+  const volume = sound?.volume ?? 0;
+  useEffect(() => {
+    if (!eventId || !url) return;
+    const audio = new Audio(url);
+    audio.volume = volume;
+    void audio.play().catch(() => undefined);
+    return () => audio.pause();
+  }, [eventId, url, volume]);
 }

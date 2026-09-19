@@ -4,17 +4,67 @@ import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { AppConfig } from '../../config/app-config.service';
 
 /**
- * Ключ счётчика на сутки. Живёт с запасом, чтобы пережить смену дня по UTC.
+ * Сутки квоты — по тихоокеанскому времени, как их считает Google.
  *
- * Сутки считаем по UTC, потому что именно так их считает Google: квота
- * сбрасывается в полночь по тихоокеанскому времени, но привязываться к местной
- * зоне сервера точно неправильно — она может быть какой угодно.
+ * Раньше сутки считались по UTC. Полночь UTC — это пять вечера в Калифорнии:
+ * исчерпав квоту, опрос ждал полночи UTC, получал от Google тот же отказ (у
+ * Google сутки ещё не кончились) и откладывался снова до следующей полночи
+ * UTC — метрики YouTube не собирались лишние шестнадцать часов. Зона задана
+ * явно, а не берётся у сервера: ключ обязан совпадать на всех инстансах.
  */
+const QUOTA_TIME_ZONE = 'America/Los_Angeles';
+
+const QUOTA_CLOCK = new Intl.DateTimeFormat('en-CA', {
+  timeZone: QUOTA_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+});
+
+const DAY_SECONDS = 24 * 60 * 60;
+
+/** Дата и прошедшие секунды суток по часам квоты. */
+function quotaClock(now: Date): { day: string; seconds: number } {
+  const part: Partial<Record<Intl.DateTimeFormatPartTypes, string>> = Object.fromEntries(
+    QUOTA_CLOCK.formatToParts(now).map((item) => [item.type, item.value]),
+  );
+  return {
+    day: `${part.year}-${part.month}-${part.day}`,
+    seconds: Number(part.hour) * 3600 + Number(part.minute) * 60 + Number(part.second),
+  };
+}
+
+/** Ключ счётчика на сутки. Живёт с запасом, чтобы пережить смену суток. */
 export function quotaKey(platform: string, now: Date = new Date()): string {
-  return `streamkit:quota:${platform}:${now.toISOString().slice(0, 10)}`;
+  return `streamkit:quota:${platform}:${quotaClock(now).day}`;
+}
+
+/**
+ * Ближайшая полночь по тихоокеанскому времени — когда Google обнуляет квоту.
+ *
+ * Сутки в дни перевода часов длятся 23 или 25 часов, поэтому «плюс остаток
+ * суток» проверяется по тем же часам и доводится до настоящей полуночи.
+ */
+export function nextQuotaReset(now: Date): Date {
+  const elapsedMs = quotaClock(now).seconds * 1000 + now.getUTCMilliseconds();
+  const guess = new Date(now.getTime() + DAY_SECONDS * 1000 - elapsedMs);
+  const off = quotaClock(guess).seconds;
+  if (off === 0) return guess;
+  return new Date(guess.getTime() + (off >= DAY_SECONDS / 2 ? DAY_SECONDS - off : -off) * 1000);
 }
 
 const KEY_TTL_SECONDS = 36 * 60 * 60;
+
+/**
+ * Бюджет чата YouTube — отдельный счётчик из того же лимита проекта Google.
+ * Отдельный, чтобы чат одного шестичасового эфира не остановил сбор метрик
+ * всем стримерам (docs/adr/0014).
+ */
+export const YOUTUBE_CHAT_QUOTA = 'youtube-chat';
 
 /**
  * Учёт суточной квоты внешнего API.
@@ -77,22 +127,21 @@ export class QuotaService {
    * которые заведомо не получатся.
    */
   async exhaust(platform: string): Promise<void> {
-    const limit = this.limitFor(platform);
-    if (limit <= 0) return;
-
-    const key = quotaKey(platform);
-    await this.redis.set(key, limit + 1, 'EX', KEY_TTL_SECONDS);
+    // Лимит у Google один на проект: исчерпан он — исчерпаны и метрики, и чат,
+    // с чьего бы запроса об этом ни стало известно.
+    const budgets = platform.startsWith('youtube') ? ['youtube', YOUTUBE_CHAT_QUOTA] : [platform];
+    for (const budget of budgets) {
+      const limit = this.limitFor(budget);
+      if (limit <= 0) continue;
+      await this.redis.set(quotaKey(budget), limit + 1, 'EX', KEY_TTL_SECONDS);
+    }
     this.logger.warn({ platform }, 'Площадка сообщила об исчерпании квоты, счётчик выровнен');
-  }
-
-  /** Сколько единиц уже потрачено за сегодня. Для диагностики. */
-  async used(platform: string): Promise<number> {
-    const value = await this.redis.get(quotaKey(platform));
-    return Number(value ?? 0);
   }
 
   /** 0 означает «квоты нет» — так у Twitch, там только лимит частоты. */
   private limitFor(platform: string): number {
-    return platform === 'youtube' ? this.config.youtubeDailyQuota : 0;
+    if (platform === 'youtube') return this.config.youtubeDailyQuota;
+    if (platform === YOUTUBE_CHAT_QUOTA) return this.config.youtubeChatDailyQuota;
+    return 0;
   }
 }

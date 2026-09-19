@@ -52,7 +52,7 @@ export class EventsController {
     @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodValidationPipe(testEventSchema)) body: TestEventInput,
   ): Promise<AlertEvent> {
-    return this.events.createTestEvent(user.id, body.language);
+    return this.events.createTestEvent(user.id, body.type, body.language);
   }
 
   /** Выдаёт новый секрет вебхука. Показывается один раз. */

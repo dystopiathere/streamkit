@@ -1,6 +1,6 @@
 # Consent to Personal Data Processing
 
-Version No. 3 of 15.09.2026
+Version No. 4 of 19.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/personal-data?lang=ru); if the
@@ -73,8 +73,8 @@ anonymized or deleted within the periods set out in the Privacy Policy
 
 ## 7. Third-party data
 
-Information about event participants (name, message, amount), Twitch chat
-viewers' messages, and private room guests' names, images and voices are not
+Information about event participants (name, message, amount), Twitch and YouTube
+chat viewers' messages, and private room guests' names, images and voices are not
 covered by this consent. I am their operator, and the Operator processes them on
 my behalf under section 13 of the Terms of Service
 (https://stream-kit.ru/legal/terms). When putting private room guests on stream,

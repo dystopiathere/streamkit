@@ -61,7 +61,10 @@ describe('проверка окружения', () => {
 
   it('подставляет значения по умолчанию для площадочных настроек', () => {
     const env = validateEnv({ ...BASE });
-    expect(env.YOUTUBE_DAILY_QUOTA).toBe(9000);
+    // Лимит проекта Google делится между метриками и чатом (docs/adr/0014).
+    expect(env.YOUTUBE_DAILY_QUOTA).toBe(7000);
+    expect(env.YOUTUBE_CHAT_DAILY_QUOTA).toBe(2000);
+    expect(env.YOUTUBE_DAILY_QUOTA + env.YOUTUBE_CHAT_DAILY_QUOTA).toBeLessThan(10_000);
     expect(env.WEB_BASE_URL).toBe('http://localhost:5173');
   });
 

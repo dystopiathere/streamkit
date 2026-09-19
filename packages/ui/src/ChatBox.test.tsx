@@ -18,8 +18,7 @@ function message(overrides: Partial<ChatMessage> = {}): ChatMessage {
   };
 }
 
-const config = (overrides: Record<string, unknown> = {}) =>
-  chatWidgetConfigSchema.parse({ channel: 'example', ...overrides });
+const config = (overrides: Record<string, unknown> = {}) => chatWidgetConfigSchema.parse(overrides);
 
 describe('ChatBox', () => {
   it('показывает ник и текст', () => {
@@ -44,6 +43,53 @@ describe('ChatBox', () => {
       />,
     );
     expect(screen.queryByText('Nightbot')).toBeNull();
+  });
+
+  it('мультичат: строка YouTube со значком площадки рядом со строкой Twitch', () => {
+    const youtube = {
+      ...message({ username: 'Зритель YouTube' }),
+      platform: 'youtube',
+      channel: 'UC' + 'a'.repeat(22),
+      login: 'UC' + 'b'.repeat(22),
+    } as ChatMessage;
+    render(<ChatBox config={config()} messages={[message(), youtube]} />);
+
+    expect(screen.getByText('Зритель YouTube')).toBeDefined();
+    expect(screen.getByRole('img', { name: 'YouTube' })).toBeDefined();
+    expect(screen.getByRole('img', { name: 'Twitch' })).toBeDefined();
+  });
+
+  it('площадку, выключенную в настройках, не показывает', () => {
+    const youtube = {
+      ...message({ username: 'Зритель YouTube' }),
+      platform: 'youtube',
+      channel: 'UC' + 'a'.repeat(22),
+      login: 'UC' + 'b'.repeat(22),
+    } as ChatMessage;
+    render(
+      <ChatBox
+        config={config({ platforms: { youtube: false } })}
+        messages={[message(), youtube]}
+      />,
+    );
+    expect(screen.queryByText('Зритель YouTube')).toBeNull();
+    expect(screen.getByText('Зритель')).toBeDefined();
+  });
+
+  it('бота YouTube прячет по имени: его id канала стример не знает', () => {
+    const bot = {
+      ...message({ username: '@Nightbot' }),
+      platform: 'youtube',
+      channel: 'UC' + 'a'.repeat(22),
+      login: 'UC' + 'c'.repeat(22),
+    } as ChatMessage;
+    render(<ChatBox config={config()} messages={[bot]} />);
+    expect(screen.queryByText('@Nightbot')).toBeNull();
+  });
+
+  it('значок площадки можно выключить', () => {
+    render(<ChatBox config={config({ showPlatform: false })} messages={[message()]} />);
+    expect(screen.queryByRole('img', { name: 'Twitch' })).toBeNull();
   });
 
   it('прячет команды ботов, но только если просили', () => {

@@ -41,7 +41,8 @@ export interface ApiClientOptions<TUser> {
   localizeMessage?: (message: string) => string;
 }
 
-type RefreshOutcome = 'refreshed' | 'rejected' | 'unavailable';
+/** `rejected` — сессии больше нет; `unavailable` — сервер сейчас не ответил, сессия жива. */
+export type RefreshOutcome = 'refreshed' | 'rejected' | 'unavailable';
 
 export interface ApiClient {
   request<T>(path: string, options?: RequestOptions): Promise<T>;
@@ -53,6 +54,11 @@ export interface ApiClient {
   delete<T>(path: string, body?: unknown): Promise<T>;
   /** Восстановление сессии при загрузке страницы: access-токен живёт только в памяти. */
   restoreSession(): Promise<boolean>;
+  /**
+   * Новый access-токен вне запроса — для сокета, который сервер закрыл по
+   * истечении токена. Отказ по сессии очищает её, как и отказ в `request`.
+   */
+  refreshSession(): Promise<RefreshOutcome>;
 }
 
 /**
@@ -172,5 +178,10 @@ export function createApiClient<TUser>({
     patch: (path, body) => request(path, { method: 'PATCH', body }),
     delete: (path, body) => request(path, { method: 'DELETE', body }),
     restoreSession: async () => (await refreshAccessToken()) === 'refreshed',
+    refreshSession: async () => {
+      const outcome = await refreshAccessToken();
+      if (outcome === 'rejected') session.clearSession();
+      return outcome;
+    },
   };
 }

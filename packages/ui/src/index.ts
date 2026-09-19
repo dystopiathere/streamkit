@@ -13,6 +13,7 @@ export {
   exitAnimationName,
 } from './alert-animations';
 export { ChatBox, type ChatBoxProps } from './ChatBox';
+export { PlatformIcon } from './PlatformIcon';
 export { GoalBar, type GoalBarProps } from './GoalBar';
 export {
   ParticipantLayout,
