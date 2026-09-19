@@ -1,23 +1,27 @@
-import type { AlertEvent } from '@streamkit/contracts';
+import { type AlertEvent, alertWidgetConfigSchema } from '@streamkit/contracts';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ALERT_EXIT_DURATION_MS } from './alert-animations';
 import { useAlertQueue } from './useAlertQueue';
 
-const CONFIG = { durationMs: 1000, gapMs: 200 };
-/** Полный цикл одного показа: держим → уходим → пауза перед следующим. */
-const CYCLE_MS = CONFIG.durationMs + ALERT_EXIT_DURATION_MS + CONFIG.gapMs;
+const CONFIG = alertWidgetConfigSchema.parse({
+  gapMs: 200,
+  scenarios: { donation: { durationMs: 1000 }, follow: { durationMs: 3000 } },
+});
+/** Полный цикл одного показа доната: держим → уходим → пауза перед следующим. */
+const CYCLE_MS = 1000 + ALERT_EXIT_DURATION_MS + CONFIG.gapMs;
 
-function event(id: string): AlertEvent {
+function event(id: string, type: AlertEvent['type'] = 'donation'): AlertEvent {
   return {
     id,
     userId: '00000000-0000-4000-8000-000000000001',
-    type: 'donation',
+    type,
     provider: 'webhook',
     externalId: id,
     username: 'Зритель',
     message: '',
     amount: { amountMinor: 10_000, currency: 'RUB' },
+    count: null,
     isTest: false,
     createdAt: new Date().toISOString(),
   };
@@ -47,6 +51,17 @@ describe('useAlertQueue', () => {
 
     act(() => void vi.advanceTimersByTime(CYCLE_MS));
     expect(result.current.current).toBeNull();
+  });
+
+  it('держит алерт столько, сколько задано в сценарии его типа', () => {
+    const { result } = renderHook(() => useAlertQueue(CONFIG));
+    act(() => result.current.enqueue(event('фолловер', 'follow')));
+
+    // Донат ушёл бы через секунду, фолловер у сценария — три.
+    act(() => void vi.advanceTimersByTime(1000));
+    expect(result.current.current?.isLeaving).toBe(false);
+    act(() => void vi.advanceTimersByTime(2000));
+    expect(result.current.current?.isLeaving).toBe(true);
   });
 
   it('не накапливает таймеры за длинный стрим', () => {

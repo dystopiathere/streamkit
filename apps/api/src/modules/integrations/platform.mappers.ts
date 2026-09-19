@@ -4,6 +4,7 @@ import {
   Platform as PrismaPlatform,
 } from '@prisma/client';
 import type { Channel, ChannelSyncState, Platform } from '@streamkit/contracts';
+import { TWITCH_SCOPES } from './twitch.provider';
 
 /**
  * Перевод между энумами БД (UPPER_SNAKE, требование Prisma) и контрактами.
@@ -16,6 +17,15 @@ import type { Channel, ChannelSyncState, Platform } from '@streamkit/contracts';
  * собирает метрики. Строка с такой площадкой в выборку аналитики попасть не
  * может — фильтр стоит в запросе.
  */
+/**
+ * Не хватает ли прав, которые площадка должна была выдать. Считается только у
+ * Twitch: у YouTube право одно и с подключения не менялось.
+ */
+function missingScopes(platform: PrismaPlatform, granted: string[]): boolean {
+  if (platform !== 'TWITCH') return false;
+  return TWITCH_SCOPES.some((scope) => !granted.includes(scope));
+}
+
 const PLATFORM_TO_PRISMA: Record<Platform, PrismaPlatform> = {
   twitch: PrismaPlatform.TWITCH,
   youtube: PrismaPlatform.YOUTUBE,
@@ -63,7 +73,7 @@ export function toContractPlatform(platform: PrismaPlatform): Platform {
   return mapped;
 }
 
-export function toContractChannel(row: PrismaChannel): Channel {
+export function toContractChannel(row: PrismaChannel, grantedScopes: string[] = []): Channel {
   return {
     id: row.id,
     platform: toContractPlatform(row.platform),
@@ -74,6 +84,7 @@ export function toContractChannel(row: PrismaChannel): Channel {
     connectedAt: row.createdAt.toISOString(),
     lastSyncedAt: row.lastSyncedAt?.toISOString() ?? null,
     syncState: SYNC_STATE_FROM_PRISMA[row.syncState],
+    needsReconnect: missingScopes(row.platform, grantedScopes),
     // syncError наружу не отдаётся: это текст ошибки площадки, он нужен в логах
     // для диагностики, а пользователю говорит только syncState.
   };

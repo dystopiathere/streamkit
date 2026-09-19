@@ -411,9 +411,4 @@ export class WidgetStateService {
   async readTimer(widgetId: string): Promise<StoredTimer> {
     return storedTimerSchema.parse((await this.read(widgetId)) ?? {});
   }
-
-  async writeTimer(widget: PrismaWidget, state: StoredTimer): Promise<void> {
-    await this.write(widget.id, state);
-    await this.publish(widget);
-  }
 }

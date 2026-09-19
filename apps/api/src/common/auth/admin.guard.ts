@@ -45,9 +45,11 @@ export class AdminGuard implements CanActivate {
 
     const user = await this.prisma.user.findUnique({
       where: { id: request.user.id },
-      select: { role: true, status: true },
+      select: { role: true, status: true, isTotpEnabled: true },
     });
-    if (!user || user.status !== 'ACTIVE' || user.role === 'USER') {
+    // Второй фактор — условие входа, а не только его шаг: выключенный в
+    // дашборде, он закрывает и уже открытую сессию админки.
+    if (!user || user.status !== 'ACTIVE' || user.role === 'USER' || !user.isTotpEnabled) {
       // 401, а не 403: сессии сотрудника больше нет, клиент уходит на вход.
       throw new UnauthorizedException('Доступ к админке закрыт');
     }

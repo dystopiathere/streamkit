@@ -1,21 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import {
-  formatMinorForInput,
-  formatMoney,
-  moneySchema,
-  parseMajorToMinor,
-  toMinor,
-} from './common.js';
+import { formatMinorForInput, formatMoney, moneySchema, parseMajorToMinor } from './common.js';
 import { dedupKey, incomingAlertEventSchema } from './events.js';
 
 describe('деньги', () => {
-  it('переводит мажорные единицы в минорные без потерь на дробных значениях', () => {
-    expect(toMinor(10.1, 'RUB')).toEqual({ amountMinor: 1010, currency: 'RUB' });
-    expect(toMinor(0.07, 'USD')).toEqual({ amountMinor: 7, currency: 'USD' });
-    // 19.99 * 100 в плавающей точке даёт 1998.9999...; округление обязано дать 1999
-    expect(toMinor(19.99, 'EUR')).toEqual({ amountMinor: 1999, currency: 'EUR' });
-  });
-
   it('запрещает дробные и отрицательные минорные единицы', () => {
     expect(moneySchema.safeParse({ amountMinor: 10.5, currency: 'RUB' }).success).toBe(false);
     expect(moneySchema.safeParse({ amountMinor: -1, currency: 'RUB' }).success).toBe(false);

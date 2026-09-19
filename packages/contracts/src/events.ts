@@ -2,11 +2,18 @@ import { z } from 'zod';
 import { isoDateSchema, moneySchema, uuidSchema } from './common.js';
 import { LANGUAGES } from './messages.js';
 
-/** Типы событий, которые могут вызвать алерт на стриме. */
+/**
+ * Типы событий, которые могут вызвать алерт на стриме.
+ *
+ * Подарочные подписки — отдельный тип, а не `subscription`: у подписки автор —
+ * тот, кто подписался, у подарка — тот, кто подарил, и шаблон «оформил
+ * подписку» над дарителем пяти подписок читался бы неправдой.
+ */
 export const ALERT_EVENT_TYPES = [
   'donation',
   'follow',
   'subscription',
+  'gift',
   'resubscription',
   'cheer',
   'raid',
@@ -28,6 +35,19 @@ export const eventProviderSchema = z.enum(EVENT_PROVIDERS);
 export type EventProvider = z.infer<typeof eventProviderSchema>;
 
 /**
+ * Количество в событии — не деньги: биты, зрители рейда, месяцы подписки,
+ * число подарочных подписок. Отдельно от `amount`: биты не валюта, и сложить
+ * их с рублями в цели или топе значило бы посчитать то, чего нет.
+ */
+export const eventCountSchema = z
+  .number()
+  .int()
+  .nonnegative()
+  .max(1_000_000_000)
+  .nullable()
+  .default(null);
+
+/**
  * Нормализованное событие от коннектора. Ещё не сохранено: без `id` и без времени
  * записи. `externalId` — идентификатор события на стороне провайдера, по нему
  * строится дедупликация; если провайдер его не даёт, коннектор обязан собрать
@@ -41,6 +61,7 @@ export const incomingAlertEventSchema = z.object({
   username: z.string().min(1).max(64),
   message: z.string().max(500).default(''),
   amount: moneySchema.nullable().default(null),
+  count: eventCountSchema,
   isTest: z.boolean().default(false),
   occurredAt: isoDateSchema.optional(),
 });
@@ -68,6 +89,7 @@ export const webhookAlertPayloadSchema = z.object({
   username: z.string().min(1).max(64),
   message: z.string().max(500).default(''),
   amount: moneySchema.nullable().default(null),
+  count: eventCountSchema,
   occurredAt: isoDateSchema.optional(),
 });
 export type WebhookAlertPayload = z.infer<typeof webhookAlertPayloadSchema>;
@@ -75,8 +97,14 @@ export type WebhookAlertPayload = z.infer<typeof webhookAlertPayloadSchema>;
 /**
  * Тестовый алерт из дашборда. Имя и текст пишет сервер — на языке интерфейса
  * стримера: алерт уходит в OBS, и английский дашборд с «Тестовым зрителем» в
- * кадре выглядел бы поломкой перевода. Без тела — по-русски: Express 5 оставляет
- * `body` неопределённым, если его нет, отсюда `.default({})`.
+ * кадре выглядел бы поломкой перевода. Без тела — донат по-русски: Express 5
+ * оставляет `body` неопределённым, если его нет, отсюда `.default({})`.
+ * `type` — сценарий, который стример настраивает: у каждого своя проверка.
  */
-export const testEventSchema = z.object({ language: z.enum(LANGUAGES).optional() }).default({});
+export const testEventSchema = z
+  .object({
+    language: z.enum(LANGUAGES).optional(),
+    type: alertEventTypeSchema.optional(),
+  })
+  .default({});
 export type TestEventInput = z.infer<typeof testEventSchema>;

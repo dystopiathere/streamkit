@@ -17,20 +17,35 @@ export const twitchLoginSchema = z
   .regex(/^[a-z0-9_]{1,25}$/, 'Логин канала Twitch: латиница, цифры и подчёркивание');
 
 /**
- * Канал в настройках виджета, который ещё не настроили.
+ * Идентификатор канала YouTube — `UC` и 22 символа.
  *
- * Пустая строка допустима намеренно: виджет создаётся кнопкой «Новый виджет»
- * с пустым конфигом, как и остальные четыре типа, а канал вписывается уже в
- * редакторе. Требовать логин прямо в схеме значило бы либо спрашивать его в
- * форме создания (у одного типа из пяти), либо запрещать создание виджета.
- * Пустой канал никуда не подключается и ничего не показывает.
+ * Канал чата YouTube адресуется им, а не адресом `@handle`: адрес канал может
+ * сменить в любой момент, и комната доставки разошлась бы с каналом сообщений.
  */
-export const chatChannelSchema = z
+export const youtubeChannelIdSchema = z
   .string()
-  .trim()
-  .toLowerCase()
-  .regex(/^([a-z0-9_]{1,25})?$/, 'Логин канала Twitch: латиница, цифры и подчёркивание')
-  .default('');
+  .regex(/^UC[A-Za-z0-9_-]{22}$/, 'Идентификатор канала YouTube: UC и 22 символа');
+
+/** Площадки, чат которых умеет читать сервис. */
+export const CHAT_PLATFORMS = ['twitch', 'youtube'] as const;
+export const chatPlatformSchema = z.enum(CHAT_PLATFORMS);
+export type ChatPlatform = z.infer<typeof chatPlatformSchema>;
+
+/**
+ * Канал чата: площадка и её идентификатор канала. Логин Twitch и id канала
+ * YouTube — разные алфавиты, и каждый проверяется схемой своей площадки: логин
+ * Twitch уходит в команду IRC, и перевод строки в нём был бы второй командой.
+ */
+export const chatChannelRefSchema = z.discriminatedUnion('platform', [
+  z.object({ platform: z.literal('twitch'), channel: twitchLoginSchema }),
+  z.object({ platform: z.literal('youtube'), channel: youtubeChannelIdSchema }),
+]);
+export type ChatChannelRef = z.infer<typeof chatChannelRefSchema>;
+
+/** Ключ канала для множеств и отметок: `twitch:shroud`, `youtube:UC…`. */
+export function chatChannelKey(ref: { platform: string; channel: string }): string {
+  return `${ref.platform}:${ref.channel}`;
+}
 
 /**
  * Значки автора, которые виджет умеет показывать.
@@ -50,6 +65,10 @@ export const CHAT_BADGES = [
   'staff',
   'turbo',
   'premium',
+  // YouTube: спонсор канала и подтверждённый автор. Модератор и владелец
+  // канала ложатся на значки Twitch выше.
+  'member',
+  'verified',
 ] as const;
 export const chatBadgeSchema = z.enum(CHAT_BADGES);
 export type ChatBadge = z.infer<typeof chatBadgeSchema>;
@@ -74,21 +93,39 @@ export const chatPartSchema = z.discriminatedUnion('kind', [
 ]);
 export type ChatPart = z.infer<typeof chatPartSchema>;
 
-export const chatMessageSchema = z.object({
-  /** Тег `id` из IRC. Он же ключ дедупликации между репликами воркера. */
-  id: z.string().min(1).max(64),
-  platform: z.literal('twitch'),
-  channel: twitchLoginSchema,
-  /** Логин автора: по нему работают фильтры, он же ключ списка скрытых. */
-  login: twitchLoginSchema,
+const chatMessageBase = {
+  /** Идентификатор сообщения у площадки: тег `id` IRC, `id` сообщения YouTube. */
+  id: z.string().min(1).max(128),
   /** Отображаемое имя: может отличаться регистром и алфавитом. */
-  username: z.string().min(1).max(64),
-  /** Цвет ника из тега. null — Twitch его не прислал, цвет выберет виджет. */
+  username: z.string().min(1).max(100),
+  /** Цвет ника из тега. null — площадка его не прислала, цвет выберет виджет. */
   color: hexColorSchema.nullable(),
   badges: z.array(chatBadgeSchema).max(8),
   parts: z.array(chatPartSchema).max(200),
   sentAt: isoDateSchema,
-});
+};
+
+/**
+ * Сообщение чата любой площадки.
+ *
+ * `login` — постоянный идентификатор автора: логин Twitch или id канала
+ * YouTube. По нему, а не по имени, работает дедупликация и ключи; список
+ * скрытых сверяется и с ним, и с именем — боты YouTube узнаются по имени.
+ */
+export const chatMessageSchema = z.discriminatedUnion('platform', [
+  z.object({
+    ...chatMessageBase,
+    platform: z.literal('twitch'),
+    channel: twitchLoginSchema,
+    login: twitchLoginSchema,
+  }),
+  z.object({
+    ...chatMessageBase,
+    platform: z.literal('youtube'),
+    channel: youtubeChannelIdSchema,
+    login: youtubeChannelIdSchema,
+  }),
+]);
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 
 /** Диапазон эмоута в тексте сообщения. Границы включительные, как их шлёт Twitch. */

@@ -9,6 +9,8 @@ const ADMIN_URL = process.env.E2E_ADMIN_URL ?? 'http://localhost:5175';
 const API_URL = process.env.E2E_API_URL ?? 'http://localhost:3000';
 const FAKE_YOOKASSA_PORT = process.env.FAKE_YOOKASSA_PORT ?? '3099';
 const FAKE_DONATIONALERTS_PORT = process.env.FAKE_DONATIONALERTS_PORT ?? '3098';
+const FAKE_TWITCH_PORT = process.env.FAKE_TWITCH_PORT ?? '3097';
+const FAKE_YOUTUBE_PORT = process.env.FAKE_YOUTUBE_PORT ?? '3096';
 
 /**
  * Сквозные тесты гоняются по СОБРАННЫМ приложениям, а не по dev-серверам.
@@ -87,7 +89,34 @@ export default defineConfig({
         DONATIONALERTS_CLIENT_ID: 'e2e-da-client',
         DONATIONALERTS_CLIENT_SECRET: 'e2e-da-secret',
         DONATIONALERTS_BASE_URL: `http://127.0.0.1:${FAKE_DONATIONALERTS_PORT}`,
+        // Twitch — фальшивый, ниже: вход и профиль канала. Без подключённого
+        // Twitch не создаётся виджет чата и нет чата в окне эфира.
+        TWITCH_CLIENT_ID: 'e2e-tw-client',
+        TWITCH_CLIENT_SECRET: 'e2e-tw-secret',
+        TWITCH_AUTH_URL: `http://127.0.0.1:${FAKE_TWITCH_PORT}/oauth2`,
+        TWITCH_API_URL: `http://127.0.0.1:${FAKE_TWITCH_PORT}/helix`,
+        // YouTube — фальшивый, ниже: вход Google и канал. Мультичат в окне эфира
+        // и виджет чата только с YouTube проверяются через него.
+        YOUTUBE_CLIENT_ID: 'e2e-yt-client',
+        YOUTUBE_CLIENT_SECRET: 'e2e-yt-secret',
+        YOUTUBE_AUTH_URL: `http://127.0.0.1:${FAKE_YOUTUBE_PORT}/o/oauth2/v2/auth`,
+        YOUTUBE_TOKEN_URL: `http://127.0.0.1:${FAKE_YOUTUBE_PORT}/token`,
+        YOUTUBE_API_URL: `http://127.0.0.1:${FAKE_YOUTUBE_PORT}/youtube/v3`,
       },
+    },
+    {
+      command: 'node fake-youtube.mjs',
+      url: `http://127.0.0.1:${FAKE_YOUTUBE_PORT}/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 10_000,
+      env: { FAKE_YOUTUBE_PORT },
+    },
+    {
+      command: 'node fake-twitch.mjs',
+      url: `http://127.0.0.1:${FAKE_TWITCH_PORT}/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 10_000,
+      env: { FAKE_TWITCH_PORT },
     },
     {
       command: 'node fake-donationalerts.mjs',

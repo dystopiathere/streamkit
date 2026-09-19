@@ -5,6 +5,7 @@ import {
   type ChatPart,
 } from '@streamkit/contracts';
 import { useEffect, useState } from 'react';
+import { PlatformIcon } from './PlatformIcon';
 import { textStyleToCss } from './text-style';
 
 export interface ChatBoxProps {
@@ -55,6 +56,13 @@ export function ChatBox({ config, messages }: ChatBoxProps): React.JSX.Element |
             overflowWrap: 'anywhere',
           }}
         >
+          {config.showPlatform !== false ? (
+            <PlatformIcon
+              platform={message.platform}
+              size={Math.round(config.text.fontSize * 0.8)}
+              style={{ marginRight: 6, verticalAlign: 'middle' }}
+            />
+          ) : null}
           {config.showBadges && message.badges.length > 0 ? (
             <span style={{ opacity: 0.75, marginRight: 6 }}>
               {message.badges.map((badge) => BADGE_SIGNS[badge]).join('')}
@@ -127,6 +135,8 @@ const BADGE_SIGNS: Record<string, string> = {
   staff: '🛠',
   turbo: '⚡',
   premium: '👑',
+  member: '★',
+  verified: '✔',
 };
 
 interface FadeClock {
@@ -179,7 +189,15 @@ function isFaded(message: ChatMessage, config: ChatWidgetConfig, clock: FadeCloc
 }
 
 function isVisible(message: ChatMessage, config: ChatWidgetConfig): boolean {
-  if (config.hiddenUsers.includes(message.login)) return false;
+  // Площадка выключена в настройках. `?.`: конфиг из предпросмотра может быть
+  // собран до того, как схема досыпала новое поле.
+  if (config.platforms?.[message.platform] === false) return false;
+  // Список скрытых сверяется и с логином, и с именем: у YouTube постоянный
+  // идентификатор — id канала, которого стример не знает, а боты узнаются по
+  // имени. Имя приводится так же, как значение в списке, — без регистра и «@».
+  const name = message.username.trim().toLowerCase().replace(/^@/, '');
+  if (config.hiddenUsers.includes(message.login.toLowerCase())) return false;
+  if (config.hiddenUsers.includes(name)) return false;
   if (config.hideCommands && startsWithCommand(message)) return false;
   return true;
 }

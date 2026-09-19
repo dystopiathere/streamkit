@@ -39,6 +39,13 @@ export const channelSchema = z.object({
   /** Когда метрики собирались в последний раз. null — ещё ни разу. */
   lastSyncedAt: isoDateSchema.nullable(),
   syncState: channelSyncStateSchema,
+  /**
+   * Выданных площадкой прав меньше, чем нужно сейчас: канал подключали до
+   * того, как понадобились новые (биты и баллы канала для оповещений).
+   * Метрики собираются, но часть событий не придёт, пока канал не
+   * переподключат.
+   */
+  needsReconnect: z.boolean(),
 });
 export type Channel = z.infer<typeof channelSchema>;
 

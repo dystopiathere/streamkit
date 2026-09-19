@@ -6,25 +6,28 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import {
+  type ChatChannelRef,
   SOCKET_EVENTS,
   chatRoom,
   type ConfigUpdatedMessage,
   type OverlayBootstrap,
   overlayRoom,
   shouldShowAlert,
-  type WidgetConfig,
   widgetRoom,
 } from '@streamkit/contracts';
 import type { Server, Socket } from 'socket.io';
 import { RealtimeBus, type BusMessage } from '../../common/bus/realtime-bus.service';
 import { PRESENCE_REFRESH_MS, PresenceService } from '../../common/redis/presence.service';
 import { WidgetStateService } from '../widgets/widget-state.service';
+import { StreamService } from '../stream/stream.service';
 import { WidgetsService } from '../widgets/widgets.service';
 
-/** Канал чата у виджета, если он вообще чат и канал в нём указан. */
-function chatChannelOf(widget: WidgetConfig): string | null {
-  if (widget.type !== 'chat') return null;
-  return widget.config.channel.length > 0 ? widget.config.channel : null;
+/** Что шлюз держит на сокете оверлея. */
+interface OverlaySocketData {
+  tokenId?: string;
+  userId?: string;
+  /** Оверлей виджета чата: его комнаты каналов меняет смена подключения площадок. */
+  isChat?: boolean;
 }
 
 /**
@@ -54,6 +57,7 @@ export class OverlayGateway
     private readonly widgetState: WidgetStateService,
     private readonly bus: RealtimeBus,
     private readonly presence: PresenceService,
+    private readonly stream: StreamService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -73,7 +77,7 @@ export class OverlayGateway
   }
 
   async handleDisconnect(client: Socket): Promise<void> {
-    const tokenId = (client.data as { tokenId?: string }).tokenId;
+    const tokenId = (client.data as OverlaySocketData).tokenId;
     if (!tokenId) return;
     await this.presence
       .dropOverlay(tokenId)
@@ -85,7 +89,7 @@ export class OverlayGateway
       const sockets = await this.server.local.fetchSockets();
       const tokenIds = new Set<string>();
       for (const socket of sockets) {
-        const tokenId = (socket.data as { tokenId?: string }).tokenId;
+        const tokenId = (socket.data as OverlaySocketData).tokenId;
         if (tokenId) tokenIds.add(tokenId);
       }
       await this.presence.markOverlays([...tokenIds]);
@@ -109,15 +113,21 @@ export class OverlayGateway
       return;
     }
 
-    (client.data as { tokenId?: string }).tokenId = resolved.tokenId;
+    const isChat = resolved.widget.type === 'chat';
+    Object.assign(client.data as OverlaySocketData, {
+      tokenId: resolved.tokenId,
+      userId: resolved.userId,
+      isChat,
+    } satisfies OverlaySocketData);
     await client.join(overlayRoom(resolved.tokenId));
     await client.join(widgetRoom(resolved.widgetId));
 
     // Чат адресуется каналом, а не пользователем: комната общая на канал, и
     // сообщение уходит в неё напрямую, без запроса «чьи это виджеты» на каждую
     // строку. Сообщений в чате сотни в минуту, а не единицы, как донатов.
-    const channel = chatChannelOf(resolved.widget);
-    if (channel) await client.join(chatRoom('twitch', channel));
+    // Каналы — подключённые площадки владельца виджета, и никакие другие.
+    const chatChannels = isChat ? await this.stream.chatChannelRefs(resolved.userId) : [];
+    for (const ref of chatChannels) await client.join(chatRoom(ref.platform, ref.channel));
 
     const bootstrap: OverlayBootstrap = {
       widgetId: resolved.widgetId,
@@ -126,6 +136,7 @@ export class OverlayGateway
       // Состояние в первом же сообщении: цель, открытая в OBS, обязана
       // показать собранную сумму сразу, а не через первый донат.
       state: await this.widgetState.computeById(resolved.widgetId),
+      chatChannels,
       ...resolved.widget,
     };
     client.emit(SOCKET_EVENTS.bootstrap, bootstrap);
@@ -138,20 +149,23 @@ export class OverlayGateway
   }
 
   /**
-   * Переселить оверлеи виджета в комнату нового канала.
+   * Переселить оверлеи чата пользователя в комнаты новых каналов.
    *
-   * Комната назначается при подключении, а настройки меняются потом. Без
-   * переселения оверлей продолжал бы слушать прежний канал: на экране новое имя
-   * канала, а сообщения из старого.
+   * Комнаты назначаются при подключении, а каналы меняются потом — стример
+   * подключил другой аккаунт площадки или отключил её. Без переселения оверлей
+   * продолжал бы показывать чат канала, которого у стримера уже нет.
    */
-  private async rejoinChatRoom(widgetId: string, channel: string | null): Promise<void> {
-    const sockets = await this.server.local.in(widgetRoom(widgetId)).fetchSockets();
+  private async rejoinChatRooms(userId: string, channels: ChatChannelRef[]): Promise<void> {
+    const sockets = await this.server.local.fetchSockets();
 
     for (const socket of sockets) {
+      const data = socket.data as OverlaySocketData;
+      if (data.userId !== userId || !data.isChat) continue;
       for (const room of socket.rooms) {
         if (room.startsWith('chat:')) socket.leave(room);
       }
-      if (channel) socket.join(chatRoom('twitch', channel));
+      for (const ref of channels) socket.join(chatRoom(ref.platform, ref.channel));
+      socket.emit(SOCKET_EVENTS.chatChannel, { channels });
     }
   }
 
@@ -191,16 +205,12 @@ export class OverlayGateway
           this.server.local
             .to(widgetRoom(message.widgetId))
             .emit(SOCKET_EVENTS.configUpdated, payload);
-
-          // Поменялся канал — оверлей надо переселить в другую комнату. Иначе
-          // смена канала в настройках потребовала бы перезагрузки сцены в OBS,
-          // а конфиг при этом приехал бы новый: виджет показывал бы чужой чат
-          // под именем нового канала.
-          if (message.type === 'chat') {
-            await this.rejoinChatRoom(message.widgetId, chatChannelOf(message));
-          }
           break;
         }
+
+        case 'chat-channel':
+          await this.rejoinChatRooms(message.userId, message.channels);
+          break;
 
         case 'chat': {
           this.server.local

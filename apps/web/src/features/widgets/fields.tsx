@@ -62,14 +62,28 @@ export function NumberField({
   );
 }
 
-export function TextField({ form, name, label, hint }: BaseProps & { hint?: string }) {
+/**
+ * Текстовое поле. `nullable` — пустое поле значит «не задано» (`null`), а не
+ * пустую строку: ссылку на картинку или звук схема принимает либо https, либо
+ * null, и стёртое поле иначе не давало бы сохранить форму.
+ */
+export function TextField({
+  form,
+  name,
+  label,
+  hint,
+  nullable = false,
+}: BaseProps & { hint?: string; nullable?: boolean }) {
   return (
     <div>
       <Label htmlFor={name}>{label}</Label>
       <Input
         id={name}
         {...describeField(name, { hint: Boolean(hint), error: errorAt(form, name) })}
-        {...form.register(name)}
+        {...form.register(
+          name,
+          nullable ? { setValueAs: (value: unknown) => (value === '' ? null : value) } : undefined,
+        )}
       />
       {hint ? <FieldHint id={name}>{hint}</FieldHint> : null}
       <FieldError id={name} message={errorAt(form, name)} />
@@ -142,22 +156,29 @@ export function CheckboxField({ form, name, label }: BaseProps): React.JSX.Eleme
 }
 
 /** Блок оформления текста — общий для всех типов виджетов. */
+/**
+ * Блок оформления текста — общий для всех типов виджетов. `prefix` — путь до
+ * объекта, где лежит `text`: у оповещений оформление своё у каждого сценария.
+ */
 export function TextStyleFields({
   form,
   labels,
   withHighlight = false,
+  prefix = '',
 }: {
   form: AnyForm;
   labels: { fontSize: string; strokeWidth: string; color: string; highlightColor: string };
   withHighlight?: boolean;
+  prefix?: string;
 }): React.JSX.Element {
+  const at = (field: string) => `${prefix}text.${field}`;
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <NumberField form={form} name="text.fontSize" label={labels.fontSize} />
-      <NumberField form={form} name="text.strokeWidth" label={labels.strokeWidth} />
-      <ColorField form={form} name="text.color" label={labels.color} />
+      <NumberField form={form} name={at('fontSize')} label={labels.fontSize} />
+      <NumberField form={form} name={at('strokeWidth')} label={labels.strokeWidth} />
+      <ColorField form={form} name={at('color')} label={labels.color} />
       {withHighlight ? (
-        <ColorField form={form} name="text.highlightColor" label={labels.highlightColor} />
+        <ColorField form={form} name={at('highlightColor')} label={labels.highlightColor} />
       ) : null}
     </div>
   );

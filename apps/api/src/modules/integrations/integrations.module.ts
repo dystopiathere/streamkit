@@ -11,6 +11,7 @@ import { OAuthStateService } from './oauth-state.service';
 import { PlatformConnectionService } from './platform-connection.service';
 import { PlatformRegistry } from './platform-registry.service';
 import { PlatformTokenService } from './platform-token.service';
+import { TwitchEventSubConnector } from './twitch-eventsub.connector';
 import { TwitchProvider } from './twitch.provider';
 import { YouTubeProvider } from './youtube.provider';
 
@@ -34,7 +35,13 @@ import { YouTubeProvider } from './youtube.provider';
     DonationAlertsApi,
     DonationSourcesService,
   ],
-  exports: [PlatformRegistry, PlatformTokenService, PlatformConnectionService, DonationAlertsApi],
+  exports: [
+    PlatformRegistry,
+    PlatformTokenService,
+    PlatformConnectionService,
+    DonationAlertsApi,
+    TwitchProvider,
+  ],
 })
 export class IntegrationsModule {}
 
@@ -42,13 +49,18 @@ export class IntegrationsModule {}
  * Коннекторы донатов. Живут ТОЛЬКО в воркере.
  *
  * Отдельный модуль, а не часть `IntegrationsModule`, именно из-за этого: у
- * `ConnectorManager` есть `onModuleInit`, который поднимает долгоживущие
+ * `ConnectorManager` есть `onApplicationBootstrap` и такт сверки, которые поднимают долгоживущие
  * websocket-соединения. Попади он в API, каждый деплой рвал бы источники
  * донатов у всех стримеров разом — и тем чаще, чем больше инстансов API.
  */
 @Module({
   imports: [EventsModule, IntegrationsModule],
-  providers: [DonationAlertsConnector, ConnectorManager, ConnectorScheduler],
+  providers: [
+    DonationAlertsConnector,
+    TwitchEventSubConnector,
+    ConnectorManager,
+    ConnectorScheduler,
+  ],
   exports: [ConnectorManager],
 })
 export class DonationConnectorsModule {}

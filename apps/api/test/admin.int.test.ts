@@ -228,6 +228,35 @@ describe('Админка (feature)', () => {
         .set('Cookie', `sk_admin_refresh=${admin.adminCookie}`)
         .expect(401);
     });
+
+    it('второй фактор, выключенный в дашборде, закрывает и открытую сессию админки', async () => {
+      const admin = await staff();
+      await request(server())
+        .post('/api/auth/totp/disable')
+        .set(auth(admin.token))
+        .send({ password: PASSWORD })
+        .expect(204);
+
+      await request(server()).get('/api/admin/users').set(auth(admin.adminToken)).expect(401);
+      await request(server())
+        .post('/api/admin/auth/refresh')
+        .set('Cookie', `sk_admin_refresh=${admin.adminCookie}`)
+        .expect(401);
+    });
+
+    it('код, которым вошли в дашборд, не открывает админку', async () => {
+      const account = await staffAccount('ADMIN');
+      const totpCode = generateSync({ secret: account.secret });
+      await request(server())
+        .post('/api/auth/login')
+        .send({ email: account.email, password: PASSWORD, totpCode })
+        .expect(200);
+
+      await request(server())
+        .post('/api/admin/auth/login')
+        .send({ email: account.email, password: PASSWORD, totpCode })
+        .expect(401);
+    });
   });
 
   /* ---------------------------------------------------------------- */
@@ -254,6 +283,24 @@ describe('Админка (feature)', () => {
         .send({ confirmEmail: target.email })
         .expect(403);
       await as(request(server()).get('/api/admin/audit')).expect(403);
+    });
+
+    it('поддержка гасит сессии и второй фактор стримерам, но не сотрудникам', async () => {
+      const support = await staff('SUPPORT');
+      const admin = await staff();
+      const target = await streamer();
+      const as = (req: request.Test) => req.set(auth(support.adminToken));
+
+      await as(request(server()).post(`/api/admin/users/${admin.userId}/totp/reset`)).expect(403);
+      await as(request(server()).post(`/api/admin/users/${admin.userId}/sessions/revoke`))
+        .send({})
+        .expect(403);
+      // Админ остался в админке: ни сессия, ни второй фактор не тронуты.
+      await request(server()).get('/api/admin/users').set(auth(admin.adminToken)).expect(200);
+
+      await as(request(server()).post(`/api/admin/users/${target.userId}/sessions/revoke`))
+        .send({})
+        .expect(204);
     });
 
     it('админ выдаёт роль другому, но не меняет свою', async () => {

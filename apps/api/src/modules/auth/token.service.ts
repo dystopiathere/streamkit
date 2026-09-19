@@ -122,8 +122,9 @@ export class TokenService {
       throw new UnauthorizedException('Учётная запись недоступна');
     }
 
-    // Снятая роль закрывает админку при следующем же обновлении.
-    if (scope === 'ADMIN' && record.user.role === 'USER') {
+    // Снятая роль или выключенный второй фактор закрывают админку при
+    // следующем же обновлении: вход туда без них не пускает.
+    if (scope === 'ADMIN' && (record.user.role === 'USER' || !record.user.isTotpEnabled)) {
       await this.revokeFamily(record.familyId);
       throw new UnauthorizedException('Доступ к админке закрыт');
     }
@@ -200,10 +201,10 @@ export class TokenService {
     }
   }
 
-  /** Выход со всех устройств: например, после смены пароля. */
-  async revokeAllForUser(userId: string): Promise<void> {
+  /** Выход со всех устройств: например, после смены пароля. С `scope` — только из этой области. */
+  async revokeAllForUser(userId: string, scope?: SessionScope): Promise<void> {
     await this.prisma.refreshToken.updateMany({
-      where: { userId, revokedAt: null },
+      where: { userId, revokedAt: null, ...(scope ? { scope } : {}) },
       data: { revokedAt: new Date() },
     });
   }

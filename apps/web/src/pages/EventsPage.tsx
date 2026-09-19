@@ -82,6 +82,13 @@ export function EventsPage(): React.JSX.Element {
               <div className="shrink-0 text-right">
                 {event.amount ? (
                   <p className="font-medium text-success">{formatMoney(event.amount)}</p>
+                ) : event.count !== null ? (
+                  <p className="font-medium tabular-nums">
+                    {t(`events.count.${event.type}`, {
+                      count: event.count,
+                      formatted: new Intl.NumberFormat(intlLocale()).format(event.count),
+                    })}
+                  </p>
                 ) : null}
                 <p className="text-xs text-muted">
                   {new Date(event.createdAt).toLocaleTimeString(intlLocale())}

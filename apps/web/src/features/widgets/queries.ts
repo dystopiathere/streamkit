@@ -1,5 +1,6 @@
 import type {
   AlertEvent,
+  AlertEventType,
   CreatedOverlayToken,
   CreateWidgetInput,
   OverlayTokenView,
@@ -106,10 +107,12 @@ export function useRevokeOverlayToken(widgetId: string) {
   });
 }
 
+/** Тестовый алерт. Без типа — донат: так проверяют виджет со страницы списка. */
 export function useSendTestAlert() {
   return useMutation({
     // Язык — чтобы имя и текст тестового алерта в OBS были на языке дашборда.
-    mutationFn: () => api.post<AlertEvent>('/events/test', { language: currentLanguage() }),
+    mutationFn: (type?: AlertEventType) =>
+      api.post<AlertEvent>('/events/test', { language: currentLanguage(), type }),
   });
 }
 

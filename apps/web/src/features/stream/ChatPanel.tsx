@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { cn } from '@streamkit/app-kit';
+import { PlatformIcon } from '@streamkit/ui';
 
 /** Насколько близко к низу считается «читаю свежее» — тогда ленту докручиваем сами. */
 const STICK_THRESHOLD_PX = 48;
@@ -18,11 +19,11 @@ const STICK_THRESHOLD_PX = 48;
  * перечитать — новые сообщения не выдёргивают его обратно.
  */
 export function ChatPanel({
-  chat,
+  chats,
   messages,
   className,
 }: {
-  chat: StreamChat | null;
+  chats: StreamChat[];
   messages: ChatMessage[];
   className?: string;
 }): React.JSX.Element {
@@ -41,9 +42,9 @@ export function ChatPanel({
     stickRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < STICK_THRESHOLD_PX;
   };
 
-  // Площадка у сообщения подписывается, только когда их несколько: у чата
-  // одного Twitch метка «twitch» на каждой строке — шум.
-  const multiPlatform = new Set(messages.map((message) => message.platform)).size > 1;
+  // Значок площадки у сообщения — только когда площадок несколько: у чата
+  // одного Twitch значок на каждой строке — шум.
+  const multiPlatform = new Set(chats.map((chat) => chat.platform)).size > 1;
 
   return (
     <section
@@ -57,14 +58,30 @@ export function ChatPanel({
         <h2 id="stream-chat-title" className="font-medium">
           {t('stream.chat.title')}
         </h2>
-        {chat ? (
-          <p className="text-xs text-muted">
-            {t(`stream.chat.source.${chat.source}`, { channel: chat.channel })}
-          </p>
+        {chats.length > 0 ? (
+          <ul className="flex flex-col gap-0.5 text-xs text-muted">
+            {chats.map((chat) => (
+              <li
+                key={`${chat.platform}:${chat.channel}`}
+                className={cn(
+                  'flex items-center gap-1.5',
+                  (chat.state === 'auth' || chat.state === 'quota') && 'text-danger',
+                )}
+              >
+                <PlatformIcon platform={chat.platform} size={14} />
+                <span>
+                  {chat.platform === 'twitch'
+                    ? t('stream.chat.channelTwitch', { channel: chat.channel })
+                    : chat.title}{' '}
+                  — {t(`stream.chat.state.${chat.state}`)}
+                </span>
+              </li>
+            ))}
+          </ul>
         ) : null}
       </header>
 
-      {chat === null ? (
+      {chats.length === 0 ? (
         <p className="px-4 py-6 text-sm text-muted">
           {t('stream.chat.none')}{' '}
           <Link to="/analytics" className="underline hover:text-fg">
@@ -91,7 +108,11 @@ export function ChatPanel({
             {messages.map((message) => (
               <li key={message.id} className="break-words">
                 {multiPlatform ? (
-                  <span className="mr-1.5 text-xs text-muted uppercase">{message.platform}</span>
+                  <PlatformIcon
+                    platform={message.platform}
+                    size={14}
+                    style={{ marginRight: 6, verticalAlign: '-2px' }}
+                  />
                 ) : null}
                 <span className="font-semibold">{message.username}</span>
                 <span className="text-muted">: </span>

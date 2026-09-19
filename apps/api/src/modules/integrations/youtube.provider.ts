@@ -12,10 +12,6 @@ import {
   type RawTokenResponse,
 } from './platform-provider';
 
-const AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
-const TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const API = 'https://www.googleapis.com/youtube/v3';
-
 const SCOPES = ['https://www.googleapis.com/auth/youtube.readonly'];
 
 /**
@@ -112,7 +108,7 @@ export class YouTubeProvider implements PlatformProvider {
   ) {}
 
   buildAuthorizeUrl(state: string): string {
-    const url = new URL(AUTHORIZE_URL);
+    const url = new URL(this.config.youtubeEndpoints.auth);
     url.searchParams.set('client_id', this.credentials().clientId);
     url.searchParams.set('redirect_uri', this.redirectUri());
     url.searchParams.set('response_type', 'code');
@@ -132,7 +128,7 @@ export class YouTubeProvider implements PlatformProvider {
     return normalizeTokens(
       await this.http.json<RawTokenResponse>({
         platform: this.platform,
-        url: TOKEN_URL,
+        url: this.config.youtubeEndpoints.token,
         method: 'POST',
         form: {
           client_id: clientId,
@@ -150,7 +146,7 @@ export class YouTubeProvider implements PlatformProvider {
     return normalizeTokens(
       await this.http.json<RawTokenResponse>({
         platform: this.platform,
-        url: TOKEN_URL,
+        url: this.config.youtubeEndpoints.token,
         method: 'POST',
         form: {
           client_id: clientId,
@@ -165,7 +161,7 @@ export class YouTubeProvider implements PlatformProvider {
   async fetchIdentity(accessToken: string): Promise<ChannelIdentity> {
     const response = await this.http.json<YouTubeList<YouTubeChannel>>({
       platform: this.platform,
-      url: `${API}/channels?part=snippet,statistics&mine=true`,
+      url: `${this.config.youtubeEndpoints.api}/channels?part=snippet,statistics&mine=true`,
       accessToken,
     });
     const channel = response.items?.[0];
@@ -179,12 +175,12 @@ export class YouTubeProvider implements PlatformProvider {
     const [channels, broadcasts] = await Promise.all([
       this.http.json<YouTubeList<YouTubeChannel>>({
         platform: this.platform,
-        url: `${API}/channels?part=snippet,statistics&mine=true`,
+        url: `${this.config.youtubeEndpoints.api}/channels?part=snippet,statistics&mine=true`,
         accessToken,
       }),
       this.http.json<YouTubeList<YouTubeBroadcast>>({
         platform: this.platform,
-        url: `${API}/liveBroadcasts?part=id,snippet&broadcastStatus=active&broadcastType=all&mine=true`,
+        url: `${this.config.youtubeEndpoints.api}/liveBroadcasts?part=id,snippet&broadcastStatus=active&broadcastType=all&mine=true`,
         accessToken,
       }),
     ]);
@@ -197,7 +193,7 @@ export class YouTubeProvider implements PlatformProvider {
       ? (
           await this.http.json<YouTubeList<YouTubeVideo>>({
             platform: this.platform,
-            url: `${API}/videos?part=liveStreamingDetails,snippet&id=${encodeURIComponent(broadcast.id)}`,
+            url: `${this.config.youtubeEndpoints.api}/videos?part=liveStreamingDetails,snippet&id=${encodeURIComponent(broadcast.id)}`,
             accessToken,
           })
         ).items?.[0]

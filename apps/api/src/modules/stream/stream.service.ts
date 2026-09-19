@@ -1,13 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import {
-  chatWidgetConfigSchema,
   type StreamChannel,
   type StreamChat,
   type StreamOverview,
   type StreamWidget,
+  type ChatChannelRef,
+  chatChannelKey,
 } from '@streamkit/contracts';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { PresenceService } from '../../common/redis/presence.service';
+import { chatChannelsOf, toChannelRefs } from '../chat/chat-channel';
 import {
   ANALYTICS_PLATFORMS,
   toContractPlatform,
@@ -30,44 +32,38 @@ export class StreamService {
   ) {}
 
   async overview(userId: string): Promise<StreamOverview> {
-    const [channels, chat, widgets] = await Promise.all([
+    const [channels, chats, widgets] = await Promise.all([
       this.channels(userId),
-      this.chatChannel(userId),
+      this.chatChannels(userId),
       this.widgets(userId),
     ]);
-    return { channels, chat, widgets };
+    return { channels, chats, widgets };
   }
 
   /**
-   * Канал чата для окна эфира.
+   * Каналы чата окна эфира — подключённые в «Аналитике» площадки, и только
+   * они (`chatChannels`). Нет подключений — нет и чата.
    *
-   * Сначала — подключённый в «Аналитике» Twitch: это канал самого стримера, и
-   * вписывать его ещё раз незачем. Нет подключённого — канал из виджета чата
-   * (соглашение, раздел 13.2, называет оба). Логин Twitch всегда в нижнем
-   * регистре, а IRC различает регистр в имени канала.
+   * Состояние — по отметке воркера. Без отметки Twitch считается читаемым
+   * (IRC не зависит от эфира), а YouTube — ждущим эфира: чат у YouTube есть
+   * только у идущей трансляции, и воркер ещё не успел её найти.
    */
-  async chatChannel(userId: string): Promise<StreamChat | null> {
-    const connected = await this.prisma.channel.findFirst({
-      where: { userId, platform: 'TWITCH' },
-      orderBy: { createdAt: 'asc' },
-      select: { login: true },
-    });
-    if (connected) {
-      return { platform: 'twitch', channel: connected.login.toLowerCase(), source: 'connected' };
-    }
+  /** Только ссылки на каналы — для комнат оверлея, без состояния чтения. */
+  async chatChannelRefs(userId: string): Promise<ChatChannelRef[]> {
+    return toChannelRefs(await chatChannelsOf(this.prisma, userId));
+  }
 
-    const widgets = await this.prisma.widget.findMany({
-      where: { userId, type: 'CHAT', isEnabled: true },
-      orderBy: { createdAt: 'asc' },
-      select: { config: true },
-    });
-    for (const widget of widgets) {
-      const config = chatWidgetConfigSchema.safeParse(widget.config);
-      if (config.success && config.data.channel.length > 0) {
-        return { platform: 'twitch', channel: config.data.channel, source: 'widget' };
-      }
-    }
-    return null;
+  async chatChannels(userId: string): Promise<StreamChat[]> {
+    const chats = await chatChannelsOf(this.prisma, userId);
+    const states = await this.presence.chatStates(chats);
+    return chats.map((chat) => ({
+      platform: chat.platform,
+      channel: chat.channel,
+      title: chat.title,
+      state: chat.authExpired
+        ? 'auth'
+        : (states.get(chatChannelKey(chat)) ?? (chat.platform === 'youtube' ? 'waiting' : 'ok')),
+    }));
   }
 
   private async channels(userId: string): Promise<StreamChannel[]> {

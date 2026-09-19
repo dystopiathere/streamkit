@@ -1,6 +1,8 @@
 import {
   ALERT_EVENT_TYPES,
   ALERT_TEMPLATE_VARS,
+  type AlertEventType,
+  CHAT_PLATFORMS,
   CURRENCIES,
   GUEST_LAYOUTS,
   TOP_DONORS_PERIODS,
@@ -8,9 +10,13 @@ import {
 } from '@streamkit/contracts';
 import type { FieldValues, UseFormReturn } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { Card } from '@streamkit/app-kit';
+import { Link } from 'react-router-dom';
+import { Button, Card, cn } from '@streamkit/app-kit';
+import { toast } from 'sonner';
 import { useChannels } from '@/features/analytics/queries';
 import { useRooms } from '@/features/rooms/queries';
+import { ApiError } from '@/lib/api';
+import { useSendTestAlert } from './queries';
 import {
   CheckboxField,
   CheckboxGroupField,
@@ -36,13 +42,24 @@ const LAYOUTS = ['center', 'banner', 'side'] as const;
 export function WidgetConfigForm({
   type,
   form,
+  alertScenario,
+  onAlertScenarioChange,
 }: {
   type: WidgetType;
   form: UseFormReturn<FieldValues>;
+  /** Открытый сценарий оповещений — его же показывает предпросмотр. */
+  alertScenario: AlertEventType;
+  onAlertScenarioChange: (scenario: AlertEventType) => void;
 }): React.JSX.Element {
   switch (type) {
     case 'alerts':
-      return <AlertsFields form={form} />;
+      return (
+        <AlertsFields
+          form={form}
+          scenario={alertScenario}
+          onScenarioChange={onAlertScenarioChange}
+        />
+      );
     case 'goal':
       return <GoalFields form={form} />;
     case 'timer':
@@ -76,63 +93,290 @@ function currencyOptions() {
 
 /* ------------------------------------------------------------------ */
 
-function AlertsFields({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.Element {
+function AlertsFields({
+  form,
+  scenario,
+  onScenarioChange,
+}: {
+  form: UseFormReturn<FieldValues>;
+  scenario: AlertEventType;
+  onScenarioChange: (scenario: AlertEventType) => void;
+}): React.JSX.Element {
   const { t } = useTranslation();
-  const textLabels = useTextLabels();
 
   return (
     <>
       <Card className="space-y-4">
         <h2 className="font-medium">{t('widgets.section.behavior')}</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <SelectField
-            form={form}
-            name="layout"
-            label={t('widgets.field.layout')}
-            options={LAYOUTS.map((value) => ({ value, label: value }))}
-          />
-          <NumberField
-            form={form}
-            name="durationMs"
-            label={t('widgets.field.durationMs')}
-            step={500}
-          />
-          <NumberField form={form} name="gapMs" label={t('widgets.field.gapMs')} step={100} />
-          <MoneyField
-            form={form}
-            name="minAmountMinor"
-            label={t('widgets.field.minAmount')}
-            hint={t('widgets.hint.minAmount')}
-          />
-          <SelectField
-            form={form}
-            name="animationIn"
-            label={t('widgets.field.animationIn')}
-            options={ANIMATIONS.map((value) => ({ value, label: value }))}
-          />
-          <SelectField
-            form={form}
-            name="animationOut"
-            label={t('widgets.field.animationOut')}
-            options={ANIMATIONS.map((value) => ({ value, label: value }))}
-          />
-        </div>
+        <NumberField
+          form={form}
+          name="gapMs"
+          label={t('widgets.field.gapMs')}
+          step={100}
+          hint={t('widgets.hint.gapMs')}
+        />
       </Card>
 
       <Card className="space-y-4">
-        <h2 className="font-medium">{t('widgets.section.text')}</h2>
+        <div>
+          <h2 className="font-medium">{t('widgets.scenario.title')}</h2>
+          <p className="text-xs text-muted">{t('widgets.scenario.hint')}</p>
+        </div>
+        <ScenarioTabs form={form} selected={scenario} onSelect={onScenarioChange} />
+        {/* Поля одного сценария на экране за раз; значения остальных форма
+            держит сама (shouldUnregister выключен) и сохраняет все разом. */}
+        <div
+          key={scenario}
+          role="tabpanel"
+          id={`scenario-panel-${scenario}`}
+          aria-labelledby={`scenario-tab-${scenario}`}
+        >
+          <ScenarioFields form={form} type={scenario} />
+        </div>
+      </Card>
+    </>
+  );
+}
+
+/**
+ * Вкладки сценариев. Выключенный сценарий зачёркнут и подписан словом для
+ * экранного диктора: его видно не только по цвету.
+ */
+function ScenarioTabs({
+  form,
+  selected,
+  onSelect,
+}: {
+  form: UseFormReturn<FieldValues>;
+  selected: AlertEventType;
+  onSelect: (scenario: AlertEventType) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const scenarios = (form.watch('scenarios') ?? {}) as Partial<
+    Record<AlertEventType, { enabled?: boolean }>
+  >;
+
+  // Стрелки двигают выбор по кругу — как у любых вкладок (WAI-ARIA Tabs).
+  const move = (from: AlertEventType, step: number): void => {
+    const count = ALERT_EVENT_TYPES.length;
+    const next = ALERT_EVENT_TYPES[(ALERT_EVENT_TYPES.indexOf(from) + step + count) % count]!;
+    onSelect(next);
+    document.getElementById(`scenario-tab-${next}`)?.focus();
+  };
+
+  return (
+    <div role="tablist" aria-label={t('widgets.scenario.title')} className="flex flex-wrap gap-1.5">
+      {ALERT_EVENT_TYPES.map((type) => {
+        const active = type === selected;
+        const enabled = scenarios[type]?.enabled !== false;
+        return (
+          <button
+            key={type}
+            type="button"
+            role="tab"
+            id={`scenario-tab-${type}`}
+            aria-selected={active}
+            aria-controls={`scenario-panel-${type}`}
+            tabIndex={active ? 0 : -1}
+            onClick={() => onSelect(type)}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowRight') move(type, 1);
+              if (event.key === 'ArrowLeft') move(type, -1);
+            }}
+            className={cn(
+              'rounded-lg border px-3 py-1.5 text-sm',
+              active
+                ? 'border-accent bg-accent/15 text-fg'
+                : 'border-border text-muted hover:text-fg',
+              !enabled && 'line-through',
+            )}
+          >
+            {t(`events.type.${type}`)}
+            {enabled ? null : <span className="sr-only">, {t('widgets.scenario.off')}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Порог количества — там, где количество у события есть. У доната порог — сумма. */
+const COUNT_THRESHOLDS: Partial<Record<AlertEventType, string>> = {
+  gift: 'widgets.field.minGifts',
+  resubscription: 'widgets.field.minMonths',
+  cheer: 'widgets.field.minBits',
+  raid: 'widgets.field.minRaiders',
+};
+
+/** Что копирует «оформление в остальные сценарии»: вид, но не тексты, медиа и пороги. */
+const DESIGN_FIELDS = ['layout', 'durationMs', 'animationIn', 'animationOut', 'text'] as const;
+
+function ScenarioFields({
+  form,
+  type,
+}: {
+  form: UseFormReturn<FieldValues>;
+  type: AlertEventType;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const textLabels = useTextLabels();
+  const sendTest = useSendTestAlert();
+  const prefix = `scenarios.${type}.`;
+  const at = (field: string): string => `${prefix}${field}`;
+  const countLabel = COUNT_THRESHOLDS[type];
+  const animationOptions = ANIMATIONS.map((value) => ({
+    value,
+    label: t(`widgets.animation.${value}`),
+  }));
+
+  const test = async (): Promise<void> => {
+    try {
+      await sendTest.mutateAsync(type);
+      toast.success(t('widgets.scenario.testSent'));
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : t('common.error'));
+    }
+  };
+
+  // Копия уходит в форму, а не на сервер: до «Сохранить» её можно отменить
+  // перезагрузкой страницы.
+  const copyDesign = (): void => {
+    for (const other of ALERT_EVENT_TYPES) {
+      if (other === type) continue;
+      for (const field of DESIGN_FIELDS) {
+        form.setValue(`scenarios.${other}.${field}`, structuredClone(form.getValues(at(field))), {
+          shouldDirty: true,
+        });
+      }
+    }
+    toast.success(t('widgets.scenario.copied'));
+  };
+
+  const listen = (): void => {
+    const url = form.getValues(at('sound.url')) as string | null;
+    if (!url) return;
+    const audio = new Audio(url);
+    audio.volume = Math.min(1, Math.max(0, Number(form.getValues(at('sound.volume'))) || 0));
+    void audio.play().catch(() => toast.error(t('widgets.scenario.soundFailed')));
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <CheckboxField
+          form={form}
+          name={at('enabled')}
+          label={t('widgets.field.scenarioEnabled')}
+        />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => void test()}
+            isLoading={sendTest.isPending}
+          >
+            {t('widgets.scenario.test')}
+          </Button>
+          <Button type="button" variant="ghost" onClick={copyDesign}>
+            {t('widgets.scenario.copyDesign')}
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {type === 'donation' ? (
+          <MoneyField
+            form={form}
+            name={at('minAmountMinor')}
+            label={t('widgets.field.minAmount')}
+            hint={t('widgets.hint.minAmount')}
+          />
+        ) : null}
+        {countLabel ? (
+          <NumberField
+            form={form}
+            name={at('minCount')}
+            label={t(countLabel)}
+            hint={t('widgets.hint.minCount')}
+          />
+        ) : null}
+        <SelectField
+          form={form}
+          name={at('layout')}
+          label={t('widgets.field.layout')}
+          options={LAYOUTS.map((value) => ({ value, label: t(`widgets.layout.${value}`) }))}
+        />
+        <NumberField
+          form={form}
+          name={at('durationMs')}
+          label={t('widgets.field.durationMs')}
+          step={500}
+        />
+        <SelectField
+          form={form}
+          name={at('animationIn')}
+          label={t('widgets.field.animationIn')}
+          options={animationOptions}
+        />
+        <SelectField
+          form={form}
+          name={at('animationOut')}
+          label={t('widgets.field.animationOut')}
+          options={animationOptions}
+        />
+      </div>
+
+      <div className="space-y-4">
+        <h3 className="text-sm font-medium">{t('widgets.section.text')}</h3>
         <TextField
           form={form}
-          name="titleTemplate"
+          name={at('titleTemplate')}
           label={t('widgets.field.titleTemplate')}
           hint={t('widgets.templateHint', {
             vars: ALERT_TEMPLATE_VARS.map((name) => `{${name}}`).join(', '),
           })}
         />
-        <TextField form={form} name="messageTemplate" label={t('widgets.field.messageTemplate')} />
-        <TextStyleFields form={form} labels={textLabels} withHighlight />
-      </Card>
-    </>
+        <TextField
+          form={form}
+          name={at('messageTemplate')}
+          label={t('widgets.field.messageTemplate')}
+        />
+        <TextStyleFields form={form} labels={textLabels} withHighlight prefix={prefix} />
+      </div>
+
+      <div className="space-y-4">
+        <h3 className="text-sm font-medium">{t('widgets.section.media')}</h3>
+        <TextField
+          form={form}
+          name={at('imageUrl')}
+          label={t('widgets.field.imageUrl')}
+          hint={t('widgets.hint.imageUrl')}
+          nullable
+        />
+        <CheckboxField
+          form={form}
+          name={at('sound.enabled')}
+          label={t('widgets.field.soundEnabled')}
+        />
+        <div className="grid gap-4 sm:grid-cols-[1fr_8rem_auto] sm:items-end">
+          <TextField
+            form={form}
+            name={at('sound.url')}
+            label={t('widgets.field.soundUrl')}
+            nullable
+          />
+          <NumberField
+            form={form}
+            name={at('sound.volume')}
+            label={t('widgets.field.volume')}
+            step={0.05}
+          />
+          <Button type="button" variant="secondary" onClick={listen}>
+            {t('widgets.scenario.listen')}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -285,25 +529,61 @@ function TopDonorsFields({ form }: { form: UseFormReturn<FieldValues> }): React.
 function ChatFields({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.Element {
   const { t } = useTranslation();
   const textLabels = useTextLabels();
-  // Подключённый канал Twitch подставляется подсказкой, а не молча: чат читается
-  // анонимно, и виджет обязан работать у того, кто площадку не подключал вовсе.
+  // Каналы — только подключённые площадки: вход на площадке доказывает, что
+  // канал ваш. Вписать чужой канал больше негде; выбрать можно только, чат
+  // каких из своих показывать.
   const channels = useChannels();
-  const twitch = channels.data?.find((channel) => channel.platform === 'twitch');
+  const connected = CHAT_PLATFORMS.map((platform) => ({
+    platform,
+    channel: channels.data?.find((channel) => channel.platform === platform),
+  }));
+  const anyConnected = connected.some((item) => item.channel);
 
   return (
     <>
       <Card className="space-y-4">
         <h2 className="font-medium">{t('widgets.section.chat')}</h2>
-        <TextField
-          form={form}
-          name="channel"
-          label={t('widgets.field.channel')}
-          hint={
-            twitch
-              ? t('widgets.hint.channelConnected', { channel: twitch.login })
-              : t('widgets.hint.channel')
-          }
-        />
+        {!channels.data ? (
+          <p className="text-sm text-muted">{t('common.loading')}</p>
+        ) : !anyConnected ? (
+          <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 p-2 text-sm">
+            {t('widgets.chat.none')}{' '}
+            <Link to="/analytics" className="underline">
+              {t('widgets.chat.connect')}
+            </Link>
+          </p>
+        ) : (
+          <fieldset className="space-y-2">
+            <legend className="sr-only">{t('widgets.section.chat')}</legend>
+            {connected.map(({ platform, channel }) =>
+              channel ? (
+                <div key={platform} className="space-y-1">
+                  <CheckboxField
+                    form={form}
+                    name={`platforms.${platform}`}
+                    label={
+                      platform === 'twitch'
+                        ? t('widgets.chat.platformTwitch', { channel: channel.login })
+                        : t('widgets.chat.platformYoutube', { channel: channel.displayName })
+                    }
+                  />
+                  {platform === 'youtube' ? (
+                    <p className="pl-6 text-xs text-muted">{t('widgets.chat.youtubeHint')}</p>
+                  ) : null}
+                </div>
+              ) : (
+                <p key={platform} className="text-sm text-muted">
+                  {t('widgets.chat.notConnected', {
+                    platform: platform === 'twitch' ? 'Twitch' : 'YouTube',
+                  })}{' '}
+                  <Link to="/analytics" className="underline hover:text-fg">
+                    {t('widgets.chat.connect')}
+                  </Link>
+                </p>
+              ),
+            )}
+          </fieldset>
+        )}
         <div className="grid gap-4 sm:grid-cols-2">
           <NumberField form={form} name="maxMessages" label={t('widgets.field.maxMessages')} />
           <NumberField
@@ -323,6 +603,7 @@ function ChatFields({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.E
         <div className="grid gap-2 sm:grid-cols-2">
           <CheckboxField form={form} name="hideCommands" label={t('widgets.field.hideCommands')} />
           <CheckboxField form={form} name="showBadges" label={t('widgets.field.showBadges')} />
+          <CheckboxField form={form} name="showPlatform" label={t('widgets.field.showPlatform')} />
           <CheckboxField form={form} name="showEmotes" label={t('widgets.field.showEmotes')} />
           <CheckboxField form={form} name="newestFirst" label={t('widgets.field.newestFirst')} />
           <CheckboxField

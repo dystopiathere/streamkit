@@ -64,8 +64,10 @@ describe('Виджеты и приём событий (feature)', () => {
       .set(auth())
       .expect(200);
 
-    expect(response.body.config.durationMs).toBe(6000);
-    expect(response.body.config.text.fontSize).toBe(32);
+    // Сценарий на каждый тип события, у каждого — свои дефолты.
+    expect(response.body.config.scenarios.donation.durationMs).toBe(6000);
+    expect(response.body.config.scenarios.donation.text.fontSize).toBe(32);
+    expect(response.body.config.scenarios.follow.titleTemplate).not.toContain('{amount}');
   });
 
   it('мержит частичное обновление конфига, не теряя остальные поля', async () => {
@@ -74,7 +76,12 @@ describe('Виджеты и приём событий (feature)', () => {
     await request(server())
       .patch(`/api/widgets/${widgetId}`)
       .set(auth())
-      .send({ config: { text: { fontSize: 64 } } })
+      .send({ config: { scenarios: { donation: { durationMs: 9000 } } } })
+      .expect(200);
+    await request(server())
+      .patch(`/api/widgets/${widgetId}`)
+      .set(auth())
+      .send({ config: { scenarios: { donation: { text: { fontSize: 64 } } } } })
       .expect(200);
 
     const response = await request(server())
@@ -82,10 +89,13 @@ describe('Виджеты и приём событий (feature)', () => {
       .set(auth())
       .expect(200);
 
-    expect(response.body.config.text.fontSize).toBe(64);
-    // Остальные поля стиля не должны обнулиться.
-    expect(response.body.config.text.color).toBe('#FFFFFF');
-    expect(response.body.config.durationMs).toBe(6000);
+    const donation = response.body.config.scenarios.donation;
+    expect(donation.text.fontSize).toBe(64);
+    // Остальное не обнулилось: ни соседние поля стиля, ни прежняя правка
+    // сценария, ни соседние сценарии.
+    expect(donation.text.color).toBe('#FFFFFF');
+    expect(donation.durationMs).toBe(9000);
+    expect(response.body.config.scenarios.follow.durationMs).toBe(6000);
   });
 
   it('создаёт виджет каждого типа с его собственными дефолтами', async () => {
@@ -150,7 +160,7 @@ describe('Виджеты и приём событий (feature)', () => {
   });
 
   it('раскладка события не видит виджеты других типов', async () => {
-    // Иначе shouldShowAlert прочитал бы у конфига цели поле eventTypes,
+    // Иначе shouldShowAlert прочитал бы у конфига цели поле scenarios,
     // которого там нет, и первый же донат уронил бы обработчик шины —
     // а вместе с ним доставку алертов ВСЕМ виджетам этого стримера.
     const alerts = await createWidget();
@@ -165,7 +175,21 @@ describe('Виджеты и приём событий (feature)', () => {
 
     expect(targets).toHaveLength(1);
     expect(targets[0]?.widgetId).toBe(alerts);
-    expect(targets[0]?.config.eventTypes).toBeDefined();
+    expect(targets[0]?.config.scenarios.donation).toBeDefined();
+  });
+
+  it('тестовое событие — по сценарию: у рейда число зрителей, у доната сумма', async () => {
+    const raid = await request(server())
+      .post('/api/events/test')
+      .set(auth())
+      .send({ type: 'raid' })
+      .expect(201);
+    expect(raid.body).toMatchObject({ type: 'raid', isTest: true, amount: null, count: 42 });
+
+    // Без тела — донат, как с кнопки на странице виджетов.
+    const donation = await request(server()).post('/api/events/test').set(auth()).expect(201);
+    expect(donation.body).toMatchObject({ type: 'donation', count: null });
+    expect(donation.body.amount).not.toBeNull();
   });
 
   it('не отдаёт чужой виджет', async () => {

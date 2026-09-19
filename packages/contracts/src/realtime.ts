@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { channelStatsSchema } from './analytics.js';
+import { chatChannelRefSchema } from './chat.js';
 import { alertEventSchema } from './events.js';
 import { widgetConfigSchema, widgetStateSchema } from './widgets.js';
 
@@ -37,6 +38,11 @@ export const SOCKET_EVENTS = {
    * клиент его не передаёт — иначе любой смог бы подписаться на любой чат.
    */
   streamWatch: 'stream:watch',
+  /**
+   * Сервер → overlay чата: канал сменился — стример подключил другой аккаунт
+   * Twitch или отключил площадку. Строки прежнего канала оверлей убирает.
+   */
+  chatChannel: 'chat:channel',
 } as const;
 
 export type SocketEventName = (typeof SOCKET_EVENTS)[keyof typeof SOCKET_EVENTS];
@@ -49,8 +55,7 @@ export function overlayRoom(tokenId: string): string {
 /**
  * Комната всех сокетов одного виджета — по ней рассылается смена настроек.
  *
- * Живёт в контрактах, а не в шлюзе: по этой же комнате шлюз переселяет
- * оверлеи чата, когда стример поменял канал в настройках.
+ * Живёт в контрактах, а не в шлюзе: комнату знают и шлюз, и тесты.
  */
 export function widgetRoom(widgetId: string): string {
   return `widget:${widgetId}`;
@@ -99,6 +104,10 @@ export const configUpdatedMessageSchema = z
   })
   .and(widgetConfigSchema);
 export type ConfigUpdatedMessage = z.infer<typeof configUpdatedMessageSchema>;
+
+/** Каналы чата оверлея сменились: подключили или отключили площадку. */
+export const chatChannelMessageSchema = z.object({ channels: z.array(chatChannelRefSchema) });
+export type ChatChannelMessage = z.infer<typeof chatChannelMessageSchema>;
 
 /** Пересчитанное сервером состояние виджета. */
 export const widgetStateMessageSchema = z.object({
@@ -149,6 +158,11 @@ export const overlayBootstrapSchema = z
     isEnabled: z.boolean(),
     /** Состояние считается сервером; у alert-виджета его нет. */
     state: widgetStateSchema.nullable(),
+    /**
+     * Каналы чата — у виджета чата: подключённые площадки владельца. Пусто —
+     * ни одной не подключено, и показывать нечего.
+     */
+    chatChannels: z.array(chatChannelRefSchema).default([]),
   })
   .and(widgetConfigSchema);
 export type OverlayBootstrap = z.infer<typeof overlayBootstrapSchema>;

@@ -93,6 +93,43 @@ export class AppConfig {
     return this.value('YOUTUBE_DAILY_QUOTA');
   }
 
+  get youtubeChatDailyQuota(): number {
+    return this.value('YOUTUBE_CHAT_DAILY_QUOTA');
+  }
+
+  get youtubeChatStreamCost(): number {
+    return this.value('YOUTUBE_CHAT_STREAM_COST');
+  }
+
+  /**
+   * Адреса Google без хвостового слэша. По умолчанию — боевые; переопределяются
+   * только в тестах. Через `get`: переменные необязательны.
+   */
+  get youtubeEndpoints(): {
+    auth: string;
+    token: string;
+    api: string;
+    chatGrpc: string;
+    chatGrpcInsecure: boolean;
+  } {
+    const trim = (value: string) => value.replace(/\/+$/, '');
+    const insecure = this.config.get<string>('YOUTUBE_CHAT_GRPC_INSECURE') === 'true';
+    if (insecure && this.isProduction) {
+      throw new Error('YOUTUBE_CHAT_GRPC_INSECURE недопустим в production');
+    }
+    return {
+      auth:
+        this.config.get<string>('YOUTUBE_AUTH_URL') ??
+        'https://accounts.google.com/o/oauth2/v2/auth',
+      token: this.config.get<string>('YOUTUBE_TOKEN_URL') ?? 'https://oauth2.googleapis.com/token',
+      api: trim(
+        this.config.get<string>('YOUTUBE_API_URL') ?? 'https://www.googleapis.com/youtube/v3',
+      ),
+      chatGrpc: this.config.get<string>('YOUTUBE_CHAT_GRPC_URL') ?? 'youtube.googleapis.com:443',
+      chatGrpcInsecure: insecure,
+    };
+  }
+
   /**
    * Адрес IRC-шлюза Twitch. undefined — берём стандартный.
    *
@@ -101,6 +138,19 @@ export class AppConfig {
    */
   get twitchIrcUrl(): string | undefined {
     return this.config.get<string>('TWITCH_IRC_URL');
+  }
+
+  /**
+   * Адреса Twitch без хвостового слэша. По умолчанию — боевые; переопределяются
+   * только в тестах. Через `get`: переменные необязательны.
+   */
+  get twitchEndpoints(): { auth: string; api: string; eventsub: string } {
+    const trim = (value: string) => value.replace(/\/+$/, '');
+    return {
+      auth: trim(this.config.get<string>('TWITCH_AUTH_URL') ?? 'https://id.twitch.tv/oauth2'),
+      api: trim(this.config.get<string>('TWITCH_API_URL') ?? 'https://api.twitch.tv/helix'),
+      eventsub: this.config.get<string>('TWITCH_EVENTSUB_URL') ?? 'wss://eventsub.wss.twitch.tv/ws',
+    };
   }
 
   /**

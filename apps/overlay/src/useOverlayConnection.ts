@@ -1,4 +1,5 @@
 import {
+  type ChatChannelRef,
   type AlertEvent,
   type ChatMessage,
   chatMessageSchema,
@@ -7,6 +8,7 @@ import {
   SOCKET_EVENTS,
   type WidgetState,
   alertEventSchema,
+  chatChannelMessageSchema,
   configUpdatedMessageSchema,
   overlayBootstrapSchema,
   widgetStateMessageSchema,
@@ -26,6 +28,8 @@ export interface OverlayConnectionHandlers {
   onState: (state: WidgetState) => void;
   /** Новое сообщение чата. Приходит потоком: состояния у чата нет. */
   onChat: (message: ChatMessage) => void;
+  /** Канал чата сменился: стример подключил другой Twitch или отключил площадку. */
+  onChatChannels: (channels: ChatChannelRef[]) => void;
 }
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
@@ -141,6 +145,11 @@ export function useOverlayConnection(
       if (parsed.success) {
         handlersRef.current.onChat(parsed.data);
       }
+    });
+
+    socket.on(SOCKET_EVENTS.chatChannel, (payload: unknown) => {
+      const parsed = chatChannelMessageSchema.safeParse(payload);
+      if (parsed.success) handlersRef.current.onChatChannels(parsed.data.channels);
     });
 
     socket.on(SOCKET_EVENTS.alert, (payload: unknown) => {

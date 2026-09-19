@@ -1,4 +1,9 @@
-import type { AlertEvent, ChatMessage, StreamChat } from '@streamkit/contracts';
+import {
+  type AlertEvent,
+  type ChatMessage,
+  chatChannelKey,
+  type StreamChat,
+} from '@streamkit/contracts';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,9 +35,9 @@ export function StreamView({ compact = false }: { compact?: boolean }): React.JS
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [liveEvents, setLiveEvents] = useState<AlertEvent[]>([]);
-  // undefined — сервер ещё не ответил на подписку, берём канал из сводки.
-  const [chat, setChat] = useState<StreamChat | null | undefined>(undefined);
-  const chatRef = useRef<StreamChat | null | undefined>(undefined);
+  // undefined — сервер ещё не ответил на подписку, берём каналы из сводки.
+  const [chats, setChats] = useState<StreamChat[] | undefined>(undefined);
+  const chatKeysRef = useRef<string | undefined>(undefined);
 
   useStreamSocket({
     onChat: (message) => setMessages((current) => [...current, message].slice(-CHAT_BUFFER)),
@@ -42,12 +47,16 @@ export function StreamView({ compact = false }: { compact?: boolean }): React.JS
     },
     onStats: (channelId, stats) => applyChannelStats(queryClient, channelId, stats),
     onWatch: (next) => {
-      // Канал сменился (подключили Twitch) — строки прежнего канала не его.
-      if (chatRef.current !== undefined && chatRef.current?.channel !== next?.channel) {
-        setMessages([]);
+      // Каналы сменились (подключили или отключили площадку) — строки
+      // канала, которого больше нет, убираем. Состояние чтения меняется
+      // каждое напоминание, а ленту трогаем только при смене состава.
+      const keys = next.map((chat) => chatChannelKey(chat));
+      if (chatKeysRef.current !== undefined && chatKeysRef.current !== keys.join(' ')) {
+        const kept = new Set(keys);
+        setMessages((current) => current.filter((message) => kept.has(chatChannelKey(message))));
       }
-      chatRef.current = next;
-      setChat(next);
+      chatKeysRef.current = keys.join(' ');
+      setChats(next);
     },
   });
 
@@ -86,7 +95,7 @@ export function StreamView({ compact = false }: { compact?: boolean }): React.JS
         )}
       >
         <ChatPanel
-          chat={chat === undefined ? overview.data.chat : chat}
+          chats={chats ?? overview.data.chats}
           messages={messages}
           className={compact ? 'h-[55vh] min-h-72' : 'h-[65vh] min-h-96'}
         />

@@ -81,13 +81,6 @@ export function normalizeTokens(raw: RawTokenResponse): OAuthTokens {
 }
 
 /**
- * Число из ответа площадки.
- *
- * И Twitch, и YouTube отдают счётчики строками, а YouTube ещё и опускает поле
- * целиком, когда стример скрыл число подписчиков. Важно отличать «скрыто» от
- * нуля: ноль на графике выглядит как обвал, которого не было.
- */
-/**
  * Метка времени площадки → ISO с миллисекундами, как у остальных дат контракта.
  * Непонятное значение — null: время стрима лучше не показать, чем показать
  * «1970-й».
@@ -98,6 +91,13 @@ export function optionalInstant(value: unknown): string | null {
   return Number.isFinite(time) ? new Date(time).toISOString() : null;
 }
 
+/**
+ * Число из ответа площадки.
+ *
+ * И Twitch, и YouTube отдают счётчики строками, а YouTube ещё и опускает поле
+ * целиком, когда стример скрыл число подписчиков. Важно отличать «скрыто» от
+ * нуля: ноль на графике выглядит как обвал, которого не было.
+ */
 export function optionalCount(value: unknown): number | null {
   if (value === null || value === undefined) return null;
   const parsed = Number(value);

@@ -1,6 +1,6 @@
 # StreamKit Terms of Service
 
-Version No. 5 of 19.09.2026
+Version No. 7 of 19.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/terms?lang=ru); if the two
@@ -26,8 +26,10 @@ processing of the user's viewers' and guests' data is described in section 13.
 
 2.1. The Service provides tools for streaming:
 
-- a widget builder for streaming software: donation alerts, donation goal,
-  timer, top donors, Twitch chat, private room guests;
+- a widget builder for streaming software: alerts for donations and channel
+  events (follows, subscriptions, Bits, raids, Channel Points rewards), donation
+  goal, timer, top donors, chat of the connected Twitch and YouTube channels in
+  one feed, private room guests;
 - public links for showing widgets in streaming software (for example, OBS);
 - receiving events from external services connected by the user;
 - channel analytics on connected platforms (Twitch, YouTube);
@@ -42,6 +44,12 @@ own, and are governed by those services' own terms.
 
 2.3. The core features of the Service are free of charge. Only the Pro plan is
 paid.
+
+2.4. To work with YouTube, the Service uses YouTube API Services. By connecting a
+YouTube channel to the Service, the user agrees to the YouTube Terms of Service
+(https://www.youtube.com/t/terms). YouTube chat is available while a stream is
+live and is limited by the daily quota Google allocates to the Service for all
+users: once it is used up, YouTube chat resumes after Google resets the quota.
 
 ## 3. Sign-up and account
 
@@ -174,12 +182,13 @@ effect for as long as the user's account exists.
 
 13.2. The personal data covered:
 
-- event participants from services connected by the user (donations,
-  subscriptions, raids and other alerts): name or nickname, message text, amount
-  and currency, date and time;
-- Twitch chat viewers on the channel specified by the user in the chat widget
-  and on the Twitch channel the user has connected to the Service: username and
-  message text;
+- event participants from services connected by the user (donations, follows,
+  subscriptions, gifted subscriptions, Bits, raids, Channel Points rewards and
+  other alerts): name or nickname, message text, amount and currency or a
+  quantity, date and time;
+- Twitch and YouTube chat viewers on the channels the user has connected to the
+  Service: username or name, for YouTube the author's channel ID, and message
+  text;
 - guests of the user's private rooms: the name entered before joining, image and
   voice.
 

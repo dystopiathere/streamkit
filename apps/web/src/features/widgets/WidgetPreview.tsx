@@ -1,5 +1,7 @@
 import type {
-  AlertWidgetConfig,
+  AlertEvent,
+  AlertEventType,
+  AlertScenarioConfig,
   ChatMessage,
   ChatWidgetConfig,
   GoalWidgetConfig,
@@ -9,7 +11,7 @@ import type {
   WidgetState,
   WidgetType,
 } from '@streamkit/contracts';
-import { defaultWidgetConfig, type Language } from '@streamkit/contracts';
+import { defaultAlertWidgetConfig, defaultWidgetConfig, type Language } from '@streamkit/contracts';
 import {
   AlertAnimationStyles,
   AlertCard,
@@ -36,10 +38,13 @@ export function WidgetPreview({
   type,
   config,
   state,
+  alertScenario = 'donation',
 }: {
   type: WidgetType;
   config: Record<string, unknown>;
   state: WidgetState | null;
+  /** Какой сценарий оповещений показать — тот, что открыт в форме. */
+  alertScenario?: AlertEventType;
 }): React.JSX.Element {
   return (
     // Клетчатый фон вместо сплошного: у оверлея прозрачный фон, и на
@@ -53,7 +58,7 @@ export function WidgetPreview({
         backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
       }}
     >
-      <Surface type={type} config={config} state={state} />
+      <Surface type={type} config={config} state={state} alertScenario={alertScenario} />
     </div>
   );
 }
@@ -80,10 +85,12 @@ function Surface({
   type,
   config: raw,
   state,
+  alertScenario,
 }: {
   type: WidgetType;
   config: Record<string, unknown>;
   state: WidgetState | null;
+  alertScenario: AlertEventType;
 }): React.JSX.Element | null {
   const config = withDefaults(type, raw);
   // Примеры — на языке дашборда: русский «Зритель» в английском интерфейсе
@@ -91,17 +98,21 @@ function Surface({
   const sample = SAMPLES[currentLanguage()];
 
   switch (type) {
-    case 'alerts':
+    case 'alerts': {
+      // Сценарий из формы поверх своих дефолтов — по той же причине, что и весь
+      // конфиг выше: в переходном кадре формы его может ещё не быть.
+      const scenarios = (config.scenarios ?? {}) as Partial<Record<AlertEventType, object>>;
+      const scenario = {
+        ...DEFAULT_SCENARIOS[alertScenario],
+        ...scenarios[alertScenario],
+      } as AlertScenarioConfig;
       return (
         <>
           <AlertAnimationStyles />
-          <AlertCard
-            event={sample.event}
-            config={config as unknown as AlertWidgetConfig}
-            animate={false}
-          />
+          <AlertCard event={sample.events[alertScenario]} config={scenario} animate={false} />
         </>
       );
+    }
 
     case 'goal': {
       const goal = config as unknown as GoalWidgetConfig;
@@ -185,11 +196,13 @@ function Surface({
   }
 }
 
+const DEFAULT_SCENARIOS = defaultAlertWidgetConfig().scenarios;
+
 /** Тексты примеров. Имена и реплики выдуманы. */
 const SAMPLE_TEXT: Record<
   Language,
   {
-    event: { username: string; message: string };
+    event: { username: string; message: string; reward: string };
     guests: [string, string, string];
     donors: string[];
     chat: [string, string, string];
@@ -197,14 +210,22 @@ const SAMPLE_TEXT: Record<
   }
 > = {
   ru: {
-    event: { username: 'Зритель', message: 'Спасибо за стрим! Держи на кофе.' },
+    event: {
+      username: 'Зритель',
+      message: 'Спасибо за стрим! Держи на кофе.',
+      reward: 'Выбрать игру',
+    },
     guests: ['Гость подкаста', 'Соведущий', 'Эксперт'],
     donors: ['Аня', 'Кирилл', 'Аноним', 'Даша', 'Пётр', 'Лена', 'Максим', 'Соня', 'Игорь', 'Вика'],
     chatNames: ['Зритель', 'Модератор', 'Гость'],
     chat: ['привет, как настройка идёт?', 'сейчас проверим ', 'шрифт читается, обводки хватает'],
   },
   en: {
-    event: { username: 'Viewer', message: 'Thanks for the stream! Coffee is on me.' },
+    event: {
+      username: 'Viewer',
+      message: 'Thanks for the stream! Coffee is on me.',
+      reward: 'Pick the game',
+    },
     guests: ['Podcast guest', 'Co-host', 'Expert'],
     donors: [
       'Anna',
@@ -250,12 +271,8 @@ const SAMPLES = {
 
 function buildSamples(text: (typeof SAMPLE_TEXT)[Language]) {
   return {
-    /** Событие-пустышка: показывает, как алерт выглядит в эфире. */
-    event: {
-      ...text.event,
-      amount: { amountMinor: 50_000, currency: 'RUB' as const },
-      type: 'donation' as const,
-    },
+    /** События-пустышки по сценариям: сумма и количество — там, где они бывают. */
+    events: sampleEvents(text.event),
     guests: text.guests.map((name, index) => {
       const hue = GUEST_HUES[index] ?? 0;
       return {
@@ -317,16 +334,51 @@ function sampleChat(
       ],
       sentAt: '2026-09-12T20:00:05.000Z',
     },
+    // Третья строка — с YouTube: предпросмотр показывает мультичат так, как
+    // его увидят зрители, со значками площадок.
     {
       id: 'sample-3',
-      platform: 'twitch',
-      channel: 'example',
-      login: 'gost',
+      platform: 'youtube',
+      channel: 'UCsampleChannel00000000a',
+      login: 'UCsampleViewer000000000a',
       username: guest,
       color: null,
-      badges: [],
+      badges: ['member'],
       parts: [{ kind: 'text', value: third }],
       sentAt: '2026-09-12T20:00:09.000Z',
     },
   ];
+}
+
+type SampleEvent = Pick<AlertEvent, 'type' | 'username' | 'message' | 'amount' | 'count'>;
+
+function sampleEvents(text: {
+  username: string;
+  message: string;
+  reward: string;
+}): Record<AlertEventType, SampleEvent> {
+  const event = (
+    type: AlertEventType,
+    extra: Partial<Pick<SampleEvent, 'message' | 'amount' | 'count'>> = {},
+  ): SampleEvent => ({
+    type,
+    username: text.username,
+    message: '',
+    amount: null,
+    count: null,
+    ...extra,
+  });
+  return {
+    donation: event('donation', {
+      message: text.message,
+      amount: { amountMinor: 50_000, currency: 'RUB' },
+    }),
+    follow: event('follow'),
+    subscription: event('subscription'),
+    gift: event('gift', { count: 5 }),
+    resubscription: event('resubscription', { message: text.message, count: 12 }),
+    cheer: event('cheer', { message: text.message, count: 500 }),
+    raid: event('raid', { count: 42 }),
+    reward: event('reward', { message: text.reward }),
+  };
 }

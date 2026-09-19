@@ -30,6 +30,7 @@ describe('Чат Twitch (feature)', () => {
   let connections: ServerSocket[] = [];
 
   let accessToken: string;
+  let userId: string;
 
   beforeAll(async () => {
     server = new WebSocketServer({ port: 0, host: '127.0.0.1' });
@@ -73,15 +74,42 @@ describe('Чат Twitch (feature)', () => {
       .send(registrationPayload())
       .expect(201);
     accessToken = registration.body.accessToken as string;
+    userId = registration.body.user.id as string;
   });
 
-  async function createChatWidget(channel: string): Promise<string> {
-    const response = await request(harness.app.getHttpServer())
+  /**
+   * Виджет чата со ссылкой OBS, открытой в сцене: канал нужен воркеру, только
+   * пока оверлей на связи. `online: false` — ссылка есть, сцена закрыта.
+   * Канал — подключённый Twitch владельца: вписать его в виджет нельзя.
+   */
+  async function createChatWidget(
+    channel: string,
+    { online = true }: { online?: boolean } = {},
+  ): Promise<{ widgetId: string; tokenId: string }> {
+    const auth = { Authorization: `Bearer ${accessToken}` };
+    await harness.prisma.channel.create({
+      data: {
+        userId,
+        platform: 'TWITCH',
+        externalId: 'ext-1',
+        login: channel,
+        displayName: channel,
+      },
+    });
+    const widget = await request(harness.app.getHttpServer())
       .post('/api/widgets')
-      .set({ Authorization: `Bearer ${accessToken}` })
-      .send({ name: 'Чат', type: 'chat', config: { channel } })
+      .set(auth)
+      .send({ name: 'Чат', type: 'chat', config: {} })
       .expect(201);
-    return response.body.id as string;
+    const widgetId = widget.body.id as string;
+    const token = await request(harness.app.getHttpServer())
+      .post(`/api/widgets/${widgetId}/tokens`)
+      .set(auth)
+      .send({})
+      .expect(201);
+    const tokenId = token.body.id as string;
+    if (online) await harness.app.get(PresenceService).markOverlays([tokenId]);
+    return { widgetId, tokenId };
   }
 
   it('заходит в канал из настроек виджета и доносит сообщение до шины', async () => {
@@ -118,7 +146,7 @@ describe('Чат Twitch (feature)', () => {
   });
 
   it('выходит из канала, когда виджет выключили', async () => {
-    const widgetId = await createChatWidget('shroud');
+    const { widgetId } = await createChatWidget('shroud');
     await chat.tick();
     await waitFor(() => received.includes('JOIN #shroud'));
 
@@ -134,28 +162,51 @@ describe('Чат Twitch (feature)', () => {
     await waitFor(() => received.includes('PART #shroud'));
   });
 
+  it('не читает канал виджета, пока его оверлей не открыт в OBS, и отпускает, когда закрыли', async () => {
+    const { tokenId } = await createChatWidget('shroud', { online: false });
+    await chat.tick();
+    await waitFor(() => connections.length > 0);
+    // Виджет настроен, но сцену никто не открывал: читать чат незачем.
+    expect(received.some((line) => line.startsWith('JOIN'))).toBe(false);
+
+    const presence = harness.app.get(PresenceService);
+    await presence.markOverlays([tokenId]);
+    await chat.tick();
+    await waitFor(() => received.includes('JOIN #shroud'));
+
+    // OBS закрыли: сокет отключился, отметка снята.
+    await presence.dropOverlay(tokenId);
+    await chat.tick();
+    await waitFor(() => received.includes('PART #shroud'));
+  });
+
   it('заходит в канал открытого окна эфира и выходит, когда отметка истекла', async () => {
     // Окно эфира отмечает канал в Redis; воркер берёт его в состав вместе с
     // каналами виджетов. Виджета чата здесь нет вовсе.
     const presence = harness.app.get(PresenceService);
-    await presence.watchChat('streamer_login');
+    await presence.watchChats([{ platform: 'twitch', channel: 'streamer_login' }]);
 
     await chat.tick();
     await waitFor(() => received.includes('JOIN #streamer_login'));
 
     // Окно закрыли: отметку никто не продлил, срок вышел.
-    await harness.redis.zadd('streamkit:presence:chat-watch', Date.now() - 1, 'streamer_login');
+    await harness.redis.zadd(
+      'streamkit:presence:chat-watch',
+      Date.now() - 1,
+      'twitch:streamer_login',
+    );
     await chat.tick();
     await waitFor(() => received.includes('PART #streamer_login'));
   });
 
-  it('не подключается, пока канал не вписан', async () => {
-    await createChatWidget('');
-
+  it('отключённый Twitch отпускает канал: читать чужой чат виджету не на чем', async () => {
+    await createChatWidget('shroud');
     await chat.tick();
-    await waitFor(() => connections.length > 0);
-    // Соединение есть — оно одно на все каналы, — но заходить некуда.
-    expect(received.some((line) => line.startsWith('JOIN'))).toBe(false);
+    await waitFor(() => received.includes('JOIN #shroud'));
+
+    await harness.prisma.channel.deleteMany({ where: { userId } });
+    await chat.tick();
+    await waitFor(() => received.includes('PART #shroud'));
   });
 
   it('соединение держит только владелец аренды', async () => {
@@ -166,7 +217,7 @@ describe('Чат Twitch (feature)', () => {
     // Имитируем вторую реплику воркера: она забрала ключ владения себе.
     // Первая обязана заметить это следующим тактом и закрыть соединение, иначе
     // зрители увидят каждое сообщение дважды.
-    await harness.redis.set('streamkit:owner:chat:twitch', 'чужая-реплика');
+    await harness.redis.set('streamkit:owner:chat', 'чужая-реплика');
 
     await chat.tick();
     await waitFor(() => connections.every((socket) => socket.readyState !== socket.OPEN));

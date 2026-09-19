@@ -1,7 +1,11 @@
 import { Injectable, Logger, Module } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
+import { HttpClient } from '../../common/http/http-client.service';
+import { QuotaService } from '../analytics/quota.service';
+import { IntegrationsModule } from '../integrations/integrations.module';
 import { CHAT_TICK_MS, ChatManager } from './chat-manager.service';
 import { TwitchChatSource } from './twitch-chat.source';
+import { YouTubeChatSource } from './youtube-chat.source';
 
 /**
  * Такт чата: подтвердить владение соединением и свести состав каналов.
@@ -41,7 +45,17 @@ export class ChatScheduler {
  * API может быть несколько.
  */
 @Module({
-  providers: [TwitchChatSource, ChatManager, ChatScheduler],
+  // Токены YouTube — из интеграций: чат читается токеном владельца канала.
+  // Счётчик квоты — тот же, что у метрик: лимит Google общий на проект.
+  imports: [IntegrationsModule],
+  providers: [
+    TwitchChatSource,
+    YouTubeChatSource,
+    HttpClient,
+    QuotaService,
+    ChatManager,
+    ChatScheduler,
+  ],
   exports: [ChatManager],
 })
 export class ChatModule {}

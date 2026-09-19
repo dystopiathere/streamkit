@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { DonationServiceView, WebhookSourceView } from '@streamkit/contracts';
 import {
@@ -12,6 +12,7 @@ import {
   StatusPill,
   usePageTitle,
 } from '@streamkit/app-kit';
+import { useChannels } from '@/features/analytics/queries';
 import {
   useConnectDonationService,
   useDisconnectDonationService,
@@ -54,12 +55,47 @@ export function SourcesPage(): React.JSX.Element {
         </p>
       ) : null}
 
+      <TwitchEventsCard />
+
       {sources.data?.services.map((service) => (
         <ServiceCard key={service.service} service={service} />
       ))}
 
       {sources.data ? <WebhookCard webhook={sources.data.webhook} /> : null}
     </div>
+  );
+}
+
+/**
+ * События Twitch — фолловеры, подписки, биты, рейды, баллы.
+ *
+ * Отдельной кнопки подключения у них нет: они идут вместе с Twitch из
+ * «Аналитики», тем же входом. Карточка говорит, откуда они берутся, — иначе
+ * стример искал бы их среди донат-сервисов.
+ */
+function TwitchEventsCard(): React.JSX.Element {
+  const { t } = useTranslation();
+  const channels = useChannels();
+  const twitch = channels.data?.find((channel) => channel.platform === 'twitch');
+  const working = twitch && twitch.syncState !== 'auth-expired' && !twitch.needsReconnect;
+
+  return (
+    <Card className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-medium">{t('sources.twitch.title')}</h2>
+        {channels.data ? (
+          <StatusPill tone={working ? 'success' : 'neutral'}>
+            {working ? t('sources.twitch.on') : t('sources.twitch.off')}
+          </StatusPill>
+        ) : null}
+      </div>
+      <p className="text-sm text-muted">{t('sources.twitch.lead')}</p>
+      {channels.data && !working ? (
+        <Link to="/analytics" className="text-sm underline">
+          {twitch ? t('sources.twitch.fix') : t('sources.twitch.connect')}
+        </Link>
+      ) : null}
+    </Card>
   );
 }
 

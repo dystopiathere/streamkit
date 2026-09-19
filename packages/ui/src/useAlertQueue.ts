@@ -18,7 +18,7 @@ export interface QueuedAlert {
  * Очередь не ограничена по длине специально: потерять донат на стриме хуже, чем
  * показать его с задержкой. Рейд из сотни событий — забота фильтров на бэкенде.
  */
-export function useAlertQueue(config: Pick<AlertWidgetConfig, 'durationMs' | 'gapMs'>): {
+export function useAlertQueue(config: Pick<AlertWidgetConfig, 'gapMs' | 'scenarios'>): {
   current: QueuedAlert | null;
   enqueue: (event: AlertEvent) => void;
   pending: number;
@@ -74,6 +74,9 @@ export function useAlertQueue(config: Pick<AlertWidgetConfig, 'durationMs' | 'ga
     isBusy.current = true;
     setCurrent({ event: next, isLeaving: false });
 
+    // Время на экране — у сценария типа события: фолловера показывают коротко,
+    // крупный донат — дольше.
+
     schedule(() => {
       setCurrent((active) => (active ? { ...active, isLeaving: true } : null));
 
@@ -81,7 +84,7 @@ export function useAlertQueue(config: Pick<AlertWidgetConfig, 'durationMs' | 'ga
         setCurrent(null);
         schedule(() => showNextRef.current(), timings.current.gapMs);
       }, ALERT_EXIT_DURATION_MS);
-    }, timings.current.durationMs);
+    }, timings.current.scenarios[next.type].durationMs);
   }, [schedule]);
 
   useEffect(() => {

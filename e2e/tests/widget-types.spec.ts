@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { connectYouTube } from './platforms';
 
 /**
  * Виджеты, отличные от алертов, доходят до браузер-сорса.
@@ -66,6 +67,16 @@ test('виджет чата настраивается, а оверлей по �
   // рендерер чата в настоящем браузере и приём токена оверлея виджетом чата.
   await registerStreamer(page, 'e2e-chat');
 
+  // Без подключённой площадки виджету нечего показать, а вписать чужой канал
+  // больше негде — создание отказывает с объяснением.
+  await page.getByPlaceholder('Название виджета').fill('Чат в кадре');
+  await page.getByLabel('Тип виджета').selectOption('chat');
+  await page.getByRole('button', { name: 'Новый виджет' }).click();
+  await expect(page.getByText(/сначала подключите Twitch или YouTube/)).toBeVisible();
+
+  // Хватает одной площадки — здесь только YouTube.
+  const youtube = await connectYouTube(page);
+  await page.getByRole('link', { name: 'Виджеты', exact: true }).click();
   await page.getByPlaceholder('Название виджета').fill('Чат в кадре');
   await page.getByLabel('Тип виджета').selectOption('chat');
   await page.getByRole('button', { name: 'Новый виджет' }).click();
@@ -77,12 +88,11 @@ test('виджет чата настраивается, а оверлей по �
   await expect(page.getByTestId('chat-box')).toBeVisible();
   await expect(page.getByTestId('chat-box')).toContainText('Модератор');
 
-  await page.getByLabel('Канал Twitch').fill('Shroud');
-  await page.getByRole('button', { name: 'Сохранить' }).first().click();
-
-  // Логин нормализуется к нижнему регистру: иначе ключ комнаты доставки
-  // разошёлся бы с тегом канала в сообщении IRC.
-  await expect(page.getByLabel('Канал Twitch')).toHaveValue('shroud');
+  // Поля канала нет: редактор называет подключённые каналы, и выбрать можно
+  // только, чьи чаты показывать. Неподключённая площадка — ссылкой в «Аналитику».
+  await expect(page.getByLabel('Канал Twitch')).toHaveCount(0);
+  await expect(page.getByLabel(`Чат YouTube: ${youtube.title}`)).toBeChecked();
+  await expect(page.getByText('Twitch не подключён.')).toBeVisible();
 
   await page.getByRole('button', { name: 'Создать ссылку' }).click();
   const field = page.locator('input[readonly]').first();

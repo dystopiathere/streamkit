@@ -3,11 +3,18 @@ import { JwtService } from '@nestjs/jwt';
 import {
   ConnectedSocket,
   type OnGatewayConnection,
+  type OnGatewayDisconnect,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { SOCKET_EVENTS, type StreamWatchAck, chatRoom, dashboardRoom } from '@streamkit/contracts';
+import {
+  type ChatChannelRef,
+  SOCKET_EVENTS,
+  type StreamWatchAck,
+  chatRoom,
+  dashboardRoom,
+} from '@streamkit/contracts';
 import type { Server, Socket } from 'socket.io';
 import type { Redis } from 'ioredis';
 import { verifyAccessToken } from '../../common/auth/access-token';
@@ -16,6 +23,13 @@ import { PresenceService } from '../../common/redis/presence.service';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { StreamService } from '../stream/stream.service';
 
+/** Что шлюз держит на сокете: пользователь, когда (и если) токен проверен. */
+interface SocketData {
+  authenticated?: Promise<string | null>;
+  /** Разрыв в момент истечения токена — см. `handleConnection`. */
+  expiry?: NodeJS.Timeout;
+}
+
 /**
  * Живая лента событий в личном кабинете.
  *
@@ -23,13 +37,10 @@ import { StreamService } from '../stream/stream.service';
  * пользователя содержит его донаты с именами и суммами, и публичной ссылки на
  * неё существовать не должно.
  */
-/** Что шлюз держит на сокете: пользователь, когда (и если) токен проверен. */
-interface SocketData {
-  authenticated?: Promise<string | null>;
-}
-
 @WebSocketGateway({ namespace: '/dashboard', cors: { origin: true, credentials: true } })
-export class DashboardGateway implements OnGatewayConnection, OnModuleInit, OnModuleDestroy {
+export class DashboardGateway
+  implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit, OnModuleDestroy
+{
   private readonly logger = new Logger(DashboardGateway.name);
   private unsubscribe?: () => Promise<void>;
 
@@ -71,6 +82,15 @@ export class DashboardGateway implements OnGatewayConnection, OnModuleInit, OnMo
         // Админский токен ленту дашборда не открывает, заблокированный — тоже.
         const payload = await verifyAccessToken(this.jwt, this.redis, token, 'dashboard');
         await client.join(dashboardRoom(payload.sub));
+        // Токен проверяется при подключении, а сокет живёт часами — окно эфира
+        // открыто весь стрим. Без разрыва соединение переживало бы выход,
+        // смену пароля и отзыв сессии: утёкший на пятнадцать минут токен давал
+        // бы ленту донатов с именами навсегда. Клиент обновляет токен и
+        // подключается заново (`connectDashboardSocket` в вебе).
+        if (payload.exp) {
+          data.expiry = setTimeout(() => client.disconnect(true), payload.exp * 1000 - Date.now());
+          data.expiry.unref();
+        }
         return payload.sub;
       } catch {
         client.disconnect(true);
@@ -78,6 +98,10 @@ export class DashboardGateway implements OnGatewayConnection, OnModuleInit, OnMo
       }
     })();
     await data.authenticated;
+  }
+
+  handleDisconnect(client: Socket): void {
+    clearTimeout((client.data as SocketData).expiry);
   }
 
   /**
@@ -88,23 +112,29 @@ export class DashboardGateway implements OnGatewayConnection, OnModuleInit, OnMo
    * вошедший читал бы через нас любой чат. Окно повторяет событие каждые 30
    * секунд: отметка живёт 90, и закрытое окно отпускает чат само, без
    * отдельного «я ушло», которое при обрыве связи никто бы не прислал. Смена
-   * канала (подключили Twitch) подхватывается на следующем повторе.
+   * канала (подключили площадку) подхватывается на следующем повторе.
+   *
+   * Отметку «чат нужен» получают только каналы, которые можно читать: YouTube
+   * с отозванным доступом окно покажет с просьбой переподключить, но воркер
+   * не будет стучаться в него за квоту.
    */
   @SubscribeMessage(SOCKET_EVENTS.streamWatch)
   async watchStream(@ConnectedSocket() client: Socket): Promise<StreamWatchAck> {
     const userId = await (client.data as SocketData).authenticated;
-    if (!userId) return { chat: null };
+    if (!userId) return { chats: [] };
 
-    const chat = await this.stream.chatChannel(userId);
-    const room = chat ? chatRoom(chat.platform, chat.channel) : null;
+    const chats = await this.stream.chatChannels(userId);
+    const rooms = new Set(chats.map((chat) => chatRoom(chat.platform, chat.channel)));
     for (const joined of client.rooms) {
-      if (joined.startsWith('chat:') && joined !== room) await client.leave(joined);
+      if (joined.startsWith('chat:') && !rooms.has(joined)) await client.leave(joined);
     }
-    if (chat && room) {
-      await client.join(room);
-      await this.presence.watchChat(chat.channel);
-    }
-    return { chat };
+    for (const room of rooms) await client.join(room);
+    await this.presence.watchChats(
+      chats
+        .filter((chat) => chat.state !== 'auth')
+        .map(({ platform, channel }) => ({ platform, channel }) as ChatChannelRef),
+    );
+    return { chats };
   }
 
   private async handleBusMessage(message: BusMessage): Promise<void> {

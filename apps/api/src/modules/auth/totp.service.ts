@@ -1,6 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import type { Redis } from 'ioredis';
 import { generateSecret, generateURI, verifySync } from 'otplib';
 import { toDataURL } from 'qrcode';
+import { REDIS_CLIENT } from '../../common/redis/redis.module';
 
 /**
  * Допуск на расхождение часов, в секундах.
@@ -14,6 +16,12 @@ import { toDataURL } from 'qrcode';
 const EPOCH_TOLERANCE_SECONDS = 30;
 
 /**
+ * Сколько помним использованный код. Код действует полторы минуты с допуском
+ * часов — отметка живёт дольше окна его действия.
+ */
+const USED_CODE_TTL_SECONDS = 120;
+
+/**
  * Второй фактор по TOTP (RFC 6238) — совместим с Google Authenticator, Aegis,
  * 1Password и прочими.
  *
@@ -25,17 +33,14 @@ const EPOCH_TOLERANCE_SECONDS = 30;
 export class TotpService {
   private readonly issuer = 'StreamKit';
 
+  constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}
+
   generateSecret(): string {
     return generateSecret();
   }
 
-  /** otpauth://-ссылка для QR-кода. */
-  buildUri(accountEmail: string, secret: string): string {
-    return generateURI({ issuer: this.issuer, label: accountEmail, secret });
-  }
-
   async buildQrDataUrl(accountEmail: string, secret: string): Promise<string> {
-    return toDataURL(this.buildUri(accountEmail, secret));
+    return toDataURL(generateURI({ issuer: this.issuer, label: accountEmail, secret }));
   }
 
   verify(secret: string, code: string): boolean {
@@ -45,5 +50,25 @@ export class TotpService {
       // Битый секрет или мусор вместо кода — это «не подошло», а не авария.
       return false;
     }
+  }
+
+  /**
+   * Код для входа принимается один раз — в дашборд и в админку вместе.
+   *
+   * Иначе подсмотренный за плечом или перехваченный вместе с паролем код
+   * открывал бы вторую сессию, пока не истекло его окно. Проверка и отметка —
+   * одна команда: две параллельные попытки с одним кодом не пройдут обе.
+   *
+   * @returns false — код уже использовали.
+   */
+  async consume(userId: string, code: string): Promise<boolean> {
+    const fresh = await this.redis.set(
+      `auth:totp-used:${userId}:${code}`,
+      '1',
+      'EX',
+      USED_CODE_TTL_SECONDS,
+      'NX',
+    );
+    return fresh === 'OK';
   }
 }

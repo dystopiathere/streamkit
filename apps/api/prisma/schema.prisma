@@ -347,6 +347,8 @@ enum AlertEventType {
   DONATION
   FOLLOW
   SUBSCRIPTION
+  /// Подарочные подписки: автор — даритель, `count` — сколько подарено.
+  GIFT
   RESUBSCRIPTION
   CHEER
   RAID
@@ -366,6 +368,8 @@ model AlertEvent {
   message     String         @db.VarChar(500)
   amountMinor Int?
   currency    String?        @db.VarChar(3)
+  /// Не деньги: биты, зрители рейда, месяцы подписки, число подарков.
+  count       Int?
   isTest      Boolean        @default(false)
   occurredAt  DateTime
   createdAt   DateTime       @default(now())

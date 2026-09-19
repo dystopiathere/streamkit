@@ -1,12 +1,13 @@
 import { expect, test } from '@playwright/test';
 import { Redis } from 'ioredis';
+import { connectTwitch, connectYouTube } from './platforms';
 
 /**
  * Окно эфира в настоящем браузере.
  *
  * Воркера в сквозном прогоне нет, поэтому сообщение чата кладётся в шину
  * напрямую — как в сценарии чата оверлея. Проверяется то, чего не видит
- * интеграционный тест: окно само подписывается на чат своего канала, ссылка
+ * интеграционный тест: окно само подписывается на чаты подключённых каналов, ссылка
  * OBS, открытая в соседней вкладке, отмечается «в OBS», а донат, пришедший,
  * пока окно открыто, появляется в нём без перезагрузки.
  */
@@ -32,21 +33,12 @@ test('окно эфира показывает чат канала, виджет
     await expect(page.getByText(/Чата нет/)).toBeVisible();
   });
 
-  const channel = `e2e_stream_${Date.now()}`;
+  let channel = '';
+  let youtube = { channel: '', title: '' };
 
-  await test.step('виджет чата с каналом и оверлей алертов, открытый «в OBS»', async () => {
-    await page.getByRole('link', { name: 'Виджеты', exact: true }).click();
-    await page.getByPlaceholder('Название виджета').fill('Чат');
-    await page.getByLabel('Тип виджета').selectOption('chat');
-    await page.getByRole('button', { name: 'Новый виджет' }).click();
-    await page.getByRole('link', { name: 'Настроить' }).first().click();
-    await page.getByLabel('Канал Twitch').fill(channel);
-    const saved = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'PATCH' && response.url().includes('/api/widgets/'),
-    );
-    await page.getByRole('button', { name: 'Сохранить' }).first().click();
-    expect((await saved).ok()).toBe(true);
+  await test.step('подключённые Twitch и YouTube и оверлей алертов, открытый «в OBS»', async () => {
+    channel = await connectTwitch(page);
+    youtube = await connectYouTube(page);
 
     await page.getByRole('link', { name: 'Виджеты', exact: true }).click();
     await page.getByPlaceholder('Название виджета').fill('Алерты');
@@ -61,9 +53,11 @@ test('окно эфира показывает чат канала, виджет
     await page.bringToFront();
   });
 
-  await test.step('окно видит канал из виджета и оверлей в OBS', async () => {
+  await test.step('окно видит оба канала с состоянием и оверлей в OBS', async () => {
     await page.getByRole('link', { name: 'Эфир', exact: true }).click();
-    await expect(page.getByText(`twitch.tv/${channel} — канал из виджета чата`)).toBeVisible();
+    await expect(page.getByText(`twitch.tv/${channel} — читаем чат`)).toBeVisible();
+    // Чат YouTube есть только у идущего эфира, а воркера в прогоне нет.
+    await expect(page.getByText(`${youtube.title} — ждём начала эфира`)).toBeVisible();
 
     const widgets = page.getByRole('region', { name: 'Виджеты' });
     await expect(
@@ -71,7 +65,7 @@ test('окно эфира показывает чат канала, виджет
     ).toBeVisible({ timeout: 15_000 });
   });
 
-  await test.step('сообщение чата канала доходит до окна', async () => {
+  await test.step('сообщения обеих площадок доходят до окна одной лентой', async () => {
     const redis = new Redis(process.env.REDIS_URL ?? 'redis://127.0.0.1:6379');
     const chatLog = page.getByRole('log', { name: 'Сообщения чата' });
     try {
@@ -79,6 +73,7 @@ test('окно эфира показывает чат канала, виджет
       await expect
         .poll(
           async () => {
+            const sentAt = new Date().toISOString();
             await redis.publish(
               'streamkit:realtime',
               JSON.stringify({
@@ -92,11 +87,31 @@ test('окно эфира показывает чат канала, виджет
                   color: null,
                   badges: [],
                   parts: [{ kind: 'text', value: 'привет из чата эфира' }],
-                  sentAt: new Date().toISOString(),
+                  sentAt,
                 },
               }),
             );
-            return chatLog.getByText('привет из чата эфира').count();
+            await redis.publish(
+              'streamkit:realtime',
+              JSON.stringify({
+                kind: 'chat',
+                message: {
+                  id: `e2e-yt-${Date.now()}`,
+                  platform: 'youtube',
+                  channel: youtube.channel,
+                  login: 'UCe2e_viewer_00000000001',
+                  username: 'Зритель YouTube',
+                  color: null,
+                  badges: [],
+                  parts: [{ kind: 'text', value: 'привет с YouTube' }],
+                  sentAt,
+                },
+              }),
+            );
+            return (
+              (await chatLog.getByText('привет из чата эфира').count()) *
+              (await chatLog.getByText('привет с YouTube').count())
+            );
           },
           { timeout: 15_000 },
         )
@@ -105,6 +120,10 @@ test('окно эфира показывает чат канала, виджет
       redis.disconnect();
     }
     await expect(chatLog.getByText('Зритель окна').first()).toBeVisible();
+    await expect(chatLog.getByText('Зритель YouTube').first()).toBeVisible();
+    // Площадок две — у строк значки, по которым их различают.
+    await expect(chatLog.getByRole('img', { name: 'YouTube' }).first()).toBeVisible();
+    await expect(chatLog.getByRole('img', { name: 'Twitch' }).first()).toBeVisible();
   });
 
   await test.step('донат, пришедший при открытом окне, виден без перезагрузки', async () => {

@@ -16,6 +16,7 @@
     "start:worker": "node dist/worker.js"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.14.5",
     "@nest-lab/throttler-storage-redis": "^1.2.0",
     "@nestjs/common": "^11.2.3",
     "@nestjs/config": "^4.0.4",
@@ -41,6 +42,7 @@
     "pg": "^8.23.0",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
+    "protobufjs": "^7.6.6",
     "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",

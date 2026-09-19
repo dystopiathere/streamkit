@@ -1,7 +1,13 @@
 import type { AnalyticsRange, Channel } from '@streamkit/contracts';
 import { useTranslation } from 'react-i18next';
-import { Button, Card } from '@streamkit/app-kit';
-import { useChannelSeries, useChannelSummary, useDisconnectChannel } from './queries';
+import { Button, Card, cn, ConfirmDialog } from '@streamkit/app-kit';
+import { useState } from 'react';
+import {
+  useChannelSeries,
+  useChannelSummary,
+  useConnectPlatform,
+  useDisconnectChannel,
+} from './queries';
 import { MetricChart } from './MetricChart';
 import { intlLocale } from '@/lib/locale';
 
@@ -15,6 +21,9 @@ export function ChannelCard({ channel, range }: ChannelCardProps): React.JSX.Ele
   const summary = useChannelSummary(channel.id, range);
   const series = useChannelSeries(channel.id, range);
   const disconnect = useDisconnectChannel();
+  // Отключение стирает все собранные метрики сразу и безвозвратно — как и
+  // обещает политика. Одним случайным нажатием такое не делается.
+  const [confirming, setConfirming] = useState(false);
 
   return (
     <Card className="space-y-6">
@@ -45,11 +54,21 @@ export function ChannelCard({ channel, range }: ChannelCardProps): React.JSX.Ele
         <Button
           variant="ghost"
           aria-label={t('analytics.disconnectNamed', { name: channel.displayName })}
-          onClick={() => disconnect.mutate(channel.id)}
-          isLoading={disconnect.isPending}
+          onClick={() => setConfirming(true)}
         >
           {t('analytics.disconnect')}
         </Button>
+        <ConfirmDialog
+          open={confirming}
+          title={t('analytics.disconnectTitle', { name: channel.displayName })}
+          confirmLabel={t('analytics.disconnect')}
+          cancelLabel={t('common.cancel')}
+          isPending={disconnect.isPending}
+          onClose={() => setConfirming(false)}
+          onConfirm={() => disconnect.mutate(channel.id, { onSettled: () => setConfirming(false) })}
+        >
+          {t('analytics.disconnectText')}
+        </ConfirmDialog>
       </header>
 
       <SyncNotice channel={channel} />
@@ -103,23 +122,41 @@ export function ChannelCard({ channel, range }: ChannelCardProps): React.JSX.Ele
  *
  * Показывается только когда оно требует действия или объяснения: «всё в
  * порядке» отдельной строкой — шум, который учит не читать это место.
+ *
+ * Мёртвый доступ и нехватка прав чинятся одним и тем же — повторным входом на
+ * площадку, поэтому кнопка прямо здесь: подключение обновляет канал, а не
+ * заводит новый.
  */
 function SyncNotice({ channel }: { channel: Channel }): React.JSX.Element | null {
   const { t } = useTranslation();
-  if (channel.syncState === 'ok') return null;
-
+  const connect = useConnectPlatform();
   const isAuth = channel.syncState === 'auth-expired';
+  const needsAction = isAuth || channel.needsReconnect;
+  if (channel.syncState === 'ok' && !channel.needsReconnect) return null;
+
   return (
-    <p
-      role={isAuth ? 'alert' : undefined}
-      className={
-        isAuth
-          ? 'rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm'
-          : 'rounded-lg border border-border bg-surface-hover px-3 py-2 text-sm text-muted'
-      }
+    <div
+      role={needsAction ? 'alert' : undefined}
+      className={cn(
+        'flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm',
+        needsAction ? 'border-danger/40 bg-danger/10' : 'border-border bg-surface-hover text-muted',
+      )}
     >
-      {t(`analytics.syncState.${channel.syncState}`)}
-    </p>
+      <p>
+        {isAuth || channel.syncState !== 'ok'
+          ? t(`analytics.syncState.${channel.syncState}`)
+          : t('analytics.needsReconnect')}
+      </p>
+      {needsAction ? (
+        <Button
+          variant="secondary"
+          isLoading={connect.isPending}
+          onClick={() => connect.mutate(channel.platform)}
+        >
+          {t('analytics.reconnect')}
+        </Button>
+      ) : null}
+    </div>
   );
 }
 

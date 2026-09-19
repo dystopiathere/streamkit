@@ -81,6 +81,7 @@ export class WebhookService {
       username: payload.username,
       message: payload.message,
       amount: payload.amount,
+      count: payload.count,
       isTest: false,
       occurredAt: payload.occurredAt,
     });

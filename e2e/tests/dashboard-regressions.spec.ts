@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Redis } from 'ioredis';
+import { connectTwitch } from './platforms';
 
 /**
  * Три бага, найденные владельцем вручную, — каждый воспроизведён до исправления.
@@ -71,17 +72,19 @@ test('«Принять все» в баннере отражается в раз
   await expect(page.getByRole('button', { name: 'Принять все' })).toHaveCount(0);
 });
 
-test('чат доезжает до оверлея, если канал вписали после открытия ссылки', async ({
+test('оверлей чата переезжает на новый канал, если Twitch переподключили после открытия ссылки', async ({
   page,
   context,
 }) => {
-  // Воркера в сквозном прогоне нет, поэтому сообщение кладётся в шину напрямую —
+  // Воркера в сквозном прогоне нет, поэтому сообщения кладутся в шину напрямую —
   // так проверяется доставка от шины до экрана, а соединение с Twitch закрыто
-  // интеграционным тестом. Порядок действий — как у живого стримера: сначала
-  // ссылка в OBS, потом канал в настройках.
+  // интеграционным тестом. Порядок — как у живого стримера: ссылка уже в OBS,
+  // а стример подключает к сервису другой аккаунт Twitch.
   await registerStreamer(page, 'e2e-chat-late');
   await dismissBanner(page);
+  const first = await connectTwitch(page);
 
+  await page.getByRole('link', { name: 'Виджеты', exact: true }).click();
   await page.getByPlaceholder('Название виджета').fill('Чат');
   await page.getByLabel('Тип виджета').selectOption('chat');
   await page.getByRole('button', { name: 'Новый виджет' }).click();
@@ -99,38 +102,50 @@ test('чат доезжает до оверлея, если канал впис�
     timeout: 15_000,
   });
 
-  await page.getByLabel('Канал Twitch').fill('dystopia_there');
-  await page.getByRole('button', { name: 'Сохранить' }).first().click();
-  // Сохранение асинхронное: опрос ниже повторяет публикацию, пока настройки не
-  // доедут до шлюза и оверлей не переселится в комнату нового канала.
+  // Другой аккаунт: отключить прежний и войти заново — фальшивый Twitch
+  // выдаёт на каждый вход новый канал.
+  await page.getByRole('link', { name: 'Аналитика', exact: true }).click();
+  await page
+    .getByRole('button', { name: /^Отключить/ })
+    .first()
+    .click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Отключить', exact: true }).click();
+  const second = await connectTwitch(page);
+  expect(second).not.toBe(first);
 
   const redis = new Redis(process.env.REDIS_URL ?? 'redis://127.0.0.1:6379');
+  const say = (channel: string, text: string) =>
+    redis.publish(
+      'streamkit:realtime',
+      JSON.stringify({
+        kind: 'chat',
+        message: {
+          id: `e2e-${Date.now()}-${Math.random()}`,
+          platform: 'twitch',
+          channel,
+          login: 'viewer',
+          username: 'Зритель из чата',
+          color: '#7FD1B9',
+          badges: [],
+          parts: [{ kind: 'text', value: text }],
+          sentAt: new Date().toISOString(),
+        },
+      }),
+    );
   try {
     await expect
       .poll(
         async () => {
-          await redis.publish(
-            'streamkit:realtime',
-            JSON.stringify({
-              kind: 'chat',
-              message: {
-                id: `e2e-${Date.now()}`,
-                platform: 'twitch',
-                channel: 'dystopia_there',
-                login: 'viewer',
-                username: 'Зритель из чата',
-                color: '#7FD1B9',
-                badges: [],
-                parts: [{ kind: 'text', value: 'привет из офлайн-чата' }],
-                sentAt: new Date().toISOString(),
-              },
-            }),
-          );
-          return overlay.getByText('привет из офлайн-чата').count();
+          await say(second, 'привет из нового канала');
+          return overlay.getByText('привет из нового канала').count();
         },
         { timeout: 15_000 },
       )
       .toBeGreaterThan(0);
+    // Прежний канал больше не показывается: он теперь чужой.
+    await say(first, 'из прежнего канала');
+    await overlay.waitForTimeout(500);
+    await expect(overlay.getByText('из прежнего канала')).toHaveCount(0);
   } finally {
     redis.disconnect();
   }

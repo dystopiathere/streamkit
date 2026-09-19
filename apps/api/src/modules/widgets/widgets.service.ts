@@ -21,6 +21,7 @@ import { CryptoService } from '../../common/crypto/crypto.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { validationError } from '../../common/pipes/zod-validation.pipe';
 import { AppConfig } from '../../config/app-config.service';
+import { chatChannelsOf } from '../chat/chat-channel';
 import { ROOM_MEDIA_SERVER, type RoomMediaServer } from '../rooms/livekit.service';
 import { WidgetStateService } from './widget-state.service';
 import {
@@ -29,6 +30,9 @@ import {
   toContractWidgetType,
   toPrismaWidgetType,
 } from './widget.mappers';
+
+const CHAT_NEEDS_PLATFORM =
+  'Виджет чата показывает чат ваших каналов — сначала подключите Twitch или YouTube в разделе «Аналитика»';
 
 export interface ResolvedOverlayToken {
   tokenId: string;
@@ -71,6 +75,11 @@ export class WidgetsService {
     // иначе старые записи будут отличаться от новых набором полей.
     const config = configSchemaFor(input.type).parse(input.config);
     await this.requireRoomReference(userId, input.type, config);
+    // Чат показывается только подключённых каналов: без подключения виджету
+    // нечего показать, а вписать чужой канал больше негде.
+    if (input.type === 'chat' && (await chatChannelsOf(this.prisma, userId)).length === 0) {
+      throw new BadRequestException(CHAT_NEEDS_PLATFORM);
+    }
 
     const row = await this.prisma.widget.create({
       data: {
@@ -305,9 +314,14 @@ export class WidgetsService {
   /**
    * Оборвать открытые оверлеи владельца: сокеты и подключения к комнатам.
    *
-   * Запись в БД здесь не меняется — это делает вызывающий (отзыв при
-   * обезличивании) или статус владельца (блокировка). Без этого шага открытая в
-   * OBS сцена продолжала бы показывать алерты и гостей до перезапуска.
+   * Запись в БД здесь не меняется — это делает вызывающий (удаление виджетов
+   * при обезличивании) или статус владельца (блокировка). Без этого шага
+   * открытая в OBS сцена продолжала бы показывать алерты и гостей до
+   * перезапуска.
+   *
+   * Сокетам строка виджета не нужна — они гаснут по идентификатору ссылки,
+   * даже когда виджета уже нет. Из комнат выгоняются оверлеи ещё живых
+   * виджетов гостей; удалённые при обезличивании выгоняет опустошение комнат.
    */
   async disconnectOverlays(
     userId: string,
@@ -315,18 +329,21 @@ export class WidgetsService {
     reason: OverlayRevokeReason,
   ): Promise<void> {
     if (tokenIds.length === 0) return;
+    for (const tokenId of tokenIds) {
+      await this.bus.publish({ kind: 'overlay-revoked', tokenId, reason });
+    }
+
     const widgets = await this.prisma.widget.findMany({
-      where: { userId, tokens: { some: { id: { in: tokenIds } } } },
+      where: { userId, type: 'GUESTS', tokens: { some: { id: { in: tokenIds } } } },
       include: { tokens: { where: { id: { in: tokenIds } }, select: { id: true } } },
     });
-
     for (const widget of widgets) {
-      const ids = widget.tokens.map((token) => token.id);
-      for (const tokenId of ids) {
-        await this.bus.publish({ kind: 'overlay-revoked', tokenId, reason });
-      }
       const room = guestsRoomOf(widget);
-      if (room) await this.evictOverlays(room, ids);
+      if (room)
+        await this.evictOverlays(
+          room,
+          widget.tokens.map((token) => token.id),
+        );
     }
   }
 
@@ -427,21 +444,20 @@ function mergeConfig(current: object, patch: Record<string, unknown>): object {
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) continue;
     const currentValue = merged[key];
-    // Вложенные объекты (text, sound) мержим на один уровень, массивы заменяем целиком.
-    if (
-      value !== null &&
-      typeof value === 'object' &&
-      !Array.isArray(value) &&
-      currentValue !== null &&
-      typeof currentValue === 'object' &&
-      !Array.isArray(currentValue)
-    ) {
-      merged[key] = { ...(currentValue as object), ...(value as object) };
+    // Вложенные объекты мержим на любую глубину, массивы заменяем целиком.
+    // Глубина нужна со сценариями оповещений: правка `scenarios.donation.text`
+    // на один уровень заменила бы весь сценарий доната одним полем текста.
+    if (isPlainObject(value) && isPlainObject(currentValue)) {
+      merged[key] = mergeConfig(currentValue, value);
     } else {
       merged[key] = value;
     }
   }
   return merged;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 /** Комната виджета гостей, либо null — у виджета другого типа или без комнаты. */

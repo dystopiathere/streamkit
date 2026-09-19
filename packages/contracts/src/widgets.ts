@@ -7,9 +7,9 @@ import {
   MINOR_UNITS_PER_MAJOR,
   uuidSchema,
 } from './common.js';
-import { chatChannelSchema, twitchLoginSchema } from './chat.js';
+import { CHAT_PLATFORMS, type ChatPlatform } from './chat.js';
 import { GUEST_LAYOUTS, MAX_GUESTS_PER_ROOM } from './rooms.js';
-import { type AlertEvent, alertEventTypeSchema } from './events.js';
+import { type AlertEvent, type AlertEventType, alertEventTypeSchema } from './events.js';
 
 /** Типы виджетов. Новый тип = новая ветка в widgetConfigSchema + рендерер в packages/ui. */
 export const WIDGET_TYPES = ['alerts', 'goal', 'timer', 'top-donors', 'chat', 'guests'] as const;
@@ -43,26 +43,96 @@ export const alertSoundSchema = z.object({
 export type AlertSound = z.infer<typeof alertSoundSchema>;
 
 /**
+ * Сценарий оповещения — всё, что видит и слышит зритель на событии одного типа.
+ *
+ * Сценарий на тип, а не общие настройки на весь виджет: фолловер и донат на
+ * тысячу рублей — события разного веса, и стример хочет для них разный текст,
+ * картинку, звук и время на экране. Раньше настройки были одни на все типы, а
+ * шаблон «{username} — {amount}» над фолловером оставлял висящее тире.
+ *
+ * Порогов два, и работает тот, что есть у события: `minAmountMinor` — у
+ * донатов (деньги), `minCount` — у битов, рейдов и подарков (количество).
+ */
+const titleTemplateSchema = z.string().min(1).max(200);
+const messageTemplateSchema = z.string().max(300);
+
+/**
+ * Сценарий с шаблонами по умолчанию своего типа — под то, что у события есть:
+ * у фолловера нет ни суммы, ни текста, у рейда есть число зрителей.
+ */
+function alertScenarioSchema(
+  titleTemplate: z.ZodDefault<z.ZodString>,
+  messageTemplate: z.ZodDefault<z.ZodString>,
+) {
+  return z
+    .object({
+      enabled: z.boolean().default(true),
+      layout: alertLayoutSchema.default('center'),
+      /** Сколько алерт висит на экране. */
+      durationMs: z.number().int().min(1000).max(60000).default(6000),
+      /** События дешевле порога не показываются (0 — показывать все). */
+      minAmountMinor: z.number().int().nonnegative().default(0),
+      /** События с меньшим количеством не показываются (0 — показывать все). */
+      minCount: z.number().int().nonnegative().max(1_000_000).default(0),
+      imageUrl: httpsUrlSchema.nullable().default(null),
+      titleTemplate,
+      messageTemplate,
+      text: textStyleSchema.prefault({}),
+      sound: alertSoundSchema.prefault({}),
+      animationIn: alertAnimationSchema.default('slide-up'),
+      animationOut: alertAnimationSchema.default('fade'),
+    })
+    .prefault({});
+}
+
+export const alertScenariosSchema = z.object({
+  donation: alertScenarioSchema(
+    titleTemplateSchema.default('{username} — {amount}'),
+    messageTemplateSchema.default('{message}'),
+  ),
+  follow: alertScenarioSchema(
+    titleTemplateSchema.default('{username} теперь с нами!'),
+    messageTemplateSchema.default(''),
+  ),
+  subscription: alertScenarioSchema(
+    titleTemplateSchema.default('{username} оформил подписку'),
+    messageTemplateSchema.default(''),
+  ),
+  gift: alertScenarioSchema(
+    titleTemplateSchema.default('{username} дарит подписки: {count}'),
+    messageTemplateSchema.default(''),
+  ),
+  resubscription: alertScenarioSchema(
+    titleTemplateSchema.default('{username} с нами {count} мес.'),
+    messageTemplateSchema.default('{message}'),
+  ),
+  cheer: alertScenarioSchema(
+    titleTemplateSchema.default('{username} — {count} битов'),
+    messageTemplateSchema.default('{message}'),
+  ),
+  raid: alertScenarioSchema(
+    titleTemplateSchema.default('Рейд от {username}: {count} зрителей'),
+    messageTemplateSchema.default(''),
+  ),
+  reward: alertScenarioSchema(
+    titleTemplateSchema.default('{username} берёт награду'),
+    messageTemplateSchema.default('{message}'),
+  ),
+} satisfies Record<AlertEventType, unknown>);
+
+export type AlertScenarioConfig = z.infer<typeof alertScenariosSchema>['donation'];
+
+/**
  * Конфиг alert-виджета. Одна и та же схема валидирует запись в API, генерирует форму
  * настроек в дашборде и управляет рендером в overlay.
+ *
+ * Общая здесь только пауза между алертами: очередь одна на виджет, и оповещения
+ * разных типов идут в ней друг за другом.
  */
 export const alertWidgetConfigSchema = z.object({
-  layout: alertLayoutSchema.default('center'),
-  /** Сколько алерт висит на экране. */
-  durationMs: z.number().int().min(1000).max(60000).default(6000),
   /** Пауза между алертами, чтобы они не слипались. */
   gapMs: z.number().int().min(0).max(10000).default(500),
-  /** Алерты дешевле порога не показываются (0 — показывать все). */
-  minAmountMinor: z.number().int().nonnegative().default(0),
-  /** Какие типы событий этот виджет вообще показывает. */
-  eventTypes: z.array(alertEventTypeSchema).min(1).default(['donation']),
-  imageUrl: httpsUrlSchema.nullable().default(null),
-  titleTemplate: z.string().min(1).max(200).default('{username} — {amount}'),
-  messageTemplate: z.string().max(300).default('{message}'),
-  text: textStyleSchema.prefault({}),
-  sound: alertSoundSchema.prefault({}),
-  animationIn: alertAnimationSchema.default('slide-up'),
-  animationOut: alertAnimationSchema.default('fade'),
+  scenarios: alertScenariosSchema.prefault({}),
 });
 export type AlertWidgetConfig = z.infer<typeof alertWidgetConfigSchema>;
 
@@ -180,15 +250,36 @@ export type TopDonorsWidgetConfig = z.infer<typeof topDonorsWidgetConfigSchema>;
 /**
  * Конфиг виджета чата.
  *
- * Канал задан ЗДЕСЬ, а не берётся из подключённой площадки, и это решение, а не
- * упрощение. Чтобы читать чат Twitch, достаточно логина: анонимный IRC не
- * требует ни OAuth, ни токена, ни зарегистрированного приложения. Значит,
- * виджет работает у стримера, который вообще не подключал аналитику, — а
- * приложение Twitch в этом проекте до сих пор не зарегистрировано. Форма
- * подставляет логин уже подключённого канала, если он есть.
+ * Канала здесь НЕТ — и это решение, а не упрощение. Раньше логин вписывался
+ * в настройки, и в эфир можно было вывести чат любого чужого канала: его
+ * сообщения, ники и эмоуты шли через платформу без ведома и согласия того
+ * стримера. Теперь каналы — только подключённые по OAuth площадки владельца
+ * виджета: вход на площадке доказывает, что канал его. Сервер находит каналы
+ * сам (`chatChannels`), без подключённой площадки виджет не создаётся.
+ * Старое поле `channel` в сохранённых конфигах схема молча отбрасывает.
+ * Выбрать здесь можно только, чат каких из подключённых площадок показывать.
  */
+/**
+ * Кого не показывать: логин Twitch или имя на YouTube, без регистра и «@».
+ *
+ * Строка, а не логин Twitch, потому что у YouTube постоянный идентификатор —
+ * id канала вида UC…, которого стример не знает, а боты узнаются по имени:
+ * «Nightbot» на обеих площадках. Старые значения — логины — остаются верными.
+ */
+export const hiddenChatUserSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .transform((value) => value.replace(/^@/, ''))
+  .pipe(z.string().regex(/^[^\s\p{C}]{1,64}$/u, 'Ник без пробелов, до 64 символов'));
+
+const chatPlatformsSchema = z.object(
+  Object.fromEntries(CHAT_PLATFORMS.map((platform) => [platform, z.boolean().default(true)])) as {
+    [K in ChatPlatform]: z.ZodDefault<z.ZodBoolean>;
+  },
+);
+
 export const chatWidgetConfigSchema = z.object({
-  channel: chatChannelSchema,
   /** Сколько строк держим на экране. Больше полусотни не читает никто. */
   maxMessages: z.number().int().min(1).max(50).default(20),
   /** Через сколько секунд строка гаснет. 0 — не гаснет вовсе. */
@@ -203,7 +294,14 @@ export const chatWidgetConfigSchema = z.object({
    * Кого не показывать. По умолчанию — привычные боты: их сообщения занимают
    * место в кадре, а адресованы механике канала, а не зрителям.
    */
-  hiddenUsers: z.array(twitchLoginSchema).max(20).default(['nightbot', 'streamelements', 'moobot']),
+  hiddenUsers: z
+    .array(hiddenChatUserSchema)
+    .max(20)
+    .default(['nightbot', 'streamelements', 'moobot']),
+  /** Чат каких площадок показывать — из подключённых. */
+  platforms: chatPlatformsSchema.prefault({}),
+  /** Значок площадки перед ником: в мультичате без него не понять, откуда строка. */
+  showPlatform: z.boolean().default(true),
   /** Ник цветом, который выбрал сам автор. Иначе — цветом подсветки виджета. */
   useAuthorColors: z.boolean().default(true),
   text: textStyleSchema.prefault({}),
@@ -512,7 +610,7 @@ export function formatDuration(totalSeconds: number, showHours = true): string {
 /* Шаблоны текста                                                       */
 /* ------------------------------------------------------------------ */
 
-export const ALERT_TEMPLATE_VARS = ['username', 'amount', 'message', 'type'] as const;
+export const ALERT_TEMPLATE_VARS = ['username', 'amount', 'count', 'message', 'type'] as const;
 export type AlertTemplateVar = (typeof ALERT_TEMPLATE_VARS)[number];
 
 /**
@@ -535,16 +633,23 @@ export function renderTemplate(
 /**
  * Решение «показывать ли событие этим виджетом». Общая логика для бэкенда
  * (не слать лишнего в сокет) и overlay (страховка на клиенте).
+ *
+ * Выключенный сценарий не показывает и тестовое событие: стример проверяет
+ * ровно то, что увидят зрители. Пороги тест обходит — иначе проверка алерта
+ * при пороге в тысячу рублей молча ничего бы не показала.
  */
 export function shouldShowAlert(
-  event: Pick<AlertEvent, 'type' | 'amount' | 'isTest'>,
-  config: Pick<AlertWidgetConfig, 'eventTypes' | 'minAmountMinor'>,
+  event: Pick<AlertEvent, 'type' | 'amount' | 'count' | 'isTest'>,
+  config: Pick<AlertWidgetConfig, 'scenarios'>,
 ): boolean {
+  const scenario = config.scenarios[event.type];
+  if (!scenario.enabled) return false;
   if (event.isTest) return true;
-  if (!config.eventTypes.includes(event.type)) return false;
-  if (config.minAmountMinor > 0) {
-    if (!event.amount) return false;
-    if (event.amount.amountMinor < config.minAmountMinor) return false;
+  if (scenario.minAmountMinor > 0) {
+    if (!event.amount || event.amount.amountMinor < scenario.minAmountMinor) return false;
+  }
+  if (scenario.minCount > 0) {
+    if (event.count === null || event.count < scenario.minCount) return false;
   }
   return true;
 }

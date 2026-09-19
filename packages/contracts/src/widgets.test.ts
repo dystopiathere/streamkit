@@ -14,17 +14,23 @@ import {
   WIDGET_TYPES,
   widgetConfigSchema,
 } from './widgets.js';
-import type { AlertEvent } from './events.js';
+import { ALERT_EVENT_TYPES, type AlertEvent, type AlertEventType } from './events.js';
 
 function event(
   overrides: Partial<AlertEvent> = {},
-): Pick<AlertEvent, 'type' | 'amount' | 'isTest'> {
+): Pick<AlertEvent, 'type' | 'amount' | 'count' | 'isTest'> {
   return {
     type: 'donation',
     amount: { amountMinor: 10_000, currency: 'RUB' },
+    count: null,
     isTest: false,
     ...overrides,
   };
+}
+
+/** Конфиг с правками одного сценария поверх дефолтов. */
+function withScenario(type: AlertEventType, scenario: Record<string, unknown>) {
+  return alertWidgetConfigSchema.parse({ scenarios: { [type]: scenario } });
 }
 
 describe('renderTemplate', () => {
@@ -48,89 +54,94 @@ describe('renderTemplate', () => {
 });
 
 describe('shouldShowAlert', () => {
-  const config = { eventTypes: ['donation'] as const, minAmountMinor: 0 };
-
-  it('показывает подходящее событие', () => {
-    expect(shouldShowAlert(event(), { ...config, eventTypes: ['donation'] })).toBe(true);
-  });
-
-  it('отсекает тип события, не включённый в виджет', () => {
+  it('показывает событие включённого сценария', () => {
+    expect(shouldShowAlert(event(), defaultAlertWidgetConfig())).toBe(true);
     expect(
-      shouldShowAlert(event({ type: 'follow' }), { ...config, eventTypes: ['donation'] }),
-    ).toBe(false);
-  });
-
-  it('отсекает донат ниже порога', () => {
-    expect(
-      shouldShowAlert(event({ amount: { amountMinor: 4_999, currency: 'RUB' } }), {
-        eventTypes: ['donation'],
-        minAmountMinor: 5_000,
-      }),
-    ).toBe(false);
-  });
-
-  it('пропускает донат ровно на пороге', () => {
-    expect(
-      shouldShowAlert(event({ amount: { amountMinor: 5_000, currency: 'RUB' } }), {
-        eventTypes: ['donation'],
-        minAmountMinor: 5_000,
-      }),
+      shouldShowAlert(event({ type: 'follow', amount: null }), defaultAlertWidgetConfig()),
     ).toBe(true);
   });
 
-  it('отсекает событие без суммы, если порог задан', () => {
-    expect(
-      shouldShowAlert(event({ amount: null }), { eventTypes: ['donation'], minAmountMinor: 1 }),
-    ).toBe(false);
+  it('отсекает событие выключенного сценария', () => {
+    const config = withScenario('follow', { enabled: false });
+    expect(shouldShowAlert(event({ type: 'follow', amount: null }), config)).toBe(false);
+    // Соседние сценарии это не задевает.
+    expect(shouldShowAlert(event(), config)).toBe(true);
   });
 
-  it('пропускает событие без суммы, если порога нет', () => {
-    expect(
-      shouldShowAlert(event({ amount: null }), { eventTypes: ['donation'], minAmountMinor: 0 }),
-    ).toBe(true);
+  it('порог суммы — у доната, на пороге показывает, ниже — нет', () => {
+    const config = withScenario('donation', { minAmountMinor: 5_000 });
+    const donation = (amountMinor: number) => event({ amount: { amountMinor, currency: 'RUB' } });
+    expect(shouldShowAlert(donation(4_999), config)).toBe(false);
+    expect(shouldShowAlert(donation(5_000), config)).toBe(true);
+    expect(shouldShowAlert(event({ amount: null }), config)).toBe(false);
   });
 
-  it('тестовый алерт проходит любые фильтры — иначе стример не проверит настройку', () => {
-    expect(
-      shouldShowAlert(event({ type: 'raid', amount: null, isTest: true }), {
-        eventTypes: ['donation'],
-        minAmountMinor: 100_000,
-      }),
-    ).toBe(true);
+  it('порог количества — у битов и рейдов', () => {
+    const config = withScenario('raid', { minCount: 10 });
+    const raid = (count: number | null) => event({ type: 'raid', amount: null, count });
+    expect(shouldShowAlert(raid(9), config)).toBe(false);
+    expect(shouldShowAlert(raid(10), config)).toBe(true);
+    expect(shouldShowAlert(raid(null), config)).toBe(false);
+  });
+
+  it('тест обходит пороги, но не выключенный сценарий', () => {
+    const config = alertWidgetConfigSchema.parse({
+      scenarios: { donation: { minAmountMinor: 100_000 }, raid: { enabled: false } },
+    });
+    expect(shouldShowAlert(event({ isTest: true }), config)).toBe(true);
+    // Выключенный сценарий не покажет и тест: стример проверяет то, что увидят зрители.
+    expect(shouldShowAlert(event({ type: 'raid', isTest: true }), config)).toBe(false);
   });
 });
 
 describe('alertWidgetConfigSchema', () => {
-  it('заполняет дефолты из пустого объекта', () => {
+  it('заполняет каждый сценарий дефолтами из пустого объекта', () => {
     const config = defaultAlertWidgetConfig();
-    expect(config.durationMs).toBe(6000);
-    expect(config.eventTypes).toEqual(['donation']);
-    expect(config.text.fontSize).toBe(32);
-    expect(config.sound.enabled).toBe(false);
+    expect(config.gapMs).toBe(500);
+    for (const type of ALERT_EVENT_TYPES) {
+      expect(config.scenarios[type].enabled).toBe(true);
+      expect(config.scenarios[type].durationMs).toBe(6000);
+      expect(config.scenarios[type].text.fontSize).toBe(32);
+      expect(config.scenarios[type].sound.enabled).toBe(false);
+    }
+  });
+
+  it('у сценариев свои шаблоны: у фолловера нет суммы, у рейда есть число зрителей', () => {
+    const { scenarios } = defaultAlertWidgetConfig();
+    expect(scenarios.donation.titleTemplate).toContain('{amount}');
+    expect(scenarios.follow.titleTemplate).not.toContain('{amount}');
+    expect(scenarios.raid.titleTemplate).toContain('{count}');
+  });
+
+  it('правка одного сценария не трогает остальные', () => {
+    const config = withScenario('cheer', { durationMs: 9000 });
+    expect(config.scenarios.cheer.durationMs).toBe(9000);
+    expect(config.scenarios.donation.durationMs).toBe(6000);
   });
 
   it('отклоняет http-ссылку на звук (смешанный контент в OBS)', () => {
     const result = alertWidgetConfigSchema.safeParse({
-      sound: { enabled: true, url: 'http://example.com/a.mp3', volume: 0.5 },
+      scenarios: { donation: { sound: { enabled: true, url: 'http://example.com/a.mp3' } } },
     });
     expect(result.success).toBe(false);
   });
 
-  it('отклоняет некорректный цвет', () => {
-    const result = alertWidgetConfigSchema.safeParse({ text: { color: 'red' } });
-    expect(result.success).toBe(false);
+  it('отклоняет некорректный цвет и отрицательный порог', () => {
+    expect(withScenarioResult({ text: { color: 'red' } })).toBe(false);
+    expect(withScenarioResult({ minAmountMinor: -1 })).toBe(false);
+    expect(withScenarioResult({ minCount: -1 })).toBe(false);
   });
 
-  it('отклоняет пустой список типов событий', () => {
-    const result = alertWidgetConfigSchema.safeParse({ eventTypes: [] });
-    expect(result.success).toBe(false);
-  });
-
-  it('отклоняет отрицательный порог суммы', () => {
-    const result = alertWidgetConfigSchema.safeParse({ minAmountMinor: -1 });
-    expect(result.success).toBe(false);
+  it('прежние поля общего конфига отбрасывает — их переносит миграция данных', () => {
+    const config = alertWidgetConfigSchema.parse({ eventTypes: ['donation'], durationMs: 9000 });
+    expect(config).not.toHaveProperty('eventTypes');
+    expect(config.scenarios.donation.durationMs).toBe(6000);
   });
 });
+
+function withScenarioResult(scenario: Record<string, unknown>): boolean {
+  return alertWidgetConfigSchema.safeParse({ scenarios: { donation: scenario } }).success;
+}
 
 describe('типы виджетов', () => {
   it('у каждого типа есть схема конфига', () => {

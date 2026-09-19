@@ -1,11 +1,12 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { UserRole } from '@streamkit/contracts';
+import type { StaffRole, UserRole } from '@streamkit/contracts';
 import type { Redis } from 'ioredis';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
 import { blockedUserKey } from '../../common/auth/access-token';
@@ -121,8 +122,9 @@ export class AccountStatusService {
   }
 
   /** Сброс второго фактора — потерянный телефон. Сессии гасятся: доступ мог уйти вместе с ним. */
-  async resetTotp(userId: string, context: AuditContext): Promise<void> {
+  async resetTotp(userId: string, actorRole: StaffRole, context: AuditContext): Promise<void> {
     const user = await this.requireUser(userId);
+    requireAuthorityOver(user.role, actorRole);
     if (!user.isTotpEnabled && !user.totpSecretEncrypted) {
       throw new ConflictException('Двухфакторная аутентификация не включена');
     }
@@ -137,9 +139,11 @@ export class AccountStatusService {
   async revokeSessions(
     userId: string,
     familyId: string | undefined,
+    actorRole: StaffRole,
     context: AuditContext,
   ): Promise<void> {
-    await this.requireUser(userId);
+    const user = await this.requireUser(userId);
+    requireAuthorityOver(user.role, actorRole);
     if (familyId) {
       const found = await this.prisma.refreshToken.findFirst({
         where: { userId, familyId, revokedAt: null },
@@ -190,5 +194,19 @@ export class AccountStatusService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('Пользователь не найден');
     return user;
+  }
+}
+
+/**
+ * Аккаунты сотрудников — только администратору.
+ *
+ * Поддержка гасит сессии и сбрасывает второй фактор стримерам: это её работа
+ * по обращению «украли доступ». Над сотрудником те же кнопки — выход из
+ * админки для администратора без его ведома: сброс 2FA закрывает ему вход,
+ * пока он не включит её заново.
+ */
+function requireAuthorityOver(targetRole: string, actorRole: StaffRole): void {
+  if (targetRole !== 'USER' && actorRole !== 'admin') {
+    throw new ForbiddenException('Аккаунты сотрудников меняет только администратор');
   }
 }
