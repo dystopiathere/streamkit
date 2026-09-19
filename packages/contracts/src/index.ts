@@ -19,3 +19,4 @@ export * from './admin.js';
 export * from './site-stats.js';
 export * from './realtime.js';
 export * from './messages.js';
+export * from './stream.js';

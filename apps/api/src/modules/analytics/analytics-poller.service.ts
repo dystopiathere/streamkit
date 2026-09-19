@@ -187,6 +187,7 @@ export class AnalyticsPoller {
         where: { id: channel.id },
         data: {
           lastSyncedAt: capturedAt,
+          liveSince: stats.isLive && stats.liveSince ? new Date(stats.liveSince) : null,
           syncState: 'OK',
           syncError: null,
           // Удача обнуляет историю неудач: иначе канал, починившийся после

@@ -41,6 +41,7 @@ describe('channelStatsSchema', () => {
     totalViews: 1_200_000,
     title: 'Стрим',
     category: 'Dota 2',
+    liveSince: '2026-09-12T08:30:00.000Z',
   };
 
   it('принимает снимок со всеми показателями', () => {

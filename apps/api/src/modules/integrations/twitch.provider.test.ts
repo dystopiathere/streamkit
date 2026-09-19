@@ -39,7 +39,12 @@ describe('нормализация метрик Twitch', () => {
 
   it('собирает снимок идущего эфира', () => {
     const stats = normalizeStats({
-      stream: { viewer_count: 1543, title: 'Ранговые', game_name: 'Dota 2' },
+      stream: {
+        viewer_count: 1543,
+        title: 'Ранговые',
+        game_name: 'Dota 2',
+        started_at: '2026-09-12T08:30:00Z',
+      },
       followersTotal: 89_120,
       subscribersTotal: 412,
       capturedAt,
@@ -54,6 +59,7 @@ describe('нормализация метрик Twitch', () => {
       totalViews: null,
       title: 'Ранговые',
       category: 'Dota 2',
+      liveSince: '2026-09-12T08:30:00.000Z',
     });
   });
 

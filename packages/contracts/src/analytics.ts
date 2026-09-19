@@ -66,6 +66,13 @@ export const channelStatsSchema = z.object({
   totalViews: z.number().int().nonnegative().nullable(),
   title: z.string().max(200).nullable(),
   category: z.string().max(120).nullable(),
+  /**
+   * Когда начался идущий эфир, по часам площадки. null вне эфира и когда
+   * площадка время не сообщила. Время стрима считается от него, а не от
+   * первого нашего снимка: опрос идёт раз в минуту, и сервис могли подключить
+   * посреди эфира.
+   */
+  liveSince: isoDateSchema.nullable(),
 });
 export type ChannelStats = z.infer<typeof channelStatsSchema>;
 

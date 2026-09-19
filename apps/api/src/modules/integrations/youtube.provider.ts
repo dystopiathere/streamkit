@@ -7,6 +7,7 @@ import {
   normalizeTokens,
   type OAuthTokens,
   optionalCount,
+  optionalInstant,
   type PlatformProvider,
   type RawTokenResponse,
 } from './platform-provider';
@@ -47,7 +48,7 @@ interface YouTubeBroadcast {
 }
 
 interface YouTubeVideo {
-  liveStreamingDetails?: { concurrentViewers?: string };
+  liveStreamingDetails?: { concurrentViewers?: string; actualStartTime?: string };
   snippet?: { title?: string; categoryId?: string };
 }
 
@@ -93,6 +94,9 @@ export function normalizeStats(input: {
     // Категорию YouTube отдаёт числовым id, расшифровка которого стоит
     // отдельного запроса. Показывать пользователю «24» бессмысленно.
     category: null,
+    // Приходит в том же liveStreamingDetails, что и зрители: отдельного
+    // запроса и квоты не стоит.
+    liveSince: isLive ? optionalInstant(input.video?.liveStreamingDetails?.actualStartTime) : null,
   };
 }
 

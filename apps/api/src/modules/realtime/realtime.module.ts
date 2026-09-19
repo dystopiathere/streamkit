@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { StreamModule } from '../stream/stream.module';
 import { WidgetsModule } from '../widgets/widgets.module';
 import { DashboardGateway } from './dashboard.gateway';
 import { OverlayGateway } from './overlay.gateway';
@@ -9,7 +10,7 @@ import { OverlayGateway } from './overlay.gateway';
  * Так модули не образуют цикл, и `forwardRef` не нужен нигде.
  */
 @Module({
-  imports: [WidgetsModule],
+  imports: [WidgetsModule, StreamModule],
   providers: [OverlayGateway, DashboardGateway],
 })
 export class RealtimeModule {}

@@ -21,6 +21,7 @@ import { RealtimeModule } from './modules/realtime/realtime.module';
 import { RoomsModule } from './modules/rooms/rooms.module';
 import { WidgetsModule } from './modules/widgets/widgets.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { StreamModule } from './modules/stream/stream.module';
 
 @Module({
   imports: [
@@ -79,6 +80,7 @@ import { BillingModule } from './modules/billing/billing.module';
     WidgetsModule,
     EventsModule,
     RealtimeModule,
+    StreamModule,
     PrivacyModule,
     RoomsModule,
     BillingModule,

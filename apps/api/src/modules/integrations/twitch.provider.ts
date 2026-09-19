@@ -7,6 +7,7 @@ import {
   normalizeTokens,
   type OAuthTokens,
   optionalCount,
+  optionalInstant,
   type PlatformProvider,
   type RawTokenResponse,
 } from './platform-provider';
@@ -36,6 +37,7 @@ interface TwitchUser {
 
 interface TwitchStream {
   viewer_count?: number;
+  started_at?: string;
   title?: string;
   game_name?: string;
 }
@@ -74,6 +76,7 @@ export function normalizeStats(input: {
     totalViews: null,
     title: input.stream?.title ?? null,
     category: input.stream?.game_name ?? null,
+    liveSince: isLive ? optionalInstant(input.stream?.started_at) : null,
   };
 }
 

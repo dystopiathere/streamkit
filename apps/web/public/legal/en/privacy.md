@@ -1,6 +1,6 @@
 # StreamKit Privacy Policy
 
-Version No. 7 of 18.09.2026
+Version No. 8 of 19.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/privacy?lang=ru); if the two
@@ -31,8 +31,8 @@ secret, if it is enabled.
 **Connected platforms** (Twitch, YouTube, DonationAlerts): access tokens issued
 by these services (stored encrypted and not shown even to the owner), the
 channel ID, handle, name and image, channel metrics (viewers, subscribers, total
-views, whether the channel is live), the title and category of the current
-stream, and for DonationAlerts, the account ID and name. We do not store or use
+views, whether the channel is live), the title, category and start time of the
+current stream, and for DonationAlerts, the account ID and name. We do not store or use
 the email address of the platform account. DonationAlerts sends it together with
 the profile, without which donations cannot be connected — we discard it
 immediately without storing it. What exactly we receive from Google and how we
@@ -92,8 +92,9 @@ Article 6 of Federal Law No. 152-FZ):
   **not recorded**. The decision to show a guest on stream is made by the user,
   who also obtains the guest's consent to it.
 
-4.2. We use this data only to run the user's widgets, event history and video
-calls, and for no purposes of our own.
+4.2. We use this data only to run the user's widgets, stream window, event
+history and video calls, and for no purposes of our own. Chat messages reach the
+stream window only while it is open and are not stored anywhere.
 
 4.3. If you are a donor, viewer or guest and want to learn about, correct or
 delete your data, contact the streamer: they are the operator and respond to
@@ -106,13 +107,13 @@ correct or delete the data within 5 business days.
 5.1. When connecting a YouTube channel, the user grants the service a single
 Google permission — `youtube.readonly`, viewing YouTube data. Through the
 YouTube Data API we receive the channel ID, handle, name and image, the number
-of subscribers and total views, and whether a stream is live, its title and the
-number of its concurrent viewers. We do not request the email address, name or
+of subscribers and total views, and whether a stream is live, when it started,
+its title and the number of its concurrent viewers. We do not request the email address, name or
 any other Google account data. The service never publishes, changes or deletes
 anything on the channel.
 
-5.2. This data is used only to show the user the analytics of their own channel
-in their dashboard. We do not use it for advertising, do not sell it, do not use
+5.2. This data is used only to show the user the analytics and live status of
+their own channel in their dashboard. We do not use it for advertising, do not sell it, do not use
 it to train artificial intelligence models, and do not transfer it to third
 parties — except for hosting of the service (section 7) and cases expressly
 provided for by law.

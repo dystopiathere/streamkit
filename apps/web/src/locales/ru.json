@@ -28,7 +28,8 @@
     "main": "Разделы",
     "openMenu": "Открыть меню",
     "closeMenu": "Закрыть меню",
-    "home": "StreamKit — на главную"
+    "home": "StreamKit — на главную",
+    "stream": "Эфир"
   },
   "auth": {
     "loginTitle": "Вход",
@@ -624,5 +625,48 @@
     "switch": "English",
     "switchLang": "en",
     "label": "Язык интерфейса"
+  },
+  "stream": {
+    "title": "Эфир",
+    "live": "В эфире",
+    "offline": "Не в эфире",
+    "duration": "Время эфира",
+    "viewersTotal": "Зрителей всего",
+    "viewers_one": "{{formatted}} зритель",
+    "viewers_few": "{{formatted}} зрителя",
+    "viewers_many": "{{formatted}} зрителей",
+    "liveNoViewers": "в эфире",
+    "platformOffline": "не в эфире",
+    "platforms": "Площадки",
+    "statusLabel": "Состояние эфира",
+    "syncProblem": "метрики не обновляются",
+    "noPlatforms": "Подключите Twitch или YouTube — здесь появятся время эфира и зрители.",
+    "connectPlatform": "Подключить площадку",
+    "openWindow": "Открыть в отдельном окне",
+    "obsDock": "Окно можно добавить в OBS: «Док-панели» → «Пользовательские док-панели браузера», адрес — {{url}}. Войти в аккаунт нужно в самом доке.",
+    "chat": {
+      "title": "Чат",
+      "label": "Сообщения чата",
+      "source": {
+        "connected": "twitch.tv/{{channel}} — подключённый канал",
+        "widget": "twitch.tv/{{channel}} — канал из виджета чата"
+      },
+      "none": "Чата нет: подключите Twitch или укажите канал в виджете чата.",
+      "waiting": "Сообщения появятся здесь в течение десяти секунд после открытия окна.",
+      "notStored": "Чат не сохраняется: здесь только сообщения, пришедшие, пока окно открыто."
+    },
+    "events": {
+      "title": "Последние события",
+      "all": "Все события"
+    },
+    "widgets": {
+      "title": "Виджеты",
+      "all": "Все виджеты",
+      "inObs": "в OBS",
+      "inObsCount": "в OBS: {{count}}",
+      "notConnected": "не открыт в OBS",
+      "noLinks": "нет ссылки",
+      "disabled": "выключен"
+    }
   }
 }

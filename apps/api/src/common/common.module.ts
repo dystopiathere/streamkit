@@ -5,6 +5,7 @@ import { CryptoService } from './crypto/crypto.service';
 import { PasswordService } from './crypto/password.service';
 import { MAILER, SmtpMailer } from './mail/mailer';
 import { RedisLock } from './redis/lock.service';
+import { PresenceService } from './redis/presence.service';
 
 /**
  * Инфраструктурные сервисы без бизнес-смысла: шифрование, хэширование паролей,
@@ -18,8 +19,17 @@ import { RedisLock } from './redis/lock.service';
     AuditService,
     RealtimeBus,
     RedisLock,
+    PresenceService,
     { provide: MAILER, useClass: SmtpMailer },
   ],
-  exports: [CryptoService, PasswordService, AuditService, RealtimeBus, RedisLock, MAILER],
+  exports: [
+    CryptoService,
+    PasswordService,
+    AuditService,
+    RealtimeBus,
+    RedisLock,
+    PresenceService,
+    MAILER,
+  ],
 })
 export class CommonModule {}

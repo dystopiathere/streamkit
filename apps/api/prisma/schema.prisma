@@ -443,6 +443,9 @@ model Channel {
   isEnabled     Boolean          @default(true)
   /// Когда метрики собирались в последний раз. NULL — ещё ни разу.
   lastSyncedAt  DateTime?
+  /// Начало идущего эфира по часам площадки; null вне эфира. Только текущее
+  /// значение: для истории хватает isLive в снимках.
+  liveSince     DateTime?
   syncState     ChannelSyncState @default(OK)
   /// Текст последней ошибки — только для диагностики, наружу не отдаётся.
   syncError     String?

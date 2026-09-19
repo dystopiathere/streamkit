@@ -29,8 +29,14 @@ export const SOCKET_EVENTS = {
   analyticsUpdated: 'analytics:updated',
   /** Сервер → overlay: пересчитанное состояние виджета (цель, таймер, топ). */
   widgetState: 'widget:state',
-  /** Сервер → overlay: сообщение чата площадки. */
+  /** Сервер → overlay и окно эфира: сообщение чата площадки. */
   chatMessage: 'chat:message',
+  /**
+   * Окно эфира → сервер: «я открыто». Повторяется каждые 30 секунд, пока окно
+   * открыто: по этой отметке воркер держит чат канала. Канал выбирает сервер,
+   * клиент его не передаёт — иначе любой смог бы подписаться на любой чат.
+   */
+  streamWatch: 'stream:watch',
 } as const;
 
 export type SocketEventName = (typeof SOCKET_EVENTS)[keyof typeof SOCKET_EVENTS];
