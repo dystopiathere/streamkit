@@ -54,20 +54,31 @@ RUN for attempt in 1 2 3 4 5; do \
       [ "$attempt" = 5 ] && exit 1; \
       sleep $((attempt * 10)); \
     done
+# Кэш метаданных pnpm — тоже монтированием: иначе 130 МБ ответов реестра
+# запекаются в слой зависимостей и каждый раз уезжают в экспорт кэша сборки.
+#
+# Только зависимости собираемого приложения: оверлею не нужны ни recharts, ни
+# роутер дашборда. Манифесты остальных приложений скопированы выше и остаются
+# в воркспейсе — без них pnpm счёл бы установку устаревшей и перед сборкой
+# молча поставил бы всё заново (так было в образе API).
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile
+    --mount=type=cache,id=pnpm-metadata,target=/root/.cache/pnpm \
+    pnpm install --frozen-lockfile --filter "@streamkit/${APP}..."
 
 COPY packages/ packages/
-COPY apps/web/ apps/web/
-COPY apps/overlay/ apps/overlay/
-COPY apps/admin/ apps/admin/
+COPY apps/${APP}/ apps/${APP}/
 
 # Сначала все пакеты, от которых зависит приложение (`^...` — зависимости без
 # самого приложения, в порядке зависимостей), потом оно само. Перечисление
 # пакетов руками уже подвело: новый app-kit в список не попал, и дашборд с
 # админкой не собрались.
-RUN pnpm --filter "@streamkit/${APP}^..." build \
-    && pnpm --filter @streamkit/${APP} build
+#
+# Без проверки типов и без `.d.ts`: выпуск собирает образы только после
+# зелёного CI того же коммита, а CI проверяет типы отдельной задачей. В образе
+# `tsc --noEmit` занимал 13 секунд из 16 сборки дашборда, а типы пакетов нужны
+# только ему — Vite читает JS.
+RUN pnpm --filter "@streamkit/${APP}^..." build --no-dts \
+    && pnpm --filter @streamkit/${APP} exec vite build
 
 # Кладём результат в фиксированный путь, чтобы финальный слой не зависел от APP.
 RUN cp -r apps/${APP}/dist /dist

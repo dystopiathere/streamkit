@@ -43,12 +43,21 @@ RUN for attempt in 1 2 3 4 5; do \
       [ "$attempt" = 5 ] && exit 1; \
       sleep $((attempt * 10)); \
     done
+# Кэш метаданных pnpm — тоже монтированием: иначе 130 МБ ответов реестра
+# запекаются в слой зависимостей и каждый раз уезжают в экспорт кэша сборки.
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    --mount=type=cache,id=pnpm-metadata,target=/root/.cache/pnpm \
     pnpm install --frozen-lockfile --filter @streamkit/api...
 
 # --- Сборка ----------------------------------------------------------------
 FROM deps AS build
-COPY packages/ packages/
+# Только пакеты, от которых зависит API, — не `packages/` целиком. С каталогом
+# целиком в воркспейс приезжал app-kit, манифеста которого при установке не
+# было; pnpm считал зависимости устаревшими и перед `pnpm build` молча ставил
+# весь воркспейс — React, Vite, recharts. Слой сборки весил 1,1 ГБ, и выпуск
+# тратил минуты на его экспорт в кэш.
+COPY packages/config/ packages/config/
+COPY packages/contracts/ packages/contracts/
 COPY apps/api/ apps/api/
 RUN pnpm --filter @streamkit/contracts build \
     && pnpm --filter @streamkit/api exec prisma generate \
@@ -59,7 +68,12 @@ RUN pnpm --filter @streamkit/contracts build \
 # только в воркспейсах с `inject-workspace-packages=true`. Включать это ради
 # сборки образа — значит поменять способ связывания пакетов и в разработке:
 # рабочие зависимости начнут копироваться вместо симлинков.
-RUN pnpm --filter @streamkit/api --prod deploy --legacy /deploy
+#
+# С теми же кэшами, что установка: без них deploy скачивал пакеты заново прямо
+# в слой — лишние 270 МБ и полминуты на каждый выпуск.
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    --mount=type=cache,id=pnpm-metadata,target=/root/.cache/pnpm \
+    pnpm --filter @streamkit/api --prod deploy --legacy /deploy
 
 # Клиент Prisma генерируется ПОВТОРНО, уже внутри /deploy.
 #
@@ -77,10 +91,51 @@ RUN cd /deploy     && /app/apps/api/node_modules/.bin/prisma generate --schema /
 # В рантайм-образ CLI Prisma не попадает: он в devDependencies и выкидывается
 # `pnpm deploy --prod`, а npx удалён из базового образа вместе с npm. Команда
 # `npx prisma migrate deploy` в compose поэтому не работала бы вовсе — узнали бы
-# об этом на первой выкатке. Образ миграций берёт сборочную стадию, где CLI есть,
-# и запускает его напрямую через node, без npx и pnpm.
-FROM build AS migrate
-WORKDIR /app/apps/api
+# об этом на первой выкатке.
+#
+# Раньше образ миграций был `FROM build`: все dev-зависимости, исходники, dist
+# и /deploy — сотни мегабайт, большая часть которых менялась с каждым коммитом.
+# Выпуск тратил на его загрузку в реестр пять минут из семи. Миграциям нужны
+# только CLI Prisma, схема и файлы миграций, поэтому образ собирается с нуля:
+# отдельный проект из одного `prisma` той же версии, что в lockfile.
+
+# Манифест проекта миграций: версия Prisma — из lockfile (а не диапазон из
+# package.json), версия pnpm — из packageManager. Слой зависит только от этих
+# двух чисел: пока они те же, установка ниже берётся из кэша, а её слой уже
+# лежит в реестре.
+FROM base AS migrate-manifest
+COPY package.json pnpm-lock.yaml /src/
+RUN node -e " \
+      const fs = require('fs'); \
+      const lock = fs.readFileSync('/src/pnpm-lock.yaml', 'utf8'); \
+      const found = /\n  apps\/api:\n[\s\S]*?\n      prisma:\n        specifier: [^\n]+\n        version: ([0-9][^(\s]*)/.exec(lock); \
+      if (!found) { console.error('Версия prisma для apps/api не найдена в pnpm-lock.yaml'); process.exit(1); } \
+      const root = JSON.parse(fs.readFileSync('/src/package.json', 'utf8')); \
+      fs.mkdirSync('/migrate'); \
+      fs.writeFileSync('/migrate/package.json', JSON.stringify({ private: true, packageManager: root.packageManager, dependencies: { prisma: found[1] } })); \
+      fs.writeFileSync('/migrate/pnpm-workspace.yaml', 'allowBuilds:\n  prisma: true\n  \'@prisma/engines\': true\n'); \
+    "
+
+FROM base AS migrate-deps
+WORKDIR /migrate
+COPY --from=migrate-manifest /migrate/ ./
+RUN for attempt in 1 2 3 4 5; do \
+      corepack install && break; \
+      [ "$attempt" = 5 ] && exit 1; \
+      sleep $((attempt * 10)); \
+    done
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    --mount=type=cache,id=pnpm-metadata,target=/root/.cache/pnpm \
+    pnpm install
+
+# В образ — только node_modules: сам pnpm, скачанный corepack, миграциям не
+# нужен, CLI Prisma запускается через node.
+FROM base AS migrate
+WORKDIR /migrate
+COPY --from=migrate-deps /migrate/node_modules ./node_modules
+COPY apps/api/prisma.config.ts ./
+COPY apps/api/prisma/schema.prisma ./prisma/
+COPY apps/api/prisma/migrations ./prisma/migrations
 USER node
 CMD ["node", "node_modules/prisma/build/index.js", "migrate", "deploy"]
 
