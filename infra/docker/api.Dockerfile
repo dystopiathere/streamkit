@@ -35,6 +35,14 @@ COPY packages/config/package.json packages/config/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/ui/package.json packages/ui/
 COPY apps/api/package.json apps/api/
+# corepack скачивает pnpm лениво — при первом вызове `pnpm` — и без повторов:
+# один обрыв связи с registry.npmjs.org (ECONNRESET) уронил выпуск всех образов.
+# Качаем явно, до install, с паузами между попытками.
+RUN for attempt in 1 2 3 4 5; do \
+      corepack install && break; \
+      [ "$attempt" = 5 ] && exit 1; \
+      sleep $((attempt * 10)); \
+    done
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter @streamkit/api...
 

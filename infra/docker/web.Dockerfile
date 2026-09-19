@@ -46,6 +46,14 @@ COPY packages/app-kit/package.json packages/app-kit/
 COPY apps/web/package.json apps/web/
 COPY apps/overlay/package.json apps/overlay/
 COPY apps/admin/package.json apps/admin/
+# corepack скачивает pnpm лениво — при первом вызове `pnpm` — и без повторов:
+# один обрыв связи с registry.npmjs.org (ECONNRESET) уронил выпуск всех образов.
+# Качаем явно, до install, с паузами между попытками.
+RUN for attempt in 1 2 3 4 5; do \
+      corepack install && break; \
+      [ "$attempt" = 5 ] && exit 1; \
+      sleep $((attempt * 10)); \
+    done
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
