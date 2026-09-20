@@ -5,10 +5,12 @@ import type {
   AlertEvent,
   AlertEventType,
   CursorPagination,
+  EventsResetResult,
   IncomingAlertEvent,
   Language,
   Page,
 } from '@streamkit/contracts';
+import { type AuditContext, AuditService } from '../../common/audit/audit.service';
 import { RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { WidgetStateService } from '../widgets/widget-state.service';
@@ -69,6 +71,7 @@ export class EventsService {
     private readonly dedup: DedupService,
     private readonly bus: RealtimeBus,
     private readonly widgetState: WidgetStateService,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -196,6 +199,48 @@ export class EventsService {
       items: items.map(toContractEvent),
       nextCursor: hasMore ? (items.at(-1)?.id ?? null) : null,
     };
+  }
+
+  /**
+   * Обнуление истории событий: донаты, фолловеры, подписки — всё.
+   *
+   * Удаление, а не флажок «скрыто»: стример просит убрать данные, а не
+   * спрятать их. Вместе с историей обнуляются цель и топ донатеров — они
+   * считаются по событиям запросом, а не хранят свою сумму (см. `raisedMinor`),
+   * поэтому отдельного «сбросить цель» здесь нет: он был бы вторым источником
+   * правды о той же сумме.
+   *
+   * Стартовая сумма цели (`offsetMinor`) остаётся: её задал сам стример в
+   * настройках виджета, это не собранные деньги, а точка отсчёта.
+   *
+   * Таймер марафона не трогаем: его остаток — это время, а не сумма, и
+   * обнулять идущий отсчёт вместе с историей донатов никто не просил. Остаток
+   * там хранится, а не считается, и сбрасывается кнопками таймера.
+   */
+  async resetHistory(userId: string, context: AuditContext = {}): Promise<EventsResetResult> {
+    const removed = await this.prisma.alertEvent.deleteMany({ where: { userId } });
+
+    // Пересчёт и рассылка — после удаления: сцены в OBS обязаны показать нули
+    // немедленно, иначе цель висит с прежней суммой до следующего доната.
+    const widgets = await this.prisma.widget.findMany({
+      where: { userId, isEnabled: true, type: { in: ['GOAL', 'TOP_DONORS'] } },
+    });
+    for (const widget of widgets) {
+      await this.widgetState
+        .publish(widget)
+        .catch((error: unknown) =>
+          this.logger.warn({ err: error, widgetId: widget.id }, 'Состояние виджета не разослано'),
+        );
+    }
+
+    await this.audit.record('events.history.reset', userId, {
+      ...context,
+      // Ни имён, ни сумм: в журнал идёт только объём. Имена донатеров — данные
+      // третьих лиц, и в аудит они не попадают ни при каком действии.
+      metadata: { ...context.metadata, removedEvents: removed.count },
+    });
+
+    return { removedEvents: removed.count, refreshedWidgets: widgets.length };
   }
 
   private async touchSource(incoming: IncomingAlertEvent): Promise<void> {

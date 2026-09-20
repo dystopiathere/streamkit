@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { HttpClient } from '../../common/http/http-client.service';
+import { PlatformAuthError, PlatformError } from '../../common/http/platform-errors';
 import type { AppConfig } from '../../config/app-config.service';
 import { normalizeIdentity, normalizeStats, YouTubeProvider } from './youtube.provider';
 
@@ -154,5 +155,73 @@ describe('разрешения Google', () => {
     const url = new URL(provider.buildAuthorizeUrl('state'));
 
     expect(url.searchParams.get('scope')).toBe('https://www.googleapis.com/auth/youtube.readonly');
+  });
+});
+
+describe('устойчивость сбора метрик YouTube', () => {
+  /** Клиент, который отвечает по подстроке в адресе, а на остальное — отказом. */
+  function http(handlers: Array<[string, unknown | Error]>): HttpClient {
+    return {
+      json: async ({ url }: { url: string }) => {
+        for (const [part, result] of handlers) {
+          if (!url.includes(part)) continue;
+          if (result instanceof Error) throw result;
+          return result;
+        }
+        throw new Error(`неожиданный запрос: ${url}`);
+      },
+    } as unknown as HttpClient;
+  }
+
+  const config = {
+    youtubeEndpoints: { api: 'https://api.test/youtube/v3' },
+  } as unknown as AppConfig;
+
+  it('записывает подписчиков, даже когда трансляции у канала не включены', async () => {
+    // Так и было у живого канала: `liveBroadcasts.list` отвечает 403
+    // `liveStreamingNotEnabled`, и одним `Promise.all` этот отказ уносил весь
+    // снимок — в дашборде вместо подписчиков стояли прочерки, а канал уезжал в
+    // AUTH_EXPIRED с требованием переподключить площадку, которое не помогает.
+    const provider = new YouTubeProvider(
+      http([
+        ['/channels', { items: [CHANNEL] }],
+        ['/liveBroadcasts', new PlatformAuthError('youtube', 403, 'Площадка отвергла токен')],
+      ]),
+      config,
+    );
+
+    const stats = await provider.fetchStats('token');
+
+    expect(stats.subscribers).toBe(2_410_000);
+    expect(stats.isLive).toBe(false);
+  });
+
+  it('мёртвый токен пропускает наружу: опрос обязан на него отреагировать', async () => {
+    const provider = new YouTubeProvider(
+      http([
+        ['/channels', { items: [CHANNEL] }],
+        ['/liveBroadcasts', new PlatformAuthError('youtube', 401, 'Площадка отвергла токен')],
+      ]),
+      config,
+    );
+
+    await expect(provider.fetchStats('token')).rejects.toThrow(PlatformAuthError);
+  });
+
+  it('эфир найден, а зрители не отдались — снимок остаётся эфирным', async () => {
+    const provider = new YouTubeProvider(
+      http([
+        ['/channels', { items: [CHANNEL] }],
+        ['/liveBroadcasts', { items: [{ id: 'abc123', snippet: { title: 'Эфир' } }] }],
+        ['/videos', new PlatformError('youtube', 500, 'Площадка ответила 500')],
+      ]),
+      config,
+    );
+
+    const stats = await provider.fetchStats('token');
+
+    expect(stats.isLive).toBe(true);
+    expect(stats.viewers).toBeNull();
+    expect(stats.title).toBe('Эфир');
   });
 });

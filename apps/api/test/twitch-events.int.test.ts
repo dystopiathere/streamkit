@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { type WebSocket as ServerSocket, WebSocketServer } from 'ws';
+import { type BusMessage, RealtimeBus } from '../src/common/bus/realtime-bus.service';
 import { CryptoService } from '../src/common/crypto/crypto.service';
 import { ConnectorManager } from '../src/modules/integrations/connector-manager.service';
 import { DonationConnectorsModule } from '../src/modules/integrations/integrations.module';
@@ -223,7 +224,7 @@ describe('События Twitch (feature)', () => {
   it('подписывается на события канала на свою сессию, и фолловер попадает в историю', async () => {
     await connectTwitch();
     await manager.reconcile();
-    await until(() => fake.subscriptions.length === 7);
+    await until(() => fake.subscriptions.length === 9);
 
     expect(fake.subscriptions.map((subscription) => subscription.type).sort()).toEqual(
       [
@@ -234,6 +235,10 @@ describe('События Twitch (feature)', () => {
         'channel.subscribe',
         'channel.subscription.gift',
         'channel.subscription.message',
+        // Начало и конец эфира: не алерты, а сигнал сбору метрик. Прав не
+        // требуют, поэтому есть всегда.
+        'stream.offline',
+        'stream.online',
       ].sort(),
     );
     expect(new Set(fake.subscriptions.map((subscription) => subscription.sessionId))).toEqual(
@@ -256,7 +261,7 @@ describe('События Twitch (feature)', () => {
   it('повтор доставки с тем же message_id не даёт второго алерта', async () => {
     await connectTwitch();
     await manager.reconcile();
-    await until(() => fake.subscriptions.length === 7);
+    await until(() => fake.subscriptions.length === 9);
 
     fake.notify('channel.cheer', { user_name: 'Щедрый', bits: 500, message: 'держи' }, 'same-id');
     fake.notify('channel.cheer', { user_name: 'Щедрый', bits: 500, message: 'держи' }, 'same-id');
@@ -275,7 +280,7 @@ describe('События Twitch (feature)', () => {
       'channel.channel_points_custom_reward_redemption.add',
     ]);
     await manager.reconcile();
-    await until(() => fake.subscriptions.length === 5);
+    await until(() => fake.subscriptions.length === 7);
 
     fake.notify('channel.follow', { user_name: 'Зритель' });
     await until(async () => (await harness.prisma.alertEvent.count()) === 1);
@@ -295,23 +300,51 @@ describe('События Twitch (feature)', () => {
     expect(channels.body[0].needsReconnect).toBe(true);
   });
 
+  it('начало эфира уходит сигналом сбору метрик, а не алертом в историю', async () => {
+    // Из-за этого сигнала окно эфира узнаёт о начале трансляции сразу. Без него
+    // оставалось расписание: вне эфира канал опрашивается раз в пятнадцать
+    // минут, и ровно столько стример ждал отметки «в эфире».
+    await connectTwitch();
+    await manager.reconcile();
+    await until(() => fake.subscriptions.length === 9);
+
+    const seen: BusMessage[] = [];
+    const unsubscribe = await harness.app.get(RealtimeBus).subscribe((message) => {
+      seen.push(message);
+    });
+    try {
+      fake.notify('stream.online', { type: 'live' });
+      await until(() => seen.some((message) => message.kind === 'channel-live'));
+
+      expect(seen.find((message) => message.kind === 'channel-live')).toMatchObject({
+        userId,
+        platform: 'twitch',
+        isLive: true,
+      });
+      // В истории событий ему делать нечего: ни автора, ни суммы.
+      expect(await harness.prisma.alertEvent.count()).toBe(0);
+    } finally {
+      await unsubscribe();
+    }
+  });
+
   it('переезд по session_reconnect не пересоздаёт подписки и не теряет события', async () => {
     await connectTwitch();
     await manager.reconcile();
-    await until(() => fake.subscriptions.length === 7);
+    await until(() => fake.subscriptions.length === 9);
 
     fake.askToReconnect();
     // Новый сокет поздоровался — старый закрыт, живой остаётся один.
     await until(() => fake.openConnections === 1);
     fake.notify('channel.subscribe', { user_name: 'Подписчик', is_gift: false });
     await until(async () => (await harness.prisma.alertEvent.count()) === 1);
-    expect(fake.subscriptions).toHaveLength(7);
+    expect(fake.subscriptions).toHaveLength(9);
   });
 
   it('отзыв доступа стримером переводит канал в «нужен повторный вход» и закрывает соединение', async () => {
     await connectTwitch();
     await manager.reconcile();
-    await until(() => fake.subscriptions.length === 7);
+    await until(() => fake.subscriptions.length === 9);
 
     fake.revoke('authorization_revoked');
     await until(async () => {

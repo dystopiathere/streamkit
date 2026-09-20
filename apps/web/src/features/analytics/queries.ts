@@ -6,6 +6,7 @@ import {
   type Channel,
   type ChannelSummary,
   type DonationTotal,
+  type EventsResetResult,
   type Platform,
   SOCKET_EVENTS,
   analyticsUpdatedMessageSchema,
@@ -117,6 +118,28 @@ export function useConnectPlatform() {
     mutationFn: async (platform: Platform) => {
       const { url } = await api.post<AuthorizeResponse>(`/integrations/${platform}/authorize`);
       window.location.href = url;
+    },
+  });
+}
+
+/**
+ * Обнуление истории событий и донатов.
+ *
+ * Сбрасываем всё, что из неё считается: суммы донатов, ленту событий, сводку
+ * окна эфира и состояние виджетов цели и топа. Перечислять ключи руками
+ * приходится потому, что общего префикса у них нет — это разные разделы,
+ * которые просто читают одни и те же строки.
+ */
+export function useResetDonations() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<EventsResetResult>('/events/reset'),
+    onSuccess: async () => {
+      await Promise.all(
+        [['analytics', 'donations'], ['events'], ['stream', 'overview'], ['widgets']].map((key) =>
+          client.invalidateQueries({ queryKey: key }),
+        ),
+      );
     },
   });
 }

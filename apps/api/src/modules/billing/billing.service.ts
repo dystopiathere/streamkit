@@ -126,6 +126,7 @@ export class BillingService {
         ? { amountMinor: row.renewalAmountMinor, currency: row.renewalCurrency as 'RUB' }
         : null,
       paymentMethodTitle: row?.paymentMethodTitle ?? null,
+      giftedDays: row?.giftedDays ?? 0,
       roomsAccess: await this.roomsAccess(userId, now),
       billingConfigured: this.configured,
     };
@@ -535,6 +536,9 @@ export class BillingService {
           where: { id: locked.id },
           data: {
             currentPeriodEnd: end,
+            // Подаренное копится: два подарка по десять дней снимаются как
+            // двадцать, а не как последние десять.
+            giftedDays: { increment: days },
             renewalFailures: 0,
             nextRenewalAttemptAt: null,
             renewalNoticeFor: null,
@@ -550,6 +554,7 @@ export class BillingService {
             period: 'MONTH',
             currentPeriodEnd: end,
             autoRenew: false,
+            giftedDays: days,
             renewalAmountMinor: PLAN_PRICES.month.amountMinor,
             renewalCurrency: PLAN_PRICES.month.currency,
           },
@@ -558,6 +563,68 @@ export class BillingService {
     });
 
     await this.audit.record('admin.subscription.extended', userId, {
+      ...context,
+      metadata: { ...context.metadata, days },
+    });
+    return this.subscription(userId, now);
+  }
+
+  /**
+   * Снятие подарочных дней.
+   *
+   * Снять можно только подаренное: предел запроса — `min(запрошено, подарено)`,
+   * и оплаченные дни сотрудник не забирает. Подарок добавил к сроку ровно
+   * столько дней, сколько записано в `giftedDays`, поэтому вычитание этого
+   * числа убирает именно его.
+   *
+   * Истёкший срок не восстанавливаем и не двигаем: снимать нечего, а поднять
+   * `currentPeriodEnd` до «сейчас» значило бы подарить доступ вместо того,
+   * чтобы его забрать.
+   *
+   * Чего эта арифметика не различает: оплату, оформленную ПОВЕРХ подарка.
+   * Платёж продлевает срок от его конца, и снятие подарка сдвигает назад и
+   * оплаченную часть. Поэтому подарок снимают до оплаты, а диалог в админке
+   * прямо говорит, что срок сдвинется. Разделять оплаченный и подаренный
+   * хвосты ради этого случая значит вести в подписке вторую дату — цена выше
+   * пользы.
+   */
+  async revokeGift(
+    userId: string,
+    days: number,
+    context: AuditContext = {},
+    now = new Date(),
+  ): Promise<SubscriptionView> {
+    await this.prisma.$transaction(async (tx) => {
+      const [locked] = await tx.$queryRaw<
+        Array<{ id: string; currentPeriodEnd: Date | null; giftedDays: number }>
+      >`
+        SELECT "id", "currentPeriodEnd", "giftedDays" FROM "Subscription"
+        WHERE "userId" = ${userId}::uuid FOR UPDATE`;
+      if (!locked) throw new NotFoundException('Подписки нет');
+      if (locked.giftedDays <= 0) {
+        throw new ConflictException('Подарочных дней у этой подписки нет');
+      }
+
+      const end = locked.currentPeriodEnd;
+      if (!end || end <= now) {
+        throw new ConflictException('Подарочные дни уже истекли');
+      }
+      const revoked = Math.min(days, locked.giftedDays);
+
+      await tx.subscription.update({
+        where: { id: locked.id },
+        data: {
+          currentPeriodEnd: new Date(end.getTime() - revoked * DAY_MS),
+          giftedDays: { decrement: revoked },
+          // Письмо о списании относилось к прежнему концу периода: после
+          // сдвига оно уже не про ту дату, и продлить по нему нельзя.
+          renewalNoticeFor: null,
+          renewalNoticeSentAt: null,
+        },
+      });
+    });
+
+    await this.audit.record('admin.subscription.gift_revoked', userId, {
       ...context,
       metadata: { ...context.metadata, days },
     });

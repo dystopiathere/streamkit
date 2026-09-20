@@ -95,6 +95,25 @@ export const webhookAlertPayloadSchema = z.object({
 export type WebhookAlertPayload = z.infer<typeof webhookAlertPayloadSchema>;
 
 /**
+ * Итог обнуления истории событий.
+ *
+ * Число удалённых записей возвращается, чтобы подтверждение в интерфейсе было
+ * про то, что произошло («удалено 412 событий»), а не про то, что кнопка
+ * нажалась. Восстановить их нечем, и это единственное сообщение об объёме
+ * потери, которое стример увидит.
+ */
+export const eventsResetResultSchema = z.object({
+  removedEvents: z.number().int().nonnegative(),
+  /**
+   * Сколько виджетов пересчитались вместе с историей: цель и топ донатеров
+   * считаются по событиям, и открытые в OBS сцены должны узнать новую сумму
+   * сразу, а не при следующем донате.
+   */
+  refreshedWidgets: z.number().int().nonnegative(),
+});
+export type EventsResetResult = z.infer<typeof eventsResetResultSchema>;
+
+/**
  * Тестовый алерт из дашборда. Имя и текст пишет сервер — на языке интерфейса
  * стримера: алерт уходит в OBS, и английский дашборд с «Тестовым зрителем» в
  * кадре выглядел бы поломкой перевода. Без тела — донат по-русски: Express 5

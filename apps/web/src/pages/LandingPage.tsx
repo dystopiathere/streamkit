@@ -174,13 +174,10 @@ export function LandingPage(): React.JSX.Element {
           <h2 id="contacts-title" className="text-xl font-semibold">
             {t('public.contacts.title')}
           </h2>
+          {/* Только способ связи. Имя, статус и ИНН продавца стоят в подвале —
+              он есть на каждой странице, и модерация ЮKassa смотрит туда же.
+              На главной они дублировали подвал через два экрана прокрутки. */}
           <dl className="grid max-w-3xl gap-x-6 gap-y-2 text-sm sm:grid-cols-[max-content_1fr]">
-            <dt className="text-muted">{t('public.contacts.seller')}</dt>
-            <dd>{seller.data?.name ?? missingValue()}</dd>
-            <dt className="text-muted">{t('public.contacts.status')}</dt>
-            <dd>{t('public.contacts.selfEmployed')}</dd>
-            <dt className="text-muted">{t('public.contacts.inn')}</dt>
-            <dd className="tabular-nums">{seller.data?.inn ?? missingValue()}</dd>
             <dt className="text-muted">{t('public.contacts.email')}</dt>
             <dd>
               {seller.data?.email ? (
@@ -191,13 +188,8 @@ export function LandingPage(): React.JSX.Element {
                 missingValue()
               )}
             </dd>
-            {seller.data?.phone ? (
-              <>
-                <dt className="text-muted">{t('public.contacts.phone')}</dt>
-                <dd>{seller.data.phone}</dd>
-              </>
-            ) : null}
           </dl>
+          <p className="text-xs text-muted">{t('public.contacts.requisites')}</p>
         </section>
       </MainContent>
 

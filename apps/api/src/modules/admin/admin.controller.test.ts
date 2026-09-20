@@ -29,6 +29,8 @@ const EXPECTED: Array<[ControllerClass, Record<string, 'support' | 'admin'>]> = 
       anonymize: 'admin',
       disableAutoRenew: 'admin',
       extend: 'admin',
+      revokeGift: 'admin',
+      resetDonations: 'admin',
     },
   ],
   [

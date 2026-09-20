@@ -1,6 +1,6 @@
 # StreamKit Terms of Service
 
-Version No. 7 of 19.09.2026
+Version No. 8 of 20.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/terms?lang=ru); if the two
@@ -14,8 +14,9 @@ tax regime “Professional Income Tax”, Taxpayer ID (INN) {{SELLER_INN}}
 available at https://stream-kit.ru (the “Service”).
 
 1.2. Signing up for the Service means full and unconditional acceptance of these
-Terms (acceptance of the offer). If you disagree with any term, do not sign up
-and do not use the Service.
+Terms (acceptance of the offer), and having an account and using the Service
+confirms that acceptance. If you disagree with any term, do not sign up and do
+not use the Service. Section 11 sets out how the Terms are changed.
 
 1.3. The terms of the paid Pro plan are set out in a separate offer published at
 https://stream-kit.ru/legal/subscription. The processing of personal data is
@@ -156,10 +157,31 @@ law, including consumer protection law, does not allow them.
 
 ## 11. Changes to the Terms
 
-The Operator may change these Terms. A new version is published in the Service
-with its date. The Operator notifies users of changes affecting their rights in
-the Service or by email, and the user can accept the new version in the Privacy
-section of their dashboard.
+11.1. The Operator may change these Terms. A new version is published in the
+Service with its number and date and takes effect when published, unless a later
+date is stated in it.
+
+11.2. The Operator notifies the user of a new version in the dashboard on the
+first sign-in after publication. The list of documents, their current versions
+and the marks of acknowledgement are available to the user in the Privacy
+section of the dashboard.
+
+11.3. Acceptance of the Terms is confirmed by having an account and using the
+Service after the notification. No separate re-acceptance of a new version is
+required, and access to the Service does not depend on it.
+
+11.4. A user who disagrees with a new version stops using the Service and may
+delete their account in the Privacy section. Amounts paid for the unused part of
+a paid plan period are refunded as provided by the Pro plan offer.
+
+11.5. Two changes are outside this procedure:
+
+- a new subscription price applies to existing subscribers no earlier than 30
+  days after the notification (Pro plan offer);
+- when the version of the personal data processing consent changes, the consent
+  is requested again: silence and inaction are not consent (Article 9 of the
+  Federal Law “On Personal Data”). Until new consent is given, processing
+  continues within the scope of the previous version.
 
 ## 12. Dispute resolution
 

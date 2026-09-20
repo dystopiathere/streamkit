@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type { ChannelStats } from '@streamkit/contracts';
 import { HttpClient } from '../../common/http/http-client.service';
 import { AppConfig } from '../../config/app-config.service';
@@ -8,6 +8,7 @@ import {
   type OAuthTokens,
   optionalCount,
   optionalInstant,
+  optionalPart,
   type PlatformProvider,
   type RawTokenResponse,
 } from './platform-provider';
@@ -82,6 +83,12 @@ export function normalizeStats(input: {
     followers: null,
     // Скрытый счётчик подписчиков обязан остаться null, а не стать нулём:
     // «скрыто» и «ноль подписчиков» — разные утверждения.
+    //
+    // Само число Google округляет: с 2019 года API отдаёт его с точностью до
+    // трёх значащих цифр, и у маленького канала это округление до десятка —
+    // пять подписчиков приезжают как «0». Это не наша потеря данных и не
+    // ошибка: в YouTube Studio у того же канала честные пять. Предупреждение
+    // об этом стоит у счётчика в дашборде.
     subscribers: statistics?.hiddenSubscriberCount
       ? null
       : optionalCount(statistics?.subscriberCount),
@@ -101,6 +108,7 @@ export class YouTubeProvider implements PlatformProvider {
   readonly platform = 'youtube' as const;
   readonly title = 'YouTube';
   readonly statsQuotaCost = STATS_QUOTA_COST;
+  private readonly logger = new Logger(YouTubeProvider.name);
 
   constructor(
     private readonly http: HttpClient,
@@ -171,6 +179,16 @@ export class YouTubeProvider implements PlatformProvider {
     return normalizeIdentity(channel);
   }
 
+  /**
+   * Снимок метрик канала.
+   *
+   * Обязательная часть здесь одна — `channels.list`: в ней подписчики и
+   * просмотры, и её отказ означает, что метрик нет. Состояние эфира —
+   * необязательная часть: `liveBroadcasts.list` отвечает 403 каналу, у
+   * которого не включены трансляции, и видит только эфиры, заведённые через
+   * Live Control Room. Пока оба запроса шли одним `Promise.all`, такой отказ
+   * отменял и подписчиков — канал выглядел так, будто сбор не работает вовсе.
+   */
   async fetchStats(accessToken: string): Promise<ChannelStats> {
     const [channels, broadcasts] = await Promise.all([
       this.http.json<YouTubeList<YouTubeChannel>>({
@@ -178,25 +196,29 @@ export class YouTubeProvider implements PlatformProvider {
         url: `${this.config.youtubeEndpoints.api}/channels?part=snippet,statistics&mine=true`,
         accessToken,
       }),
-      this.http.json<YouTubeList<YouTubeBroadcast>>({
-        platform: this.platform,
-        url: `${this.config.youtubeEndpoints.api}/liveBroadcasts?part=id,snippet&broadcastStatus=active&broadcastType=all&mine=true`,
-        accessToken,
-      }),
+      optionalPart('liveBroadcasts', this.logger, () =>
+        this.http.json<YouTubeList<YouTubeBroadcast>>({
+          platform: this.platform,
+          url: `${this.config.youtubeEndpoints.api}/liveBroadcasts?part=id,snippet&broadcastStatus=active&broadcastType=all&mine=true`,
+          accessToken,
+        }),
+      ),
     ]);
 
-    const broadcast = broadcasts.items?.[0];
+    const broadcast = broadcasts?.items?.[0];
     // Число зрителей лежит не в трансляции, а в видео: liveBroadcasts его не
     // отдаёт вовсе. Второй запрос делаем только когда эфир действительно идёт —
     // вне эфира он был бы чистой тратой квоты.
     const video = broadcast
       ? (
-          await this.http.json<YouTubeList<YouTubeVideo>>({
-            platform: this.platform,
-            url: `${this.config.youtubeEndpoints.api}/videos?part=liveStreamingDetails,snippet&id=${encodeURIComponent(broadcast.id)}`,
-            accessToken,
-          })
-        ).items?.[0]
+          await optionalPart('videos', this.logger, () =>
+            this.http.json<YouTubeList<YouTubeVideo>>({
+              platform: this.platform,
+              url: `${this.config.youtubeEndpoints.api}/videos?part=liveStreamingDetails,snippet&id=${encodeURIComponent(broadcast.id)}`,
+              accessToken,
+            }),
+          )
+        )?.items?.[0]
       : undefined;
 
     return normalizeStats({

@@ -1,4 +1,5 @@
 import type { ChannelStats, Platform } from '@streamkit/contracts';
+import { PlatformAuthError, PlatformQuotaError } from '../../common/http/platform-errors';
 
 /** Пара токенов, как её отдаёт площадка после обмена кода или обновления. */
 export interface OAuthTokens {
@@ -102,4 +103,40 @@ export function optionalCount(value: unknown): number | null {
   if (value === null || value === undefined) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : null;
+}
+
+/** Минимум от логгера — чтобы помощник ниже не тянул за собой весь Nest. */
+interface WarnLogger {
+  warn(message: unknown, context?: unknown): void;
+}
+
+/**
+ * Необязательная часть снимка метрик.
+ *
+ * Снимок собирается из нескольких запросов, и они не равны по важности. У
+ * YouTube счётчик подписчиков лежит в `channels.list`, а состояние эфира — в
+ * `liveBroadcasts.list`, и второй отвечает 403 `liveStreamingNotEnabled`
+ * каналу, у которого трансляции не включены. Пока запросы шли одним
+ * `Promise.all`, такой отказ ронял ВЕСЬ сбор: снимка не появлялось ни разу,
+ * в дашборде вместо подписчиков стояли прочерки, а канал вдобавок уезжал в
+ * `AUTH_EXPIRED` — с требованием переподключить площадку, которое ничего не
+ * лечит. Отказ необязательной части — `undefined` и строка в журнале.
+ *
+ * Мёртвый токен (401) и квота пропускаются наружу: на них опрос обязан
+ * отреагировать, иначе канал с отозванным доступом опрашивался бы вечно, а
+ * исчерпанный суточный бюджет Google — до полуночи.
+ */
+export async function optionalPart<T>(
+  part: string,
+  logger: WarnLogger,
+  request: () => Promise<T>,
+): Promise<T | undefined> {
+  try {
+    return await request();
+  } catch (error) {
+    if (error instanceof PlatformQuotaError) throw error;
+    if (error instanceof PlatformAuthError && error.status === 401) throw error;
+    logger.warn({ err: error, part }, 'Площадка не отдала часть метрик');
+    return undefined;
+  }
 }

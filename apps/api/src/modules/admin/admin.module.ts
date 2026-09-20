@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { BillingModule } from '../billing/billing.module';
+import { EventsModule } from '../events/events.module';
 import { PrivacyModule } from '../privacy/privacy.module';
 import { RoomMediaModule } from '../rooms/room-media.module';
 import { RoomsModule } from '../rooms/rooms.module';
@@ -21,7 +22,16 @@ import { AdminObjectsController, AdminUsersController } from './admin.controller
  * дашборда.
  */
 @Module({
-  imports: [AuthModule, WidgetsModule, RoomsModule, RoomMediaModule, BillingModule, PrivacyModule],
+  imports: [
+    AuthModule,
+    WidgetsModule,
+    RoomsModule,
+    RoomMediaModule,
+    BillingModule,
+    PrivacyModule,
+    // Обнуление истории донатов идёт тем же сервисом, что у стримера.
+    EventsModule,
+  ],
   controllers: [AdminAuthController, AdminUsersController, AdminObjectsController],
   providers: [
     AdminAuthService,

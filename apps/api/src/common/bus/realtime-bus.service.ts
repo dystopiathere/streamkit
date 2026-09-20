@@ -5,6 +5,7 @@ import type {
   ChannelStats,
   ChatMessage,
   OverlayRevokeReason,
+  Platform,
   WidgetConfig,
   WidgetState,
 } from '@streamkit/contracts';
@@ -30,6 +31,10 @@ export type BusMessage =
   | { kind: 'chat-channel'; userId: string; channels: ChatChannelRef[] }
   | { kind: 'overlay-revoked'; tokenId: string; reason: OverlayRevokeReason }
   | { kind: 'analytics'; userId: string; channelId: string; stats: ChannelStats }
+  // Площадка сообщила о начале или конце эфира. Адресат — не браузер, а сбор
+  // метрик в воркере: сокет EventSub висит на одной реплике, а опрос идёт на
+  // той, что держит блокировку, и другого пути между ними нет.
+  | { kind: 'channel-live'; userId: string; platform: Platform; isLive: boolean }
   // Аккаунт заблокирован: открытые вкладки дашборда отключаются, а не
   // досматривают ленту событий до конца срока токена.
   | { kind: 'user-suspended'; userId: string };

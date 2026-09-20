@@ -71,7 +71,8 @@ test('стример оформляет тариф «Про», получает 
   await expect(page.getByRole('link', { name: 'Открыть' })).toBeVisible();
 
   // Отключение продления — одной кнопкой; доступ доживает оплаченный период.
-  await page.getByRole('link', { name: 'Тариф' }).click();
+  // exact: без него «Тариф» находит и «Тарифы» в карте сайта в подвале.
+  await page.getByRole('link', { name: 'Тариф', exact: true }).click();
   await page.getByRole('button', { name: 'Отключить автопродление' }).click();
   await expect(page.getByTestId('subscription-status')).toContainText('Автопродление выключено');
   await page.getByRole('link', { name: 'Комнаты' }).click();

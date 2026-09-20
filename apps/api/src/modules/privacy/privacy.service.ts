@@ -6,7 +6,12 @@ import { PasswordService } from '../../common/crypto/password.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { RoomEviction } from '../rooms/room-eviction.service';
 import { WidgetsService } from '../widgets/widgets.service';
-import { LEGAL_DOCUMENTS, publishedDocuments, REQUIRED_ON_REGISTER } from './legal-documents';
+import {
+  LEGAL_DOCUMENTS,
+  type LegalDocument,
+  publishedDocuments,
+  REQUIRED_ON_REGISTER,
+} from './legal-documents';
 
 export interface ConsentView {
   document: ConsentDocument;
@@ -20,8 +25,14 @@ export interface ConsentView {
   /** Версия, на которую пользователь согласился. null — согласия нет. */
   acceptedVersion: string | null;
   acceptedAt: string | null;
-  /** true, если согласие дано на устаревшую редакцию и его нужно подтвердить заново. */
+  /** true, если отметка стоит на устаревшей редакции. */
   needsRenewal: boolean;
+  /**
+   * Что значит устаревшая отметка: `notify` — только уведомить о новой
+   * редакции, `reconsent` — попросить подтвердить согласие (см.
+   * `LegalDocument.updatePolicy`). Ни то, ни другое не закрывает доступ.
+   */
+  updatePolicy: LegalDocument['updatePolicy'];
 }
 
 @Injectable()
@@ -37,9 +48,11 @@ export class PrivacyService {
   /**
    * Состояние согласий пользователя.
    *
-   * Сравнение с актуальной версией здесь не косметика: согласие на редакцию
-   * полугодовой давности не является согласием на новую, и интерфейс обязан это
-   * показывать, а не молча считать галочку проставленной.
+   * Сравнение с актуальной версией здесь не косметика: отметка на редакции
+   * полугодовой давности — это не отметка на новой, и интерфейс обязан это
+   * показывать, а не молча считать галочку проставленной. Что делать с
+   * расхождением — уведомить или просить подтверждения — говорит
+   * `updatePolicy`; закрывать доступ оно не может ни в одном случае.
    */
   async listConsents(userId: string): Promise<ConsentView[]> {
     const rows = await this.prisma.consent.findMany({
@@ -66,8 +79,36 @@ export class PrivacyService {
         acceptedVersion: accepted?.documentVersion ?? null,
         acceptedAt: accepted?.grantedAt.toISOString() ?? null,
         needsRenewal: accepted ? accepted.documentVersion !== document.version : false,
+        updatePolicy: document.updatePolicy,
       };
     });
+  }
+
+  /**
+   * «Ознакомлен с новой редакцией» — одной кнопкой по всем изменившимся
+   * документам.
+   *
+   * Зачем запись вообще, если соглашение принято регистрацией: уведомление
+   * должно быть доказуемым. Иначе спор «меня не предупредили» опирается на то,
+   * что баннер когда-то показывался, а это ничем не подтверждается. Отметка
+   * пишется тем же журналом согласий — он и есть источник правды о том, какую
+   * редакцию человек видел.
+   *
+   * Документы, принимаемые при оплате (`acceptedAtCheckout`), пропускаются:
+   * согласие на списания даётся выбором тарифа и суммы, а не кнопкой
+   * «понятно» в баннере.
+   *
+   * @returns сколько отметок поставлено.
+   */
+  async acknowledgeUpdates(userId: string, context: AuditContext = {}): Promise<number> {
+    const outdated = (await this.listConsents(userId)).filter(
+      (consent) => consent.needsRenewal && !consent.acceptedAtCheckout,
+    );
+
+    for (const consent of outdated) {
+      await this.grant(userId, consent.document, context);
+    }
+    return outdated.length;
   }
 
   async grant(

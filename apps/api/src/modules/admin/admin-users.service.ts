@@ -14,6 +14,7 @@ import { TokenService } from '../auth/token.service';
 import { DAY_MS, subscriptionStatus } from '../billing/billing-periods';
 import { BillingService, toPaymentView } from '../billing/billing.service';
 import { toContractProvider } from '../events/event.mappers';
+import { EventsService } from '../events/events.service';
 import {
   ANALYTICS_PLATFORMS,
   toContractPlatform,
@@ -45,6 +46,7 @@ export class AdminUsersService {
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
     private readonly billing: BillingService,
+    private readonly events: EventsService,
     private readonly audit: AuditService,
   ) {}
 
@@ -200,6 +202,35 @@ export class AdminUsersService {
     if (!user) throw new NotFoundException('Пользователь не найден');
     if (user.status !== 'ACTIVE') throw new ConflictException('Аккаунт не активен');
     return this.billing.extend(userId, days, context);
+  }
+
+  /**
+   * Снятие подарочных дней.
+   *
+   * Обезличенный аккаунт не проверяем на активность: подарок снимают в том
+   * числе у заблокированного — тем же основанием, по которому его выдали.
+   */
+  async revokeGiftDays(
+    userId: string,
+    days: number,
+    context: AuditContext,
+  ): Promise<SubscriptionView> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!user) throw new NotFoundException('Пользователь не найден');
+    return this.billing.revokeGift(userId, days, context);
+  }
+
+  /**
+   * Обнуление истории событий стримера сотрудником.
+   *
+   * Делает ровно то же, что кнопка у самого стримера, — тем же сервисом: у
+   * действия из админки должны быть те же следствия (пересчёт цели и топа в
+   * открытых сценах OBS), и второй реализации того же удаления быть не должно.
+   */
+  async resetDonations(userId: string, context: AuditContext): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!user) throw new NotFoundException('Пользователь не найден');
+    await this.events.resetHistory(userId, context);
   }
 
   private listFilter(query: AdminUserListQuery, now: Date): Prisma.UserWhereInput {

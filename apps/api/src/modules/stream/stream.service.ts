@@ -1,14 +1,19 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   type StreamChannel,
   type StreamChat,
   type StreamOverview,
+  type StreamRefresh,
   type StreamWidget,
   type ChatChannelRef,
   chatChannelKey,
+  STREAM_REFRESH_COOLDOWN_MS,
 } from '@streamkit/contracts';
+import type { Redis } from 'ioredis';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { PresenceService } from '../../common/redis/presence.service';
+import { REDIS_CLIENT } from '../../common/redis/redis.module';
+import { AnalyticsPoller } from '../analytics/analytics-poller.service';
 import { chatChannelsOf, toChannelRefs } from '../chat/chat-channel';
 import {
   ANALYTICS_PLATFORMS,
@@ -29,6 +34,8 @@ export class StreamService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly presence: PresenceService,
+    private readonly poller: AnalyticsPoller,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
   async overview(userId: string): Promise<StreamOverview> {
@@ -38,6 +45,38 @@ export class StreamService {
       this.widgets(userId),
     ]);
     return { channels, chats, widgets };
+  }
+
+  /**
+   * Обновить метрики сейчас, по нажатию кнопки.
+   *
+   * Расписание не может быть частым: вне эфира канал опрашивается раз в
+   * пятнадцать минут, потому что суточная квота YouTube выдаётся на весь
+   * проект. О начале эфира Twitch сообщает событием сразу, у YouTube такого
+   * события нет — и без кнопки окно эфира узнавало бы о трансляции с
+   * опозданием до четверти часа.
+   *
+   * Пауза между нажатиями — в Redis, а не в памяти процесса: инстансов API
+   * несколько, и счёт в памяти умножал бы разрешённую частоту на их число.
+   * Слишком частое нажатие не ошибка: сводка в ответе всё равно свежая,
+   * просто без нового запроса к площадке.
+   */
+  async refresh(userId: string): Promise<StreamRefresh> {
+    const key = `streamkit:stream-refresh:${userId}`;
+    const ttl = Math.ceil(STREAM_REFRESH_COOLDOWN_MS / 1000);
+    const allowed = await this.redis.set(key, '1', 'EX', ttl, 'NX');
+
+    if (allowed) await this.poller.pollUser(userId);
+
+    // Остаток паузы спрашиваем у Redis, а не считаем от текущего времени: при
+    // отказе нам важно, сколько осталось от ЧУЖОГО нажатия, а не сколько было
+    // бы от нашего.
+    const remaining = await this.redis.ttl(key);
+    return {
+      overview: await this.overview(userId),
+      throttled: allowed === null,
+      nextRefreshAt: new Date(Date.now() + Math.max(remaining, 0) * 1000).toISOString(),
+    };
   }
 
   /**

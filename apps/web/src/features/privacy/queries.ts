@@ -12,6 +12,12 @@ export interface ConsentView {
   acceptedVersion: string | null;
   acceptedAt: string | null;
   needsRenewal: boolean;
+  /**
+   * Что значит устаревшая отметка: `notify` — уведомить о новой редакции,
+   * `reconsent` — попросить подтвердить согласие. Доступ не закрывает ни то,
+   * ни другое.
+   */
+  updatePolicy: 'notify' | 'reconsent';
 }
 
 export const consentKeys = { all: ['privacy', 'consents'] as const };
@@ -47,6 +53,21 @@ export function useGrantConsent() {
       // Выбор в браузере следует за журналом сразу, не дожидаясь перезапроса:
       // иначе баннер успел бы мигнуть с вопросом, на который уже ответили.
       if (document === ANALYTICS_CONSENT) writeCookieChoice('all');
+      await client.invalidateQueries({ queryKey: consentKeys.all });
+    },
+  });
+}
+
+/**
+ * «Ознакомлен с новой редакцией» — одной кнопкой по всем изменившимся
+ * документам. Одним запросом, а не пятью: это одно действие пользователя, и
+ * по журналу должно быть видно именно его.
+ */
+export function useAcknowledgeConsents() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<{ acknowledged: number }>('/privacy/consents/acknowledge'),
+    onSuccess: async () => {
       await client.invalidateQueries({ queryKey: consentKeys.all });
     },
   });

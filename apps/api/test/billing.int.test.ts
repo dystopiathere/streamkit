@@ -606,6 +606,45 @@ describe('Подписка на платформу (feature)', () => {
     expect(gateway.charged).toHaveLength(0);
   });
 
+  it('снятие подарочных дней забирает подаренное и не трогает оплаченное', async () => {
+    const owner = await streamer();
+    const now = new Date();
+
+    // Подарок поверх оплаченного месяца: снимаем ровно подаренное.
+    await subscribed(owner.token);
+    const paid = await harness.prisma.subscription.findUniqueOrThrow({
+      where: { userId: owner.userId },
+    });
+    await billing.extend(owner.userId, 10, {}, now);
+
+    const view = await billing.revokeGift(owner.userId, 10, {}, now);
+
+    expect(view.giftedDays).toBe(0);
+    expect(new Date(view.currentPeriodEnd!).getTime()).toBe(paid.currentPeriodEnd!.getTime());
+    // Письмо о списании называло прежнюю дату — после сдвига оно не про неё.
+    const row = await harness.prisma.subscription.findUniqueOrThrow({
+      where: { userId: owner.userId },
+    });
+    expect(row.renewalNoticeFor).toBeNull();
+  });
+
+  it('снять больше подаренного нельзя, а без подарка — нечего', async () => {
+    const owner = await streamer();
+    const now = new Date();
+    await billing.extend(owner.userId, 5, {}, now);
+
+    // Запрос на тридцать дней снимает пять: остальное не подарено.
+    const view = await billing.revokeGift(owner.userId, 30, {}, now);
+    expect(view.giftedDays).toBe(0);
+    expect(new Date(view.currentPeriodEnd!).getTime()).toBe(now.getTime());
+    expect(view.roomsAccess).toBe(false);
+
+    // Подарок снят целиком — снимать больше нечего.
+    await expect(billing.revokeGift(owner.userId, 1, {}, now)).rejects.toThrow(
+      'Подарочных дней у этой подписки нет',
+    );
+  });
+
   it('бесплатные дни без подписки открывают комнаты без автопродления', async () => {
     const owner = await streamer();
     const now = new Date();

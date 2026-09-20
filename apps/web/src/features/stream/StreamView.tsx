@@ -11,6 +11,7 @@ import { cn } from '@streamkit/app-kit';
 import { useRecentEvents } from '@/features/widgets/queries';
 import { ChatPanel } from './ChatPanel';
 import { RecentEvents } from './RecentEvents';
+import { latestCapturedAt, RefreshMetrics } from './RefreshMetrics';
 import { applyChannelStats, useStreamOverview } from './queries';
 import { StreamStatus } from './StreamStatus';
 import { StreamWidgets } from './StreamWidgets';
@@ -88,6 +89,10 @@ export function StreamView({ compact = false }: { compact?: boolean }): React.JS
   return (
     <div className="space-y-4">
       <StreamStatus channels={overview.data.channels} compact={compact} />
+      {/* Ручной опрос — только там, где есть что опрашивать. */}
+      {overview.data.channels.length > 0 ? (
+        <RefreshMetrics capturedAt={latestCapturedAt(overview.data.channels)} />
+      ) : null}
       <div
         className={cn(
           'grid gap-4',

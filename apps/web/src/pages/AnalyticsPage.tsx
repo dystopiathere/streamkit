@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Button, Card, cn, usePageTitle } from '@streamkit/app-kit';
+import { Button, Card, cn, ConfirmDialog, usePageTitle } from '@streamkit/app-kit';
 import { ChannelCard } from '@/features/analytics/ChannelCard';
 import {
   useChannels,
@@ -15,6 +15,7 @@ import {
   useDonationTotals,
   useLiveChannelStats,
   usePlatforms,
+  useResetDonations,
 } from '@/features/analytics/queries';
 import { formatMoney } from '@/lib/locale';
 
@@ -72,7 +73,54 @@ export function AnalyticsPage(): React.JSX.Element {
       {channels.data?.map((channel) => (
         <ChannelCard key={channel.id} channel={channel} range={range} />
       ))}
+
+      <ResetDonationsCard />
     </div>
+  );
+}
+
+/**
+ * Обнуление истории донатов и событий.
+ *
+ * Внизу страницы аналитики, а не рядом с суммами: это необратимое действие, и
+ * ему не место в одном ряду с переключателем диапазона. Подтверждение
+ * обязательно — восстановить историю нечем ни нам, ни площадкам.
+ */
+function ResetDonationsCard(): React.JSX.Element {
+  const { t } = useTranslation();
+  const reset = useResetDonations();
+  const [confirming, setConfirming] = useState(false);
+
+  return (
+    <Card className="space-y-3">
+      <h2 className="text-sm font-medium">{t('analytics.reset.title')}</h2>
+      <p className="text-sm text-muted">{t('analytics.reset.text')}</p>
+      <Button variant="secondary" onClick={() => setConfirming(true)}>
+        {t('analytics.reset.action')}
+      </Button>
+      <ConfirmDialog
+        open={confirming}
+        title={t('analytics.reset.confirmTitle')}
+        confirmLabel={t('analytics.reset.action')}
+        cancelLabel={t('common.cancel')}
+        isPending={reset.isPending}
+        onClose={() => setConfirming(false)}
+        onConfirm={() =>
+          reset.mutate(undefined, {
+            onSuccess: (result) => {
+              setConfirming(false);
+              toast.success(t('analytics.reset.done', { count: result.removedEvents }));
+            },
+            onError: () => {
+              setConfirming(false);
+              toast.error(t('common.error'));
+            },
+          })
+        }
+      >
+        {t('analytics.reset.confirmText')}
+      </ConfirmDialog>
+    </Card>
   );
 }
 

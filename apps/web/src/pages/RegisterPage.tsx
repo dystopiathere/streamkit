@@ -24,20 +24,19 @@ import { useAuthStore } from '@/lib/auth-store';
 import { localizedResolver } from '@/lib/form-errors';
 
 /**
- * Согласия оформлены отдельными чекбоксами и не проставлены заранее.
+ * Документы, которые принимаются регистрацией.
  *
- * 152-ФЗ требует активного действия пользователя: предустановленная галочка
- * согласием не считается, а «согласие со всем сразу» не позволяет отличить
- * обязательные документы от необязательных.
+ * Тремя галочками они были раньше, и это не давало выбора: не поставив любую,
+ * зарегистрироваться было нельзя. Активное действие — нажатие кнопки под
+ * фразой, которая называет документы: так принимают договор, и так же
+ * однозначно даётся согласие по 152-ФЗ. Об изменении редакций сервис
+ * уведомляет отдельно (`LegalUpdateNotice`), заново ничего подписывать не
+ * нужно.
  */
-const CONSENT_FIELDS = [
-  { name: 'consents.terms', label: 'auth.consentTerms', href: '/legal/terms' },
-  { name: 'consents.privacy', label: 'auth.consentPrivacy', href: '/legal/privacy' },
-  {
-    name: 'consents.personalData',
-    label: 'auth.consentPersonalData',
-    href: '/legal/personal-data',
-  },
+const DOCUMENTS = [
+  { label: 'auth.consentTerms', href: '/legal/terms' },
+  { label: 'auth.consentPrivacy', href: '/legal/privacy' },
+  { label: 'auth.consentPersonalData', href: '/legal/personal-data' },
 ] as const;
 
 export function RegisterPage(): React.JSX.Element {
@@ -51,7 +50,7 @@ export function RegisterPage(): React.JSX.Element {
       email: '',
       password: '',
       displayName: '',
-      consents: { terms: false, privacy: false, personalData: false } as never,
+      acceptDocuments: true,
     },
   });
 
@@ -68,8 +67,6 @@ export function RegisterPage(): React.JSX.Element {
       toast.error(error instanceof ApiError ? error.message : t('common.error'));
     }
   });
-
-  const consentsInvalid = Boolean(form.formState.errors.consents);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -115,30 +112,24 @@ export function RegisterPage(): React.JSX.Element {
               <FieldError id="password" message={errors.password?.message} />
             </div>
 
-            <fieldset
-              className="space-y-2 border-t border-border pt-4"
-              aria-describedby={consentsInvalid ? 'consents-error' : undefined}
-            >
-              <legend className="sr-only">{t('auth.consentsLegend')}</legend>
-              {CONSENT_FIELDS.map((field) => (
-                <label key={field.name} className="flex items-start gap-2 text-xs text-muted">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    {...form.register(field.name as 'consents.terms')}
-                  />
-                  <span>
-                    <Link to={field.href} target="_blank" className="underline hover:text-fg">
-                      {t(field.label)}
+            {/* Документы — перед кнопкой, а не после: фраза объясняет, что
+                означает нажатие, и прочитать её надо до нажатия. */}
+            <div className="border-t border-border pt-4 text-xs text-muted">
+              <p>
+                {t('auth.acceptByRegistering', { button: t('auth.submitRegister') })}{' '}
+                {DOCUMENTS.map((document, index) => (
+                  <span key={document.href}>
+                    {index > 0 ? ', ' : ''}
+                    <Link to={document.href} target="_blank" className="underline hover:text-fg">
+                      {t(document.label)}
                       <NewTabHint />
                     </Link>
                   </span>
-                </label>
-              ))}
-              {consentsInvalid ? (
-                <FieldError id="consents" message={t('auth.consentRequired')} />
-              ) : null}
-            </fieldset>
+                ))}
+                .
+              </p>
+              <p className="mt-1">{t('auth.acceptUpdates')}</p>
+            </div>
 
             <Button type="submit" className="w-full" isLoading={form.formState.isSubmitting}>
               {t('auth.submitRegister')}

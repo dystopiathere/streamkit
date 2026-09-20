@@ -95,6 +95,13 @@ export function ChannelCard({ channel, range }: ChannelCardProps): React.JSX.Ele
         />
       </div>
 
+      {/* YouTube округляет число подписчиков в самом API: у канала меньше
+          тысячи это округление до десятка, и пять подписчиков приезжают как
+          ноль. Без этой строки цифра выглядит нашей ошибкой. */}
+      {channel.platform === 'youtube' ? (
+        <p className="text-xs text-muted">{t('analytics.youtubeRounding')}</p>
+      ) : null}
+
       <div className="grid gap-6 lg:grid-cols-2">
         <MetricChart
           points={series.data?.points ?? []}

@@ -56,6 +56,27 @@ export class PrivacyController {
     await this.privacy.grant(user.id, body.document, this.audit.contextFromRequest(request));
   }
 
+  /**
+   * «Ознакомлен с новой редакцией» по всем изменившимся документам разом.
+   *
+   * Отдельно от `consents`, а не пять запросов с фронта: уведомление —
+   * одно действие пользователя, и разъехавшиеся отметки (половина документов
+   * принята, половина нет) означали бы, что по журналу невозможно сказать,
+   * видел человек уведомление или нет.
+   */
+  @HttpCode(HttpStatus.OK)
+  @Post('consents/acknowledge')
+  async acknowledge(
+    @CurrentUser() user: AuthenticatedUser,
+    @Req() request: Request,
+  ): Promise<{ acknowledged: number }> {
+    const acknowledged = await this.privacy.acknowledgeUpdates(
+      user.id,
+      this.audit.contextFromRequest(request),
+    );
+    return { acknowledged };
+  }
+
   @HttpCode(HttpStatus.NO_CONTENT)
   @Post('consents/revoke')
   async revoke(

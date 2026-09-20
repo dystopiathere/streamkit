@@ -1,6 +1,6 @@
 # StreamKit Privacy Policy
 
-Version No. 10 of 19.09.2026
+Version No. 11 of 20.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/privacy?lang=ru); if the two
@@ -244,6 +244,17 @@ The cookies used by the service are described in the Cookie Policy
 
 ## 13. Changes to this Policy
 
-When the text changes, a new version is published with its date. If the changes
-affect the purposes or scope of processing, we will ask for consent again:
-consent previously given applies to a specific version of the document.
+13.1. When the text changes, a new version is published with its number and
+date. This Policy is a document the operator is required to publish (Article
+18.1 of Federal Law No. 152-FZ), not a consent: its versions do not have to be
+accepted, and access to the service does not depend on that.
+
+13.2. We notify you of a new version in the dashboard on the first sign-in after
+publication. The list of documents, their current versions and the marks of
+acknowledgement are in the Privacy section.
+
+13.3. If the changes affect the purposes or scope of processing that requires
+your consent, we will ask for consent again: consent previously given applies to
+a specific version of the document, and silence is not consent. Until new
+consent is given, processing continues within the scope of the previous
+version.

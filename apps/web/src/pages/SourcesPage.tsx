@@ -213,10 +213,17 @@ function WebhookCard({ webhook }: { webhook: WebhookSourceView | null }): React.
 
   return (
     <Card className="space-y-3">
-      {/* Свёрнуто по умолчанию, пока вебхука нет: это инструмент разработчика, и
-          стримеру без своей программы он ничего не даёт. */}
-      <details open={webhook !== null}>
-        <summary className="font-medium">{t('sources.webhookTitle')}</summary>
+      {/* Свёрнуто ВСЕГДА, а не только пока вебхука нет: это инструмент
+          разработчика, и стримеру без своей программы он ничего не даёт.
+          Раскрытый блок с адресом, секретом и форматом подписи занимал экран
+          на странице, куда приходят нажать одну кнопку подключения. */}
+      <details>
+        <summary className="font-medium">
+          {t('sources.webhookTitle')}
+          <span className="ml-2 text-xs font-normal text-muted">
+            {t('sources.webhookForDevelopers')}
+          </span>
+        </summary>
         <div className="mt-3 space-y-4">
           <p className="text-sm text-muted">{t('sources.webhookDescription')}</p>
 

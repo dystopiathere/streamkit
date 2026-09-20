@@ -34,6 +34,11 @@ function subscriptionsFor(
 ): Array<{ type: string; version: string; condition: Record<string, string> }> {
   const broadcaster = { broadcaster_user_id: broadcasterId };
   return [
+    // Начало и конец эфира. Прав не требуют вовсе — это публичные события
+    // канала, — и алертами не становятся: они нужны сбору метрик, чтобы окно
+    // эфира не ждало следующего такта опроса (до пятнадцати минут вне эфира).
+    { type: 'stream.online', version: '1', condition: broadcaster },
+    { type: 'stream.offline', version: '1', condition: broadcaster },
     {
       type: 'channel.follow',
       version: '2',
@@ -283,6 +288,14 @@ class EventSubSession {
 
       case 'notification': {
         this.touch(socket);
+        // Эфир начался или закончился — это не алерт, а сигнал сбору метрик.
+        // Разбирается до нормализации: у события нет ни автора, ни суммы, и в
+        // ленте событий стримера ему делать нечего.
+        const type = message.metadata.subscription_type;
+        if (type === 'stream.online' || type === 'stream.offline') {
+          this.context.onStreamState?.(type === 'stream.online');
+          return;
+        }
         const event = normalizeEventSubNotification(message, this.context.userId);
         if (!event) return;
         await this.context
@@ -341,6 +354,7 @@ class EventSubSession {
     }
 
     const missing: string[] = [];
+    const created: string[] = [];
     for (const subscription of subscriptionsFor(this.broadcasterId)) {
       if (this.stopped || socket !== this.socket) return;
       try {
@@ -348,6 +362,7 @@ class EventSubSession {
           ...subscription,
           transport: { method: 'websocket', session_id: sessionId },
         });
+        created.push(subscription.type);
       } catch (error) {
         if (error instanceof PlatformAuthError && error.status === 401) {
           this.lose('Доступ к Twitch потерян — подключите Twitch заново');
@@ -370,7 +385,14 @@ class EventSubSession {
     // Пауза сбрасывается не сразу: соединение, которое падает через секунду
     // после подписки, иначе переподключалось бы без паузы по кругу.
     this.stableTimer = setTimeout(() => (this.attempt = 0), STABLE_CONNECTION_MS);
-    this.logger.log({ userId: this.context.userId }, 'Подписка на события Twitch');
+    // Состав подписок — в журнал, а не только их число: «алерта о фолловере не
+    // было» — самый частый вопрос, и первый ответ на него должен находиться в
+    // логах воркера, а не отладкой. Типы, а не данные: имён и сообщений здесь
+    // нет и быть не может.
+    this.logger.log(
+      { userId: this.context.userId, created, missing },
+      `Подписка на события Twitch: ${created.length} из ${created.length + missing.length}`,
+    );
   }
 
   private lose(reason: string): void {

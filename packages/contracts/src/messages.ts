@@ -89,6 +89,10 @@ export const MESSAGES_EN: Readonly<Record<string, string>> = {
     'The payment service did not respond. Please try again.',
   'Платёжный сервис не вернул страницу оплаты': 'The payment service did not return a payment page',
   'Подписки нет': 'You have no subscription',
+  // Отказы снятия подарочных дней. Действие только для сотрудника, но словарь
+  // собирается по файлам, а billing — не админка: пусть перевод будет.
+  'Подарочных дней у этой подписки нет': 'This subscription has no gifted days',
+  'Подарочные дни уже истекли': 'The gifted days have already expired',
   'Нет сохранённого способа оплаты — оформите подписку заново':
     'No saved payment method — please subscribe again',
   'Включение автопродления требует согласия на списания':

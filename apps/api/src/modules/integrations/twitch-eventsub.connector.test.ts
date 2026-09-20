@@ -119,3 +119,15 @@ describe('уведомление EventSub → событие', () => {
     ).toBeNull();
   });
 });
+
+describe('начало и конец эфира', () => {
+  it('в алерт не превращаются: это сигнал сбору метрик, а не событие ленты', () => {
+    // В ленте событий стримера им делать нечего — у события нет ни автора, ни
+    // суммы. Их разбирает сессия и дёргает опрос метрик: без этого окно эфира
+    // узнавало бы о начале трансляции через пятнадцать минут.
+    expect(
+      normalizeEventSubNotification(notification('stream.online', { type: 'live' }), USER),
+    ).toBeNull();
+    expect(normalizeEventSubNotification(notification('stream.offline', {}), USER)).toBeNull();
+  });
+});

@@ -563,6 +563,11 @@ model Subscription {
   /// подписчиков при следующей выкатке.
   renewalAmountMinor     Int
   renewalCurrency        String        @db.VarChar(3)
+  /// Сколько дней текущего срока подарено сотрудником, а не оплачено.
+  /// Нужно, чтобы снятие подарка не забирало оплаченное: какие именно дни
+  /// оплачены, из одного `currentPeriodEnd` не видно, а отнимать у человека
+  /// оплаченный доступ нельзя — это обязательство по оферте.
+  giftedDays             Int           @default(0)
   renewalFailures        Int           @default(0)
   nextRenewalAttemptAt   DateTime?
   /// Письмо о предстоящем списании: за какой конец периода и когда ушло.

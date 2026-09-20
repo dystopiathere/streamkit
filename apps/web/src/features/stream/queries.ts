@@ -1,5 +1,5 @@
-import type { ChannelStats, StreamOverview } from '@streamkit/contracts';
-import { type QueryClient, useQuery } from '@tanstack/react-query';
+import type { ChannelStats, StreamOverview, StreamRefresh } from '@streamkit/contracts';
+import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
 export const streamKeys = {
@@ -21,6 +21,22 @@ export function useStreamOverview() {
     // страницах, и с общим `staleTime` окно полминуты показывало бы прежние.
     staleTime: 0,
     refetchInterval: 30_000,
+  });
+}
+
+/**
+ * Ручной опрос площадок.
+ *
+ * Сводка из ответа кладётся в кэш сразу: сервер уже посчитал её после опроса, и
+ * перезапрос вернул бы то же самое лишним кругом по сети.
+ */
+export function useRefreshStream() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<StreamRefresh>('/stream/refresh'),
+    onSuccess: (result) => {
+      client.setQueryData<StreamOverview>(streamKeys.overview, result.overview);
+    },
   });
 }
 

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Channel as PrismaChannel, ChannelSyncState } from '@prisma/client';
-import type { ChannelStats } from '@streamkit/contracts';
+import type { ChannelStats, Platform } from '@streamkit/contracts';
 import { RealtimeBus } from '../../common/bus/realtime-bus.service';
 import {
   PlatformAuthError,
@@ -10,7 +10,11 @@ import {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { PlatformRegistry } from '../integrations/platform-registry.service';
 import { PlatformTokenService } from '../integrations/platform-token.service';
-import { ANALYTICS_PLATFORMS, toContractPlatform } from '../integrations/platform.mappers';
+import {
+  ANALYTICS_PLATFORMS,
+  toContractPlatform,
+  toPrismaPlatform,
+} from '../integrations/platform.mappers';
 import { nextQuotaReset, QuotaService } from './quota.service';
 
 /** Как часто опрашивается канал в эфире. Зрители меняются поминутно. */
@@ -122,13 +126,53 @@ export class AnalyticsPoller {
     return polled;
   }
 
-  private async pollChannel(channel: PrismaChannel): Promise<boolean> {
+  /**
+   * Опрос каналов одного пользователя ВНЕ расписания.
+   *
+   * Нужен там, где ждать такта нельзя: Twitch сообщает о начале эфира событием
+   * `stream.online`, и сводка обязана обновиться сразу, а не через четверть
+   * часа, когда до канала дойдёт очередь опроса. Тем же путём работает кнопка
+   * «Обновить» в окне эфира — у YouTube события о начале эфира нет вовсе.
+   *
+   * Каденция здесь не проверяется: вызов и так редкий и ограничен снаружи
+   * (пауза между нажатиями, одно событие площадки на эфир). Квота и состояние
+   * доступа проверяются как обычно — обойти бюджет YouTube кнопкой нельзя.
+   *
+   * @returns сколько каналов обновилось и есть ли эфир по ответу площадки.
+   */
+  async pollUser(
+    userId: string,
+    platform?: Platform,
+  ): Promise<{ polled: number; isLive: boolean }> {
+    const channels = await this.prisma.channel.findMany({
+      where: {
+        userId,
+        isEnabled: true,
+        platform: platform ? toPrismaPlatform(platform) : { in: ANALYTICS_PLATFORMS },
+        syncState: { not: 'AUTH_EXPIRED' },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    let polled = 0;
+    let isLive = false;
+    for (const channel of channels) {
+      const stats = await this.pollChannel(channel);
+      if (!stats) continue;
+      polled += 1;
+      isLive = isLive || stats.isLive;
+    }
+    return { polled, isLive };
+  }
+
+  /** @returns снимок, если его удалось собрать. */
+  private async pollChannel(channel: PrismaChannel): Promise<ChannelStats | null> {
     const platform = toContractPlatform(channel.platform);
     const provider = this.registry.find(platform);
     if (!provider) {
       // Площадку выключили в конфигурации, а канал остался подключённым.
       // Это не ошибка пользователя — молча пропускаем.
-      return false;
+      return null;
     }
 
     // Бюджет резервируется ДО запроса: списание после означало бы, что
@@ -139,7 +183,7 @@ export class AnalyticsPoller {
       await this.markState(channel.id, 'RATE_LIMITED', 'Суточная квота площадки исчерпана', {
         nextAttemptAt: nextQuotaReset(new Date()),
       });
-      return false;
+      return null;
     }
 
     try {
@@ -152,10 +196,10 @@ export class AnalyticsPoller {
       });
 
       await this.persist(channel, stats);
-      return true;
+      return stats;
     } catch (error) {
       await this.handleFailure(channel, error);
-      return false;
+      return null;
     }
   }
 
@@ -237,8 +281,24 @@ export class AnalyticsPoller {
     }
 
     if (error instanceof PlatformAuthError) {
-      await this.markState(channel.id, 'AUTH_EXPIRED', 'Площадка отвергла доступ');
-      this.logger.warn({ channelId: channel.id }, 'Доступ к площадке истёк, опрос остановлен');
+      // Мёртвый токен — только 401. Так отвечают обе площадки на отозванный
+      // доступ, и этим же кодом заканчивается неудачное обновление токена.
+      //
+      // 403 — не про токен: площадка не даёт ИМЕННО ЭТИ данные. У YouTube так
+      // отвечает канал без включённых трансляций, у Twitch — канал без
+      // партнёрства на список подписчиков. Пока обе ветки сходились в
+      // AUTH_EXPIRED, такой канал вставал насовсем и просил переподключения,
+      // которое ничего не меняет: право выдано, а данных всё равно нет.
+      if (error.status === 401) {
+        await this.markState(channel.id, 'AUTH_EXPIRED', 'Площадка отвергла доступ');
+        this.logger.warn({ channelId: channel.id }, 'Доступ к площадке истёк, опрос остановлен');
+        return;
+      }
+      await this.markState(channel.id, 'ERROR', errorMessage(error));
+      this.logger.warn(
+        { channelId: channel.id, status: error.status },
+        'Площадка отказала в доступе к данным канала',
+      );
       return;
     }
 

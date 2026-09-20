@@ -63,6 +63,11 @@ export function PrivacyPage(): React.JSX.Element {
 
       <Card className="space-y-4">
         <h2 className="font-medium">{t('privacy.consents')}</h2>
+        {/* Прямым текстом, как это устроено: согласие с правилами даётся
+            регистрацией, об изменениях уведомляем, доступ от неотмеченной
+            редакции не зависит. Без этого абзаца красная строка «редакция
+            изменилась» выглядит угрозой. */}
+        <p className="text-sm text-muted">{t('privacy.consentsLead')}</p>
 
         <ul className="space-y-3">
           {consents.data?.map((consent) => (
@@ -82,8 +87,18 @@ export function PrivacyPage(): React.JSX.Element {
                       })
                     : t('privacy.notAccepted')}
                 </p>
+                {/* Новая редакция — не потеря доступа. У договора и политики
+                    это уведомление (доступ работает как раньше), у согласий по
+                    152-ФЗ — просьба подтвердить, потому что молчание согласием
+                    не является. Ни то, ни другое не выключает сервис, и
+                    подпись обязана это говорить: иначе «не принял» читается как
+                    «сейчас отключат». */}
                 {consent.needsRenewal ? (
-                  <p className="text-xs text-danger">{t('privacy.needsRenewal')}</p>
+                  <p className="text-xs text-warning">
+                    {consent.updatePolicy === 'reconsent'
+                      ? t('privacy.needsRenewal')
+                      : t('privacy.newEdition')}
+                  </p>
                 ) : null}
               </div>
 
@@ -110,14 +125,22 @@ export function PrivacyPage(): React.JSX.Element {
                 <Button
                   variant="secondary"
                   aria-label={t(
-                    consent.needsRenewal ? 'privacy.renewNamed' : 'privacy.grantNamed',
+                    !consent.needsRenewal
+                      ? 'privacy.grantNamed'
+                      : consent.updatePolicy === 'reconsent'
+                        ? 'privacy.renewNamed'
+                        : 'privacy.acknowledgeNamed',
                     {
                       name: documentTitle(consent.document, consent.title),
                     },
                   )}
                   onClick={() => grant.mutate(consent.document)}
                 >
-                  {consent.needsRenewal ? t('privacy.renew') : t('privacy.grant')}
+                  {!consent.needsRenewal
+                    ? t('privacy.grant')
+                    : consent.updatePolicy === 'reconsent'
+                      ? t('privacy.renew')
+                      : t('privacy.acknowledge')}
                 </Button>
               )}
             </li>

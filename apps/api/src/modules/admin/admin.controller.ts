@@ -25,6 +25,8 @@ import {
   type AdminPayment,
   type AdminPaymentListQuery,
   adminPaymentListQuerySchema,
+  type AdminResetDonationsInput,
+  adminResetDonationsSchema,
   type AdminRoom,
   type AdminRoomListQuery,
   adminRoomListQuerySchema,
@@ -46,6 +48,8 @@ import {
   extendSubscriptionSchema,
   type Page,
   type PaymentView,
+  type RevokeGiftDaysInput,
+  revokeGiftDaysSchema,
   type RevokeSessionsInput,
   revokeSessionsSchema,
   type SetUserRoleInput,
@@ -198,6 +202,41 @@ export class AdminUsersController {
     return this.users.extendSubscription(
       id,
       body.days,
+      staffContext(this.audit, request, staff, { reason: body.reason }),
+    );
+  }
+
+  /** Снятие подарочных дней. Оплаченные снять нельзя — предел считает billing. */
+  @Post(':id/subscription/revoke-gift')
+  revokeGift(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zodBody(revokeGiftDaysSchema)) body: RevokeGiftDaysInput,
+    @CurrentStaff() staff: StaffUser,
+    @Req() request: Request,
+  ): Promise<SubscriptionView> {
+    return this.users.revokeGiftDays(
+      id,
+      body.days,
+      staffContext(this.audit, request, staff, { reason: body.reason }),
+    );
+  }
+
+  /**
+   * Обнуление истории событий и донатов стримера.
+   *
+   * По его просьбе: своя кнопка у него есть, но в поддержку приходят и те, кто
+   * до неё не дошёл. Причина обязательна, автор — в журнале.
+   */
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Post(':id/donations/reset')
+  resetDonations(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zodBody(adminResetDonationsSchema)) body: AdminResetDonationsInput,
+    @CurrentStaff() staff: StaffUser,
+    @Req() request: Request,
+  ): Promise<void> {
+    return this.users.resetDonations(
+      id,
       staffContext(this.audit, request, staff, { reason: body.reason }),
     );
   }

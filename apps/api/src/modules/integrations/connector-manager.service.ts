@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import type { IncomingAlertEvent } from '@streamkit/contracts';
+import { RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { EventsService } from '../events/events.service';
 import type { DonationConnector } from './donation-provider';
@@ -62,6 +63,7 @@ export class ConnectorManager implements OnApplicationBootstrap, OnApplicationSh
     private readonly prisma: PrismaService,
     private readonly tokens: PlatformTokenService,
     private readonly events: EventsService,
+    private readonly bus: RealtimeBus,
     donationAlerts: DonationAlertsConnector,
     twitch: TwitchEventSubConnector,
   ) {
@@ -170,6 +172,17 @@ export class ConnectorManager implements OnApplicationBootstrap, OnApplicationSh
       },
       reportFailure: (reason) => {
         this.logger.warn({ userId, provider, reason }, 'Сбой соединения с донат-сервисом');
+      },
+      // Сигнал о начале эфира уходит в шину, а не прямым вызовом опроса:
+      // модуль аналитики импортирует интеграции, и обратный импорт замкнул бы
+      // граф. Слушает его воркер (`StreamStateListener`).
+      onStreamState: (isLive) => {
+        if (provider !== 'twitch') return;
+        void this.bus
+          .publish({ kind: 'channel-live', userId, platform: 'twitch', isLive })
+          .catch((error: unknown) =>
+            this.logger.warn({ err: error, userId }, 'Сигнал о состоянии эфира не отправлен'),
+          );
       },
       onAccessLost: (reason) => {
         void this.disable(userId, provider, reason);

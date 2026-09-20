@@ -4,6 +4,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Socket } from 'socket.io';
 import { CryptoService } from '../src/common/crypto/crypto.service';
+import { PlatformAuthError } from '../src/common/http/platform-errors';
 import { PresenceService } from '../src/common/redis/presence.service';
 import { AnalyticsPoller } from '../src/modules/analytics/analytics-poller.service';
 import type { PlatformProvider } from '../src/modules/integrations/platform-provider';
@@ -26,12 +27,17 @@ describe('Окно эфира (feature)', () => {
   let userId: string;
   let accessToken: string;
   let nextStats: ChannelStats;
+  /** Отказ площадки на следующий опрос. Ставится тестом, снимается в beforeEach. */
+  let nextError: Error | null;
 
   const provider = {
     platform: 'twitch',
     title: 'Twitch',
     statsQuotaCost: 0,
-    fetchStats: async () => nextStats,
+    fetchStats: async () => {
+      if (nextError) throw nextError;
+      return nextStats;
+    },
   } as unknown as PlatformProvider;
 
   beforeAll(async () => {
@@ -48,6 +54,7 @@ describe('Окно эфира (feature)', () => {
 
   beforeEach(async () => {
     await harness.reset();
+    nextError = null;
     const registration = await request(server())
       .post('/api/auth/register')
       .send(registrationPayload());
@@ -291,6 +298,49 @@ describe('Окно эфира (feature)', () => {
     await new Promise((resolve) => setTimeout(resolve, 1_500));
     expect(disconnected).toBe(true);
     gateway.handleDisconnect(client);
+  });
+
+  it('кнопка «Обновить» опрашивает площадку сразу, а второе нажатие подряд — нет', async () => {
+    // Расписание вне эфира — раз в пятнадцать минут (квота YouTube), и это та
+    // самая жалоба: о начале эфира окно узнавало с опозданием. Кнопка
+    // опрашивает площадку немедленно; пауза между нажатиями общая на все
+    // инстансы API, потому что живёт в Redis.
+    await connectTwitch();
+    nextStats = liveStats();
+
+    const first = await request(server()).post('/api/stream/refresh').set(auth()).expect(200);
+    expect(first.body.throttled).toBe(false);
+    expect(first.body.overview.channels[0]).toMatchObject({ isLive: true, viewers: 1543 });
+    expect(Date.parse(first.body.nextRefreshAt as string)).toBeGreaterThan(Date.now());
+
+    // Второе нажатие отдаёт ту же сводку и признак «слишком часто» — но не
+    // ошибку: данные свежие, просто без нового запроса к площадке.
+    nextStats = liveStats({ viewers: 9999 });
+    const second = await request(server()).post('/api/stream/refresh').set(auth()).expect(200);
+    expect(second.body.throttled).toBe(true);
+    expect(second.body.overview.channels[0].viewers).toBe(1543);
+  });
+
+  it('403 от площадки — временный отказ, а не «переподключите площадку»', async () => {
+    // У YouTube так отвечает канал без включённых трансляций, у Twitch — канал
+    // без партнёрства. AUTH_EXPIRED здесь означал бы тупик: право выдано, а
+    // данных всё равно нет, и переподключение ничего не меняет.
+    await connectTwitch();
+    nextError = new PlatformAuthError('twitch', 403, 'Площадка отвергла токен');
+    await harness.app.get(AnalyticsPoller).pollDue();
+
+    const channel = await harness.prisma.channel.findFirstOrThrow({ where: { userId } });
+    expect(channel.syncState).toBe('ERROR');
+    expect(channel.nextAttemptAt).not.toBeNull();
+  });
+
+  it('401 от площадки останавливает опрос до переподключения', async () => {
+    await connectTwitch();
+    nextError = new PlatformAuthError('twitch', 401, 'Площадка отвергла токен');
+    await harness.app.get(AnalyticsPoller).pollDue();
+
+    const channel = await harness.prisma.channel.findFirstOrThrow({ where: { userId } });
+    expect(channel.syncState).toBe('AUTH_EXPIRED');
   });
 
   it('без канала чата окно ни на что не подписывается', async () => {

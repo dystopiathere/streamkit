@@ -38,6 +38,8 @@ export type AuditAction =
   | 'privacy.account.anonymized'
   | 'consent.granted'
   | 'consent.revoked'
+  /** Стример или сотрудник обнулил историю событий и донатов. */
+  | 'events.history.reset'
   | 'integration.connected'
   | 'integration.disconnected'
   | 'integration.token.expired'
@@ -55,6 +57,8 @@ export type AuditAction =
   | 'admin.widget.disabled'
   | 'admin.widget.enabled'
   | 'admin.subscription.extended'
+  /** Сотрудник снял подарочные дни. Оплаченные снять нельзя — см. billing. */
+  | 'admin.subscription.gift_revoked'
   | 'admin.channel.resync'
   | 'admin.payment.synced';
 

@@ -66,7 +66,15 @@ export function UserPage(): React.JSX.Element {
 }
 
 type Dialog =
-  'suspend' | 'restore' | 'resetTotp' | 'anonymize' | 'revokeAll' | 'autoRenew' | 'extend';
+  | 'suspend'
+  | 'restore'
+  | 'resetTotp'
+  | 'anonymize'
+  | 'revokeAll'
+  | 'autoRenew'
+  | 'extend'
+  | 'revokeGift'
+  | 'resetDonations';
 
 function UserCard({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
   const { t } = useTranslation();
@@ -108,6 +116,15 @@ function UserCard({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
   const extend = useAdminAction(
     (input: { days: number; reason: string }) => api.post(`${base}/subscription/extend`, input),
     t('user.extended'),
+  );
+  const revokeGift = useAdminAction(
+    (input: { days: number; reason: string }) =>
+      api.post(`${base}/subscription/revoke-gift`, input),
+    t('user.giftRevoked'),
+  );
+  const resetDonations = useAdminAction(
+    (reason: string) => api.post(`${base}/donations/reset`, { reason }),
+    t('user.donationsReset'),
   );
   const resync = useAdminAction(
     (channelId: string) => api.post(`/admin/channels/${channelId}/resync`),
@@ -193,6 +210,17 @@ function UserCard({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
                   <>
                     {formatNumber(detail.eventCount)}
                     <span className="block text-xs text-muted">{t('user.eventsNote')}</span>
+                    {/* Обнуление — по просьбе стримера: своя кнопка у него есть,
+                        но в поддержку приходят и те, кто до неё не дошёл. */}
+                    {isAdmin && !anonymized && detail.eventCount > 0 ? (
+                      <Button
+                        variant="ghost"
+                        className="mt-1 px-0"
+                        onClick={() => dialog.open('resetDonations')}
+                      >
+                        {t('user.resetDonations')}
+                      </Button>
+                    ) : null}
                   </>
                 ),
               },
@@ -213,6 +241,13 @@ function UserCard({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
                 {user.status === 'active' ? (
                   <Button variant="secondary" onClick={() => dialog.open('extend')}>
                     {t('user.extend')}
+                  </Button>
+                ) : null}
+                {/* Снять можно только подаренное: оплаченные дни — обязательство
+                    по оферте. Нечего снимать — кнопки нет. */}
+                {detail.subscription.giftedDays > 0 ? (
+                  <Button variant="secondary" onClick={() => dialog.open('revokeGift')}>
+                    {t('user.revokeGift')}
                   </Button>
                 ) : null}
               </>
@@ -244,6 +279,13 @@ function UserCard({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
               {
                 label: t('user.subMethod'),
                 value: detail.subscription.paymentMethodTitle ?? '—',
+              },
+              {
+                label: t('user.subGifted'),
+                value:
+                  detail.subscription.giftedDays > 0
+                    ? formatNumber(detail.subscription.giftedDays)
+                    : '—',
               },
             ]}
           />
@@ -524,6 +566,31 @@ function UserCard({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
       >
         <p>{t('user.extendText')}</p>
         <DaysField value={days} onChange={setDays} />
+      </Confirm>
+      <Confirm
+        open={dialog.target === 'revokeGift'}
+        title={t('user.revokeGiftTitle', { name })}
+        confirmLabel={t('user.revokeGift')}
+        reason={{ label: t('user.revokeGiftReason'), required: true, maxLength: 500 }}
+        isPending={revokeGift.isPending}
+        onClose={close}
+        onConfirm={({ reason }) =>
+          revokeGift.mutate({ days, reason: reason ?? '' }, { onSuccess: close })
+        }
+      >
+        <p>{t('user.revokeGiftText', { days: detail.subscription.giftedDays })}</p>
+        <DaysField value={days} onChange={setDays} />
+      </Confirm>
+      <Confirm
+        open={dialog.target === 'resetDonations'}
+        title={t('user.resetDonationsTitle', { name })}
+        confirmLabel={t('user.resetDonations')}
+        reason={{ label: t('user.resetDonationsReason'), required: true, maxLength: 500 }}
+        isPending={resetDonations.isPending}
+        onClose={close}
+        onConfirm={({ reason }) => resetDonations.mutate(reason ?? '', { onSuccess: close })}
+      >
+        {t('user.resetDonationsText')}
       </Confirm>
       <Confirm
         open={pendingRole !== null}

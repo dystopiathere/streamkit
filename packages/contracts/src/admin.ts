@@ -230,6 +230,31 @@ export const extendSubscriptionSchema = z.object({
 });
 export type ExtendSubscriptionInput = z.infer<typeof extendSubscriptionSchema>;
 
+/**
+ * Снятие подарочных дней — тот же диапазон, отдельная ручка.
+ *
+ * Отдельная, а не отрицательные `days` у продления: у этих действий разные
+ * границы. Подарить можно сверх оплаченного, а снять — только подаренное, и
+ * запрос «минус триста дней» у аккаунта с оплаченным годом не должен
+ * выглядеть допустимым на уровне схемы.
+ */
+export const revokeGiftDaysSchema = z.object({
+  days: z.coerce.number().int().min(1).max(366),
+  reason: z.string().trim().min(1, 'Укажите причину').max(500),
+});
+export type RevokeGiftDaysInput = z.infer<typeof revokeGiftDaysSchema>;
+
+/**
+ * Обнуление истории донатов пользователя сотрудником.
+ *
+ * Причина обязательна: это удаление данных по просьбе стримера, и в журнале
+ * должно остаться, по чьей именно.
+ */
+export const adminResetDonationsSchema = z.object({
+  reason: z.string().trim().min(1, 'Укажите причину').max(500),
+});
+export type AdminResetDonationsInput = z.infer<typeof adminResetDonationsSchema>;
+
 /* ------------------------------------------------------------------ */
 /* Списки объектов                                                     */
 /* ------------------------------------------------------------------ */

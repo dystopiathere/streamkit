@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type { ChannelStats } from '@streamkit/contracts';
 import { HttpClient } from '../../common/http/http-client.service';
 import { AppConfig } from '../../config/app-config.service';
@@ -8,6 +8,7 @@ import {
   type OAuthTokens,
   optionalCount,
   optionalInstant,
+  optionalPart,
   type PlatformProvider,
   type RawTokenResponse,
 } from './platform-provider';
@@ -97,6 +98,7 @@ export class TwitchProvider implements PlatformProvider {
   readonly title = 'Twitch';
   /** Квоты по объёму у Twitch нет — только лимит частоты, его держит бэкофф. */
   readonly statsQuotaCost = 0;
+  private readonly logger = new Logger(TwitchProvider.name);
 
   constructor(
     private readonly http: HttpClient,
@@ -169,25 +171,34 @@ export class TwitchProvider implements PlatformProvider {
     // `first=1` в запросах фолловеров и подписчиков — мы берём только поле
     // `total`, сам список не нужен, а страница по умолчанию тянет двадцать
     // записей с персональными данными, которые нам незачем даже получать.
+    // Обязателен только `streams`: он отвечает, идёт ли эфир, и без него
+    // снимок бессмысленен. Счётчики — части необязательные: `subscriptions`
+    // отвечает 403 каналу без партнёрства, а `followers` — если право выдали
+    // не полностью. Отказ такой части даёт null в этом поле, а не потерянный
+    // снимок: раньше одним `Promise.all` он отменял и состояние эфира.
     const [stream, followers, subscribers] = await Promise.all([
       this.get<TwitchList<TwitchStream>>(
         `${this.helix}/streams?user_id=${broadcaster}`,
         accessToken,
       ),
-      this.get<TwitchList<never>>(
-        `${this.helix}/channels/followers?broadcaster_id=${broadcaster}&first=1`,
-        accessToken,
+      optionalPart('followers', this.logger, () =>
+        this.get<TwitchList<never>>(
+          `${this.helix}/channels/followers?broadcaster_id=${broadcaster}&first=1`,
+          accessToken,
+        ),
       ),
-      this.get<TwitchList<never>>(
-        `${this.helix}/subscriptions?broadcaster_id=${broadcaster}&first=1`,
-        accessToken,
+      optionalPart('subscriptions', this.logger, () =>
+        this.get<TwitchList<never>>(
+          `${this.helix}/subscriptions?broadcaster_id=${broadcaster}&first=1`,
+          accessToken,
+        ),
       ),
     ]);
 
     return normalizeStats({
       stream: stream.data[0],
-      followersTotal: followers.total,
-      subscribersTotal: subscribers.total,
+      followersTotal: followers?.total,
+      subscribersTotal: subscribers?.total,
       capturedAt: new Date(),
     });
   }

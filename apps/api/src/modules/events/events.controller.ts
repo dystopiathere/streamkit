@@ -16,6 +16,7 @@ import {
   type AlertEvent,
   type CursorPagination,
   cursorPaginationSchema,
+  type EventsResetResult,
   type Page,
   type TestEventInput,
   testEventSchema,
@@ -35,6 +36,7 @@ export class EventsController {
   constructor(
     private readonly events: EventsService,
     private readonly webhooks: WebhookService,
+    private readonly audit: AuditService,
   ) {}
 
   @Get()
@@ -53,6 +55,22 @@ export class EventsController {
     @Body(new ZodValidationPipe(testEventSchema)) body: TestEventInput,
   ): Promise<AlertEvent> {
     return this.events.createTestEvent(user.id, body.type, body.language);
+  }
+
+  /**
+   * Обнуление истории событий и донатов по просьбе владельца.
+   *
+   * Подтверждение — на клиенте: восстановить историю нечем, и сервер тут не
+   * добавит осмысленности вторым полем в теле запроса. Лимит по умолчанию
+   * оставлен: удалять историю двадцать раз в минуту незачем.
+   */
+  @HttpCode(HttpStatus.OK)
+  @Post('reset')
+  async reset(
+    @CurrentUser() user: AuthenticatedUser,
+    @Req() request: Request,
+  ): Promise<EventsResetResult> {
+    return this.events.resetHistory(user.id, this.audit.contextFromRequest(request));
   }
 
   /** Выдаёт новый секрет вебхука. Показывается один раз. */

@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LanguageSwitch } from '@/components/LanguageSwitch';
+import { LegalUpdateNotice } from '@/components/LegalUpdateNotice';
+import { PublicFooter } from '@/features/public/PublicFooter';
 import { api } from '@/lib/api';
 import { useAuthStore, useCurrentUser } from '@/lib/auth-store';
 import {
@@ -48,7 +49,7 @@ export function AppLayout(): React.JSX.Element {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="flex min-h-screen flex-col">
       <SkipLink />
       <header className="border-b border-border bg-surface">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 lg:py-3">
@@ -92,20 +93,28 @@ export function AppLayout(): React.JSX.Element {
               <span className="min-w-0 truncate px-3 text-sm text-muted lg:px-0">
                 {user?.displayName}
               </span>
-              <div className="flex items-center gap-1">
-                <LanguageSwitch className="rounded-lg px-3 py-1.5 text-sm text-muted" />
-                <Button variant="ghost" onClick={handleLogout}>
-                  {t('nav.logout')}
-                </Button>
-              </div>
+              {/* Переключателя языка здесь больше нет: кнопка «English» между
+                  разделами дашборда читалась как ещё один раздел. Он в подвале,
+                  целой фразой. */}
+              <Button variant="ghost" onClick={handleLogout}>
+                {t('nav.logout')}
+              </Button>
             </div>
           </div>
         </div>
       </header>
 
-      <MainContent className="mx-auto max-w-6xl px-4 py-6">
+      {/* Подвал прижат к низу: на короткой странице («Источники» без
+          подключений) он иначе висел бы посреди экрана. */}
+      <MainContent className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">
+        {/* Уведомление о новой редакции документов — над содержимым любой
+            страницы дашборда: раньше узнать об изменении можно было только
+            зайдя в «Приватность». Ничего не блокирует. */}
+        <LegalUpdateNotice />
         <Outlet />
       </MainContent>
+
+      <PublicFooter />
     </div>
   );
 }

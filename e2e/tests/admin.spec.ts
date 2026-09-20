@@ -27,7 +27,7 @@ async function register(request: APIRequestContext, prefix: string): Promise<Acc
       email,
       password: PASSWORD,
       displayName: `E2E ${prefix}`,
-      consents: { terms: true, privacy: true, personalData: true },
+      acceptDocuments: true,
     },
   });
   expect(response.ok()).toBe(true);

@@ -60,6 +60,49 @@ describe('Приватность и удаление аккаунта (feature)'
       .expect(400);
   });
 
+  it('новая редакция не закрывает доступ, а «ознакомлен» отмечает её в журнале', async () => {
+    // Правила приняты регистрацией: об изменениях уведомляют, а не требуют
+    // подписать заново. Отметка в журнале всё равно нужна — уведомление должно
+    // быть доказуемым.
+    await harness.prisma.consent.updateMany({
+      where: { document: 'TERMS' },
+      data: { documentVersion: 'old-edition' },
+    });
+
+    const before = await request(server()).get('/api/privacy/consents').set(auth()).expect(200);
+    const terms = (before.body as Array<Record<string, unknown>>).find(
+      (consent) => consent.document === 'TERMS',
+    );
+    expect(terms).toMatchObject({ needsRenewal: true, updatePolicy: 'notify' });
+
+    // Доступ не зависит от отметки: обычная ручка дашборда отвечает как обычно.
+    await request(server()).get('/api/widgets').set(auth()).expect(200);
+
+    const result = await request(server())
+      .post('/api/privacy/consents/acknowledge')
+      .set(auth())
+      .expect(200);
+    expect(result.body.acknowledged).toBe(1);
+
+    const after = await request(server()).get('/api/privacy/consents').set(auth()).expect(200);
+    expect(
+      (after.body as Array<Record<string, unknown>>).every((consent) => !consent.needsRenewal),
+    ).toBe(true);
+  });
+
+  it('согласие на обработку ПДн просят подтвердить заново: молчание согласием не является', async () => {
+    const consents = await request(server()).get('/api/privacy/consents').set(auth()).expect(200);
+    const byDocument = new Map(
+      (consents.body as Array<{ document: string; updatePolicy: string }>).map((consent) => [
+        consent.document,
+        consent.updatePolicy,
+      ]),
+    );
+    expect(byDocument.get('PERSONAL_DATA')).toBe('reconsent');
+    expect(byDocument.get('COOKIE_ANALYTICS')).toBe('reconsent');
+    expect(byDocument.get('PRIVACY')).toBe('notify');
+  });
+
   it('журнал согласий удаляется через три года после удаления аккаунта, но не раньше', async () => {
     await deleteAccount();
     const maintenance = harness.app.get(MaintenanceService);

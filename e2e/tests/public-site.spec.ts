@@ -15,6 +15,7 @@ test('главная без входа показывает цены, получ
   const seller = (await (await page.request.get(`${API_URL}/api/public/seller`)).json()) as {
     name: string | null;
     inn: string | null;
+    email: string | null;
   };
   // Рядом с `pnpm dev` реквизиты могут быть не заполнены; в CI они заданы, и
   // пропуск там означал бы молча выключенную проверку.
@@ -31,11 +32,17 @@ test('главная без входа показывает цены, получ
   await expect(page.locator('#delivery')).toContainText('Физической доставки нет');
   await expect(page.locator('#payment')).toContainText('ЮKassa');
 
+  // На главной — только способ связи: имя, статус и ИНН продавца стоят в
+  // подвале, а он есть на каждой странице. Дублировать их в теле главной значило
+  // повторять подвал через два экрана прокрутки.
   const contacts = page.locator('#contacts');
-  await expect(contacts).toContainText(seller.name!);
-  await expect(contacts).toContainText(seller.inn!);
-  await expect(contacts).toContainText('самозанятый');
-  await expect(page.getByTestId('seller-requisites')).toContainText(seller.inn!);
+  await expect(contacts).toContainText(seller.email!);
+  await expect(contacts).not.toContainText(seller.inn!);
+
+  const requisites = page.getByTestId('seller-requisites');
+  await expect(requisites).toContainText(seller.name!);
+  await expect(requisites).toContainText(seller.inn!);
+  await expect(requisites).toContainText('самозанятый');
 
   // Оферта открывается из подвала, с подставленными реквизитами и ценой.
   await page.getByRole('link', { name: 'Оферта тарифа «Про»' }).click();
@@ -57,7 +64,9 @@ test('на телефоне разделы главной свёрнуты в м
   await page.goto('/');
 
   const menuButton = page.getByRole('button', { name: 'Открыть меню' });
-  const pricing = page.getByRole('link', { name: 'Тарифы', exact: true });
+  // Строго в шапке: те же разделы есть и в подвале — там карта сайта.
+  const header = page.getByRole('navigation', { name: 'Разделы главной' });
+  const pricing = header.getByRole('link', { name: 'Тарифы', exact: true });
   await expect(page.getByRole('link', { name: 'Войти' })).toBeVisible();
   await expect(pricing).toBeHidden();
 
@@ -72,7 +81,7 @@ test('на телефоне разделы главной свёрнуты в м
   // Escape закрывает меню и возвращает фокус на кнопку.
   await menuButton.click();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('link', { name: 'Контакты', exact: true })).toBeHidden();
+  await expect(header.getByRole('link', { name: 'Контакты', exact: true })).toBeHidden();
   await expect(page.getByRole('button', { name: 'Открыть меню' })).toBeFocused();
 });
 

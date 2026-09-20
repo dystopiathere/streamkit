@@ -72,7 +72,7 @@ test('английский сайт: главная, вход, дашборд, �
     await page.reload();
     await expect(page.getByRole('link', { name: 'Политика конфиденциальности' })).toBeVisible();
 
-    await page.getByRole('button', { name: 'English' }).click();
+    await page.getByRole('button', { name: 'Версия сайта на английском' }).click();
     await expect(page.getByRole('link', { name: 'Privacy Policy' })).toBeVisible();
     await expect(
       page.getByRole('heading', { level: 1, name: 'StreamKit Privacy Policy' }),

@@ -72,10 +72,10 @@ describe('Аутентификация (feature)', () => {
     expect(consents.every((consent) => consent.documentVersion.length > 0)).toBe(true);
   });
 
-  it('отклоняет регистрацию без согласий', async () => {
+  it('отклоняет регистрацию без принятия документов', async () => {
     await request(server())
       .post('/api/auth/register')
-      .send(registrationPayload({ consents: { terms: true, privacy: false, personalData: true } }))
+      .send(registrationPayload({ acceptDocuments: false }))
       .expect(400);
   });
 

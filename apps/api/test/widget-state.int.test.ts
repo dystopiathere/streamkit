@@ -89,6 +89,32 @@ describe('Состояние виджетов (feature)', () => {
     expect(response.body.targetMinor).toBe(100_000);
   });
 
+  it('обнуление истории донатов обнуляет цель и топ, но не стартовую сумму', async () => {
+    // Стартовая сумма — настройка стримера, а не собранные деньги: обнуление
+    // истории её не трогает, иначе оно молча правило бы настройки виджета.
+    const goalId = await createWidget('goal', { targetMinor: 100_000 });
+    const topId = await createWidget('top-donors', {});
+    await seedDonation(30_000, { username: 'Щедрый' });
+    await request(server())
+      .patch(`/api/widgets/${goalId}/state`)
+      .set(auth())
+      .send({ kind: 'goal', offsetMinor: 5_000 })
+      .expect(200);
+
+    const before = await request(server()).get(`/api/widgets/${goalId}/state`).set(auth());
+    expect(before.body.raisedMinor).toBe(35_000);
+
+    const reset = await request(server()).post('/api/events/reset').set(auth()).expect(200);
+    expect(reset.body).toEqual({ removedEvents: 1, refreshedWidgets: 2 });
+
+    const goal = await request(server()).get(`/api/widgets/${goalId}/state`).set(auth());
+    expect(goal.body.raisedMinor).toBe(5_000);
+    const top = await request(server()).get(`/api/widgets/${topId}/state`).set(auth());
+    expect(top.body.entries).toEqual([]);
+    const events = await request(server()).get('/api/events').set(auth());
+    expect(events.body.items).toEqual([]);
+  });
+
   it('засчитывает в цель несколько типов событий сразу', async () => {
     // Марафон обычно наполняют и донаты, и платные подписки. Схема массив
     // поддерживала с самого начала — ограничение было только в форме.

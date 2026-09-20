@@ -68,15 +68,15 @@ export async function createHarness(
   };
 }
 
-/** Согласия, обязательные при регистрации. */
-export const VALID_CONSENTS = { terms: true, privacy: true, personalData: true } as const;
+/** Принятие документов сервиса: одно поле, см. registerSchema. */
+export const ACCEPT_DOCUMENTS = true;
 
 export function registrationPayload(overrides: Record<string, unknown> = {}) {
   return {
     email: `user-${Math.random().toString(36).slice(2, 10)}@example.com`,
     password: 'очень-надёжный-пароль-1',
     displayName: 'Тестовый стример',
-    consents: VALID_CONSENTS,
+    acceptDocuments: ACCEPT_DOCUMENTS,
     ...overrides,
   };
 }

@@ -52,6 +52,27 @@ test('тестовый алерт с вкладки виджетов виден 
   await expect(page.getByText('Тестовый зритель')).toBeVisible({ timeout: 5_000 });
 });
 
+test('стример обнуляет историю донатов, и подвал есть на странице дашборда', async ({ page }) => {
+  await registerStreamer(page, 'e2e-reset');
+  await dismissBanner(page);
+
+  await page.getByRole('button', { name: 'Тестовый алерт' }).click();
+  await expect(page.getByText('Тестовый алерт отправлен')).toBeVisible();
+
+  await page.getByRole('link', { name: 'Аналитика', exact: true }).click();
+  // Подвал стоит и в дашборде: реквизиты продавца находятся с любой страницы.
+  await expect(page.getByTestId('seller-requisites')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Версия сайта на английском' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Обнулить историю' }).click();
+  // Подтверждение — в диалоге: восстановить историю нечем.
+  await page.getByRole('dialog').getByRole('button', { name: 'Обнулить историю' }).click();
+  await expect(page.getByText(/Удалено 1 событие/)).toBeVisible();
+
+  await page.getByRole('link', { name: 'События' }).click();
+  await expect(page.getByText('Тестовый зритель')).toHaveCount(0);
+});
+
 test('«Принять все» в баннере отражается в разделе «Приватность»', async ({ page }) => {
   await registerStreamer(page, 'e2e-cookies');
 

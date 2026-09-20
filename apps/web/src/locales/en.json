@@ -44,11 +44,11 @@
     "toRegister": "No account? Sign up",
     "toLogin": "Already have an account? Sign in",
     "passwordHint": "At least 12 characters",
-    "consentTerms": "I accept the Terms of Service",
-    "consentPrivacy": "I have read the Privacy Policy",
-    "consentPersonalData": "I consent to the processing of my personal data",
-    "consentRequired": "You cannot sign up without these consents",
-    "consentsLegend": "Consents"
+    "consentTerms": "the Terms of Service",
+    "consentPrivacy": "the Privacy Policy",
+    "consentPersonalData": "the consent to personal data processing",
+    "acceptByRegistering": "By clicking “{{button}}” you accept",
+    "acceptUpdates": "We notify you in the dashboard when a document changes. Nothing has to be accepted again, and if a new version does not suit you, you can delete the account in the Privacy section."
   },
   "widgets": {
     "title": "Widgets",
@@ -251,11 +251,11 @@
     "disconnected": "Service disconnected",
     "connected": "DonationAlerts is connected. Donations will start arriving within a few seconds.",
     "connectFailed": "Could not connect the service. Please try again.",
-    "account": "Account",
     "lastEvent": "Last donation",
     "lastEventAt": "Last event: {{date}}",
     "noEvents": "No donations yet",
     "brokenFallback": "The service stopped responding. Reconnect it.",
+    "webhookForDevelopers": "for developers",
     "webhookTitle": "For developers: your own webhook",
     "webhookDescription": "If you have your own bot or service, it can send donations directly. Each request is signed with HMAC-SHA256 using the secret below — this cannot be set up without programming; for regular donations, connect a service above.",
     "createWebhook": "Create webhook",
@@ -304,7 +304,11 @@
     "consents": "Consents",
     "accepted": "Accepted on {{date}}",
     "notAccepted": "Not accepted",
+    "consentsLead": "You accept the service rules by signing up, and having an account confirms it. We notify you in the dashboard when a document changes: access does not depend on an unmarked version, and if a new version does not suit you, the account can be deleted below.",
     "needsRenewal": "The document has been updated — please confirm",
+    "newEdition": "A new version has been published — please read it",
+    "acknowledge": "Got it",
+    "acknowledgeNamed": "Got it: {{name}}",
     "renew": "Confirm",
     "grant": "Give consent",
     "revoke": "Withdraw",
@@ -370,6 +374,16 @@
     "liveHours": "Live",
     "hoursSuffix": "h",
     "noValue": "—",
+    "youtubeRounding": "YouTube rounds the subscriber count in the API itself: below a thousand it is rounded to the nearest ten, so five subscribers arrive as zero. The exact number is in YouTube Studio.",
+    "reset": {
+      "title": "Reset donation history",
+      "text": "Deletes every event: donations, followers, subscriptions, raids. Period totals, the top donors list and goal progress reset with them. Widget settings and goal starting amounts stay.",
+      "action": "Reset history",
+      "confirmTitle": "Reset donation history?",
+      "confirmText": "There is no way to restore it: platforms do not resend past events. The goal and top donors open in OBS reset too.",
+      "done_one": "{{count}} event deleted",
+      "done_other": "{{count}} events deleted"
+    },
     "noData": "No data yet",
     "noLiveData": "No streams in this period",
     "chartViewers": "Viewers",
@@ -655,7 +669,8 @@
       "refund": "You can cancel the plan at any time: we refund the remaining full days of the period within 10 days of your email to the support address in the Contacts section. See the Pro plan offer for details."
     },
     "contacts": {
-      "title": "Contacts and business details",
+      "title": "Contacts",
+      "requisites": "The seller’s full name, tax status and taxpayer ID are in the page footer.",
       "seller": "Seller",
       "status": "Status",
       "selfEmployed": "Professional income tax payer (self-employed)",
@@ -665,6 +680,14 @@
     },
     "footer": {
       "documents": "Documents",
+      "map": {
+        "service": "Service",
+        "home": "Home",
+        "pricing": "Pricing",
+        "delivery": "How the service is delivered",
+        "payment": "Payment and refunds",
+        "contact": "Contact and language"
+      },
       "terms": "Terms of Service",
       "offer": "Pro plan offer",
       "privacy": "Privacy Policy",
@@ -681,8 +704,16 @@
     "unavailable": "The document is unavailable",
     "table": "Table, scrolls horizontally"
   },
+  "legalUpdate": {
+    "notify": "A new version of the service documents has been published.",
+    "reconsent": "A new version has been published: please confirm your data processing consent.",
+    "details": "What changed and when you marked the versions",
+    "gotIt": "Got it",
+    "confirm": "I confirm",
+    "later": "Later"
+  },
   "language": {
-    "switch": "Русский",
+    "switchSite": "Russian version",
     "switchLang": "ru",
     "label": "Interface language"
   },
@@ -698,6 +729,12 @@
     "platformOffline": "offline",
     "platforms": "Platforms",
     "statusLabel": "Stream status",
+    "refresh": "Refresh",
+    "refreshIn": "Refresh ({{seconds}}s)",
+    "refreshHint": "Ask the platforms for viewers and stream state right now. Twitch reports the start of a stream itself, YouTube does not: there this is the only way not to wait for the next poll.",
+    "refreshThrottled": "Just refreshed — platforms are polled at most once every 30 seconds.",
+    "updatedAt": "updated at {{time}}",
+    "neverUpdated": "metrics have not been collected yet",
     "syncProblem": "metrics are not updating",
     "noPlatforms": "Connect Twitch or YouTube to see stream time and viewers here.",
     "connectPlatform": "Connect a platform",

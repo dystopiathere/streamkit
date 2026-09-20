@@ -718,6 +718,62 @@ describe('Админка (feature)', () => {
       expect(log.metadata).toEqual({ reason: 'компенсация сбоя', days: 14 });
     });
 
+    it('снятие подарочных дней возвращает срок и пишет автора', async () => {
+      const admin = await staff();
+      const target = await streamer();
+      await request(server())
+        .post(`/api/admin/users/${target.userId}/subscription/extend`)
+        .set(auth(admin.adminToken))
+        .send({ days: 14, reason: 'компенсация сбоя' })
+        .expect(201);
+
+      const response = await request(server())
+        .post(`/api/admin/users/${target.userId}/subscription/revoke-gift`)
+        .set(auth(admin.adminToken))
+        .send({ days: 14, reason: 'выдано по ошибке' })
+        .expect(201);
+
+      // Срок вернулся туда, где был до подарка: подписки у стримера не было,
+      // значит период кончился.
+      expect(response.body).toMatchObject({ giftedDays: 0, status: 'expired' });
+      const log = await harness.prisma.auditLog.findFirstOrThrow({
+        where: { action: 'admin.subscription.gift_revoked' },
+      });
+      expect(log).toMatchObject({ userId: target.userId, actorId: admin.userId });
+    });
+
+    it('обнуление истории донатов из админки удаляет события и пишет причину', async () => {
+      const admin = await staff();
+      const target = await streamer();
+      await harness.prisma.alertEvent.create({
+        data: {
+          userId: target.userId,
+          type: 'DONATION',
+          provider: 'WEBHOOK',
+          externalId: 'donation-1',
+          username: 'Щедрый',
+          message: 'спасибо',
+          amountMinor: 50_000,
+          currency: 'RUB',
+          occurredAt: new Date(),
+        },
+      });
+
+      await request(server())
+        .post(`/api/admin/users/${target.userId}/donations/reset`)
+        .set(auth(admin.adminToken))
+        .send({ reason: 'просьба владельца письмом' })
+        .expect(204);
+
+      expect(await harness.prisma.alertEvent.count({ where: { userId: target.userId } })).toBe(0);
+      const log = await harness.prisma.auditLog.findFirstOrThrow({
+        where: { action: 'events.history.reset' },
+      });
+      // Ни имени донатера, ни суммы: в журнал идёт только объём и причина.
+      expect(log.metadata).toEqual({ reason: 'просьба владельца письмом', removedEvents: 1 });
+      expect(log).toMatchObject({ userId: target.userId, actorId: admin.userId });
+    });
+
     it('журнал фильтруется по префиксу действия', async () => {
       const admin = await staff();
       const target = await streamer();
