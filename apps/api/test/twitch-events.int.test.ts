@@ -249,9 +249,18 @@ describe('События Twitch (feature)', () => {
     fake.notify('channel.raid', { from_broadcaster_user_name: 'Сосед', viewers: 42 });
     await until(async () => (await harness.prisma.alertEvent.count()) === 2);
 
-    const events = await harness.prisma.alertEvent.findMany({ orderBy: { createdAt: 'asc' } });
+    // Порядок здесь не проверяется, и это не небрежность: два уведомления
+    // разбираются независимо, `createdAt` хранится с точностью до миллисекунды,
+    // и у событий одной миллисекунды порядок по нему не определён — в CI тест
+    // падал на перевёрнутой паре. Утверждение теста в том, что оба события
+    // попали в историю с верными полями. Где порядок важен по-настоящему — в
+    // ленте событий, — он задан парой ключей (`createdAt`, `id`), см.
+    // `EventsService.list`.
+    const events = await harness.prisma.alertEvent.findMany();
     expect(
-      events.map((event) => [event.type, event.provider, event.username, event.count]),
+      events
+        .map((event) => [event.type, event.provider, event.username, event.count])
+        .sort((left, right) => String(left[0]).localeCompare(String(right[0]))),
     ).toEqual([
       ['FOLLOW', 'TWITCH', 'Новый зритель', null],
       ['RAID', 'TWITCH', 'Сосед', 42],
