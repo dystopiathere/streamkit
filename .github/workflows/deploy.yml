@@ -129,6 +129,31 @@ jobs:
         run: |
           set -euo pipefail
           ssh_opts=(-i ~/.ssh/deploy -o StrictHostKeyChecking=yes)
+          # Место на диске — ДО копирования файлов, командой по ssh, а не
+          # скриптом с ВМ.
+          #
+          # Уборка есть и в самом deploy.sh, но она бесполезна, когда диск уже
+          # полон: сначала выкатка упала на `pull`, потом — на записи окружения
+          # из Lockbox, а потом `scp` не смог записать и сам deploy.sh («write
+          # remote: Failure»). Обновлённый скрипт до ВМ не доезжал, и конвейер
+          # оказался заблокирован без ручного вмешательства. Этот шаг ничего с
+          # ВМ не читает и не пишет, поэтому работает и на полном диске.
+          #
+          # Удаляются образы с тегом-sha, кроме выкатываемого: зеркала caddy и
+          # umami помечены версиями. `docker image rm` без `-f` не удалит образ
+          # запущенного контейнера — работающий выпуск остаётся на месте.
+          # shellcheck disable=SC2087
+          ssh "${ssh_opts[@]}" "deploy@${HOST}" bash -s -- "$TAG" <<'CLEANUP'
+          set -uo pipefail
+          tag=$1
+          df -h --output=avail / | tail -1 | xargs echo "Свободно до уборки:"
+          docker images --format '{{.Repository}}:{{.Tag}}' |
+            grep -E ':[0-9a-f]{40}$' |
+            grep -v ":${tag}$" |
+            xargs -r -n1 docker image rm >/dev/null 2>&1 || true
+          docker image prune -f >/dev/null
+          df -h --output=avail / | tail -1 | xargs echo "Свободно после уборки:"
+          CLEANUP
           scp "${ssh_opts[@]}" infra/yandex-cloud/app/compose.yml infra/yandex-cloud/app/Caddyfile \
             infra/yandex-cloud/app/deploy.sh infra/yandex-cloud/lib/lockbox.sh "deploy@${HOST}:/opt/streamkit/"
           # Тег подставляется на стороне раннера намеренно: он уже проверен на
