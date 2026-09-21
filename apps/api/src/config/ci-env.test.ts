@@ -29,17 +29,31 @@ const WORKFLOW = resolve(
 );
 
 /**
- * Достаёт блоки `env:` из workflow.
+ * Окружения приложения, с которыми его запускает workflow.
  *
  * Полноценный разбор YAML тут не нужен и потребовал бы зависимости: блоки
  * плоские, значения простые. Отбираются только блоки приложения — по наличию
  * `DATABASE_URL`, иначе сюда попал бы и служебный блок с `NODE_VERSION`.
+ *
+ * Шаг видит окружение задания плюс своё, и проверяется именно эта сумма.
+ * Секреты стоят на уровне задания, а база — на уровне шага: интеграционные
+ * тесты и сквозной сценарий идут одним заданием, но каждый в свою базу. Пока
+ * разбор брал блоки по отдельности, блок шага с одной `DATABASE_URL` проверялся
+ * без ключей и валился, хотя приложение получало их от задания.
  */
 export function extractEnvBlocks(yaml: string): Array<Record<string, string>> {
   const lines = yaml.split(/\r?\n/);
   const blocks: Array<Record<string, string>> = [];
+  // Окружение текущего задания: задания — ключи с отступом 2 под `jobs:`, их
+  // собственный `env:` — с отступом 4. Всё глубже — окружение шагов и служб.
+  let jobEnv: Record<string, string> = {};
 
   for (let i = 0; i < lines.length; i += 1) {
+    if (/^ {2}[A-Za-z0-9_-]+:\s*$/.test(lines[i] ?? '')) {
+      jobEnv = {};
+      continue;
+    }
+
     const header = /^(\s+)env:\s*$/.exec(lines[i] ?? '');
     if (!header) continue;
 
@@ -59,7 +73,12 @@ export function extractEnvBlocks(yaml: string): Array<Record<string, string>> {
       block[pair[1] as string] = (pair[2] ?? '').trim().replace(/^['"]|['"]$/g, '');
     }
 
-    if ('DATABASE_URL' in block) blocks.push(block);
+    if (indent === 4) {
+      jobEnv = block;
+      if ('DATABASE_URL' in block) blocks.push(block);
+    } else if ('DATABASE_URL' in block) {
+      blocks.push({ ...jobEnv, ...block });
+    }
   }
 
   return blocks;
