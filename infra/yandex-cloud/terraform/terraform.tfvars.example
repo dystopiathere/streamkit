@@ -11,12 +11,17 @@ admin_ssh_cidrs = ["203.0.113.10/32"]
 admin_ssh_public_key  = "ssh-ed25519 AAAA... admin"
 deploy_ssh_public_key = "ssh-ed25519 AAAA... github-actions-deploy"
 
-# Подтверждение домена для Google Search Console (README, раздел 7): без него
+# Подтверждение домена для Google Search Console и Yandex 360 (README, раздел 7): без него
 # Google не публикует OAuth-приложение YouTube.
-# root_txt_records = ["google-site-verification=..."]
+# root_txt_records = ["google-site-verification=...", "yandex-verification: ..."]
 
 # Запись DKIM из консоли Postbox (README, раздел «Почта»). До её появления — не задавать.
 # postbox_dkim = {
-#   name  = "postbox._domainkey.stream-kit.ru."
+#   name  = "postbox._domainkey.stream-kit.ru"
 #   value = "v=DKIM1; k=rsa; p=MIIBIjANBg..."
+# }
+
+# yandex_dkim = {
+#   name  = "mail._domainkey.stream-kit.ru"
+#   value = "v=DKIM1; k=rsa; t=s; p=MIGfMA0..."
 # }

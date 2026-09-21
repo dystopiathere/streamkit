@@ -2,6 +2,8 @@ import {
   BILLING_PERIODS,
   type BillingPeriod,
   type Money,
+  PAID_PLANS,
+  type PaidPlan,
   PLAN_PRICES,
   type SubscriptionView,
 } from '@streamkit/contracts';
@@ -17,6 +19,7 @@ import {
   useSubscription,
   useUpdateSubscription,
 } from '@/features/billing/queries';
+import { planFeatureList } from '@/features/billing/plan-features';
 import { trackSiteEvent } from '@/features/public/site-stats';
 import { ApiError } from '@/lib/api';
 import { formatMoney, intlLocale } from '@/lib/locale';
@@ -29,7 +32,7 @@ const formatDate = (iso: string): string =>
   });
 
 /**
- * Тариф «Про»: оформление, автопродление, история платежей.
+ * Тарифы: оформление, смена, автопродление, история платежей.
  *
  * Данные карты сюда не попадают вовсе: «Оплатить» уводит на страницу ЮKassa, и
  * возвращается стример уже с идентификатором платежа в адресе.
@@ -75,10 +78,10 @@ export function BillingPage(): React.JSX.Element {
         </Card>
       ) : null}
       {subscription.data?.billingConfigured ? (
-        subscription.data.roomsAccess ? (
-          <CurrentPlan subscription={subscription.data} />
-        ) : (
+        subscription.data.plan === 'free' ? (
           <Checkout expired={subscription.data.status === 'expired'} />
+        ) : (
+          <CurrentPlan subscription={subscription.data} />
         )
       ) : null}
 
@@ -94,6 +97,7 @@ function CurrentPlan({ subscription }: { subscription: SubscriptionView }): Reac
 
   const end = subscription.currentPeriodEnd ? formatDate(subscription.currentPeriodEnd) : '';
   const nextPeriod = subscription.period ?? 'month';
+  const nextPlan = subscription.nextPlan ?? 'pro';
 
   const handleError = (error: unknown): void => {
     toast.error(error instanceof ApiError ? error.message : t('common.error'));
@@ -102,7 +106,12 @@ function CurrentPlan({ subscription }: { subscription: SubscriptionView }): Reac
   return (
     <Card className="space-y-4">
       <div className="space-y-1">
-        <h2 className="font-medium">{t('billing.plan.name')}</h2>
+        <h2 className="font-medium">{t(`billing.plans.${subscription.plan}.name`)}</h2>
+        <ul className="text-xs text-muted">
+          {planFeatureList(subscription.plan, t).map((feature) => (
+            <li key={feature}>{feature}</li>
+          ))}
+        </ul>
         <p data-testid="subscription-status" className="text-sm">
           {subscription.status === 'grace'
             ? t('billing.status.grace', { date: end })
@@ -119,6 +128,31 @@ function CurrentPlan({ subscription }: { subscription: SubscriptionView }): Reac
 
       {subscription.autoRenew ? (
         <div className="space-y-3">
+          {/* Смена тарифа применяется при продлении: доплат и пересчёта
+              остатка нет, доступ до конца оплаченного периода не меняется. */}
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted">{t('billing.nextPlan')}</span>
+            {PAID_PLANS.map((plan) => (
+              <Button
+                key={plan}
+                variant={plan === nextPlan ? 'secondary' : 'ghost'}
+                aria-pressed={plan === nextPlan}
+                onClick={() =>
+                  plan === nextPlan ? undefined : update.mutate({ plan }, { onError: handleError })
+                }
+              >
+                {t(`billing.plans.${plan}.name`)} · {formatMoney(PLAN_PRICES[plan][nextPeriod])}
+              </Button>
+            ))}
+          </div>
+          {nextPlan !== subscription.plan ? (
+            <p className="text-xs text-muted">
+              {t('billing.planChanges', {
+                plan: t(`billing.plans.${nextPlan}.name`),
+                date: end,
+              })}
+            </p>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="text-muted">{t('billing.nextPeriod')}</span>
             {BILLING_PERIODS.map((period) => (
@@ -138,7 +172,7 @@ function CurrentPlan({ subscription }: { subscription: SubscriptionView }): Reac
                 {formatMoney(
                   period === nextPeriod && subscription.renewalAmount
                     ? subscription.renewalAmount
-                    : PLAN_PRICES[period],
+                    : PLAN_PRICES[nextPlan][period],
                 )}
               </Button>
             ))}
@@ -158,7 +192,7 @@ function CurrentPlan({ subscription }: { subscription: SubscriptionView }): Reac
             checked={renewConsent}
             onChange={setRenewConsent}
             period={nextPeriod}
-            amount={subscription.renewalAmount ?? undefined}
+            amount={subscription.renewalAmount ?? PLAN_PRICES[nextPlan][nextPeriod]}
           />
           <Button
             variant="secondary"
@@ -179,12 +213,13 @@ function CurrentPlan({ subscription }: { subscription: SubscriptionView }): Reac
 function Checkout({ expired }: { expired: boolean }): React.JSX.Element {
   const { t } = useTranslation();
   const checkout = useCheckout();
+  const [plan, setPlan] = useState<PaidPlan>('pro');
   const [period, setPeriod] = useState<BillingPeriod>('month');
   const [accepted, setAccepted] = useState(false);
 
   const handlePay = async (): Promise<void> => {
     try {
-      const result = await checkout.mutateAsync(period);
+      const result = await checkout.mutateAsync({ plan, period });
       trackSiteEvent('checkout');
       // Уход со страницы: данные карты вводятся у ЮKassa, а не у нас.
       window.location.assign(result.confirmationUrl);
@@ -196,11 +231,43 @@ function Checkout({ expired }: { expired: boolean }): React.JSX.Element {
   return (
     <Card className="space-y-5">
       <div className="space-y-1">
-        <h2 className="font-medium">{t('billing.plan.name')}</h2>
+        <h2 className="font-medium">{t('billing.choosePlan')}</h2>
         <p className="text-sm text-muted">
-          {expired ? t('billing.status.expired') : t('billing.plan.includes')}
+          {expired ? t('billing.status.expired') : t('billing.freeIncludes')}
         </p>
       </div>
+
+      {/* Тариф — радиокнопками, а не двумя кнопками «оплатить»: выбор тарифа и
+          выбор периода это один выбор из четырёх цен, и цена на кнопке внизу
+          должна соответствовать обоим. */}
+      <fieldset className="grid gap-3 sm:grid-cols-2">
+        <legend className="sr-only">{t('billing.choosePlan')}</legend>
+        {PAID_PLANS.map((option) => (
+          <label
+            key={option}
+            className="flex items-start gap-3 rounded-lg border border-border-strong p-4 has-[:checked]:border-accent has-[:checked]:bg-accent/10 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent"
+          >
+            <input
+              type="radio"
+              name="billing-plan"
+              className="mt-1 h-4 w-4 shrink-0"
+              checked={plan === option}
+              onChange={() => setPlan(option)}
+            />
+            <span>
+              <span className="block font-medium">{t(`billing.plans.${option}.name`)}</span>
+              <span className="block text-lg tabular-nums">
+                {t('billing.perMonth', { amount: formatMoney(PLAN_PRICES[option].month) })}
+              </span>
+              <ul className="mt-1 space-y-0.5 text-xs text-muted">
+                {planFeatureList(option, t).map((feature) => (
+                  <li key={feature}>{feature}</li>
+                ))}
+              </ul>
+            </span>
+          </label>
+        ))}
+      </fieldset>
 
       <fieldset className="grid gap-3 sm:grid-cols-2">
         <legend className="sr-only">{t('billing.choosePeriod')}</legend>
@@ -218,17 +285,24 @@ function Checkout({ expired }: { expired: boolean }): React.JSX.Element {
             />
             <span>
               <span className="block font-medium">{t(`billing.period.${option}`)}</span>
-              <span className="block text-lg tabular-nums">{formatMoney(PLAN_PRICES[option])}</span>
+              <span className="block text-lg tabular-nums">
+                {formatMoney(PLAN_PRICES[plan][option])}
+              </span>
               <span className="block text-xs text-muted">{t(`billing.periodHint.${option}`)}</span>
             </span>
           </label>
         ))}
       </fieldset>
 
-      <OfferConsent checked={accepted} onChange={setAccepted} period={period} />
+      <OfferConsent
+        checked={accepted}
+        onChange={setAccepted}
+        period={period}
+        amount={PLAN_PRICES[plan][period]}
+      />
 
       <Button onClick={() => void handlePay()} disabled={!accepted} isLoading={checkout.isPending}>
-        {t('billing.pay', { amount: formatMoney(PLAN_PRICES[period]) })}
+        {t('billing.pay', { amount: formatMoney(PLAN_PRICES[plan][period]) })}
       </Button>
     </Card>
   );
@@ -244,13 +318,13 @@ function OfferConsent({
   checked,
   onChange,
   period,
-  amount = PLAN_PRICES[period],
+  amount,
 }: {
   checked: boolean;
   onChange: (value: boolean) => void;
   period: BillingPeriod;
   /** Сумма списаний. У действующей подписки — её цена, а не прайс. */
-  amount?: Money;
+  amount: Money;
 }): React.JSX.Element {
   const { t } = useTranslation();
   return (
@@ -308,6 +382,7 @@ function PaymentHistory(): React.JSX.Element | null {
               <tr key={payment.id} className="border-t border-border">
                 <td className="py-2 pr-4 whitespace-nowrap">{formatDate(payment.createdAt)}</td>
                 <td className="py-2 pr-4">
+                  {t(`billing.plans.${payment.plan}.name`)} ·{' '}
                   {t(`billing.history.kind.${payment.kind}`)} ·{' '}
                   {t(`billing.period.${payment.period}`)}
                 </td>

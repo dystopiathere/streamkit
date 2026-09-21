@@ -27,15 +27,63 @@ export const billingPeriodSchema = z.enum(BILLING_PERIODS);
 export type BillingPeriod = z.infer<typeof billingPeriodSchema>;
 
 /**
- * Цены тарифа «Про».
+ * Тарифы.
  *
- * ЗАГЛУШКИ: цену утверждает владелец продукта. Сумма снимается в строку
- * платежа в момент его создания, и списание берёт её оттуда — смена цены здесь
- * не меняет уже созданные платежи задним числом.
+ * `free` — не подписка, а её отсутствие: строки в БД у него нет, и платить за
+ * него нечем. Поэтому в перечислении он есть (действующий тариф стримера всегда
+ * один из трёх), а в `PAID_PLANS` — нет.
  */
-export const PLAN_PRICES: Record<BillingPeriod, Money> = {
-  month: { amountMinor: 49_000, currency: 'RUB' },
-  year: { amountMinor: 490_000, currency: 'RUB' },
+export const PLANS = ['free', 'multistream', 'pro'] as const;
+export const planSchema = z.enum(PLANS);
+export type Plan = z.infer<typeof planSchema>;
+
+export const PAID_PLANS = ['multistream', 'pro'] as const;
+export const paidPlanSchema = z.enum(PAID_PLANS);
+export type PaidPlan = z.infer<typeof paidPlanSchema>;
+
+/**
+ * Цены платных тарифов.
+ *
+ * Сумма снимается в строку платежа в момент его создания, и списание берёт её
+ * оттуда — смена цены здесь не меняет уже созданные платежи задним числом. У
+ * действующих подписчиков цена продления тоже своя (`renewalAmountMinor`):
+ * оферта обещает предупредить о новой не позднее чем за 30 дней.
+ */
+export const PLAN_PRICES: Record<PaidPlan, Record<BillingPeriod, Money>> = {
+  multistream: {
+    month: { amountMinor: 19_900, currency: 'RUB' },
+    year: { amountMinor: 190_000, currency: 'RUB' },
+  },
+  pro: {
+    month: { amountMinor: 49_900, currency: 'RUB' },
+    year: { amountMinor: 490_000, currency: 'RUB' },
+  },
+};
+
+/**
+ * Что даёт тариф.
+ *
+ * Единственное место, где написаны лимиты: их читают гейты в API, плашки в
+ * дашборде, таблица цен на главной и тексты документов. Ни одной четвёрки и ни
+ * одной единицы в коде вне этой таблицы — иначе лимит в интерфейсе и лимит на
+ * сервере разойдутся, и узнает об этом стример.
+ */
+export const planFeaturesSchema = z.object({
+  /** Сколько виджетов можно создать. null — без ограничения. */
+  widgets: z.number().int().positive().nullable(),
+  /** Сколько площадок работает одновременно. null — без ограничения. */
+  platforms: z.number().int().positive().nullable(),
+  /** Приватные комнаты. */
+  rooms: z.boolean(),
+  /** Позиции элементов, фоны, шрифты, расширенные анимации. */
+  advancedStyling: z.boolean(),
+});
+export type PlanFeatures = z.infer<typeof planFeaturesSchema>;
+
+export const PLAN_FEATURES: Record<Plan, PlanFeatures> = {
+  free: { widgets: 4, platforms: 1, rooms: false, advancedStyling: false },
+  multistream: { widgets: null, platforms: null, rooms: false, advancedStyling: false },
+  pro: { widgets: null, platforms: null, rooms: true, advancedStyling: true },
 };
 
 /**
@@ -62,6 +110,21 @@ export const subscriptionViewSchema = z.object({
    * - `expired` — доступа нет.
    */
   status: z.enum(SUBSCRIPTION_STATUSES),
+  /**
+   * Действующий тариф: тот, что оплачен и ещё не кончился. `free` — платного
+   * нет или он истёк.
+   */
+  plan: planSchema,
+  /**
+   * Тариф следующего периода. Отличается от действующего, когда стример выбрал
+   * другой: смена применяется при продлении, без доплат и пересчёта.
+   */
+  nextPlan: paidPlanSchema.nullable(),
+  /**
+   * Что доступно прямо сейчас. Считает сервер, а не клиент: без настроенной
+   * оплаты открыто всё, и вывести это из одного названия тарифа нельзя.
+   */
+  features: planFeaturesSchema,
   /** Период следующего продления. */
   period: billingPeriodSchema.nullable(),
   currentPeriodEnd: isoDateSchema.nullable(),
@@ -92,6 +155,8 @@ export const PAYMENT_KINDS = ['initial', 'renewal'] as const;
 
 export const paymentViewSchema = moneySchema.extend({
   id: uuidSchema,
+  /** За какой тариф заплатили: после смены цен по сумме это не восстановить. */
+  plan: paidPlanSchema,
   period: billingPeriodSchema,
   kind: z.enum(PAYMENT_KINDS),
   status: z.enum(PAYMENT_STATUSES),
@@ -103,6 +168,7 @@ export const paymentViewSchema = moneySchema.extend({
 export type PaymentView = z.infer<typeof paymentViewSchema>;
 
 export const checkoutInputSchema = z.object({
+  plan: paidPlanSchema,
   period: billingPeriodSchema,
   /**
    * Согласие с офертой и с автоматическими списаниями. Литерал `true`: запрос
@@ -129,6 +195,11 @@ export const updateSubscriptionSchema = z
   .object({
     autoRenew: z.boolean().optional(),
     period: billingPeriodSchema.optional(),
+    /**
+     * Тариф следующего периода. Смена применяется при продлении: доплаты,
+     * пересчёта остатка и возврата разницы нет — так же, как у смены периода.
+     */
+    plan: paidPlanSchema.optional(),
     acceptOffer: z.literal(true).optional(),
   })
   .refine((input) => input.autoRenew !== true || input.acceptOffer === true, {

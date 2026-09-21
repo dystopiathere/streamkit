@@ -1,6 +1,6 @@
 # StreamKit Terms of Service
 
-Version No. 8 of 20.09.2026
+Version No. 9 of 20.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/terms?lang=ru); if the two
@@ -18,8 +18,8 @@ Terms (acceptance of the offer), and having an account and using the Service
 confirms that acceptance. If you disagree with any term, do not sign up and do
 not use the Service. Section 11 sets out how the Terms are changed.
 
-1.3. The terms of the paid Pro plan are set out in a separate offer published at
-https://stream-kit.ru/legal/subscription. The processing of personal data is
+1.3. The terms of the paid Multistream and Pro plans are set out in a separate
+offer published at https://stream-kit.ru/legal/subscription. The processing of personal data is
 described in the Privacy Policy (https://stream-kit.ru/legal/privacy); the
 processing of the user's viewers' and guests' data is described in section 13.
 
@@ -43,8 +43,12 @@ transfer operator. The Service does not accept, hold or transfer viewers' money.
 Donations are accepted by third-party services that the user connects on their
 own, and are governed by those services' own terms.
 
-2.3. The core features of the Service are free of charge. Only the Pro plan is
-paid.
+2.3. The core features of the Service — alerts, chat, analytics and widgets —
+are free of charge. The free plan limits how many widgets exist at a time and
+how many platforms work at a time; the paid Multistream and Pro plans lift those
+limits, and Pro adds private rooms and advanced widget styling. What each plan
+includes, the prices and how to change a plan are in the offer
+(https://stream-kit.ru/legal/subscription).
 
 2.4. To work with YouTube, the Service uses YouTube API Services. By connecting a
 YouTube channel to the Service, the user agrees to the YouTube Terms of Service
@@ -129,9 +133,9 @@ texts they use.
 
 ## 8. Payment
 
-8.1. The Pro plan is paid for through the YooKassa payment service. The price,
-period, automatic renewal, turning it off and refunds are set out in the Pro
-plan offer. Bank card details are not passed to the Operator.
+8.1. Paid plans are paid for through the YooKassa payment service. The price,
+period, automatic renewal, turning it off, changing the plan and refunds are set
+out in the paid plans offer. Bank card details are not passed to the Operator.
 
 8.2. The Operator notifies users by email of a change in the plan price at least
 30 days in advance. The new price applies to periods starting after that time.

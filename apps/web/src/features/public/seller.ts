@@ -28,8 +28,10 @@ export function missingValue(): string {
  *
  * В файлах документов на их месте стоят метки `{{SELLER_NAME}}` и подобные: сами
  * тексты лежат статикой и открываются по прямой ссылке, а реквизиты живут в
- * окружении сервера. Цены — метками `{{PRICE_MONTH}}` и `{{PRICE_YEAR}}` из
- * `PLAN_PRICES`: вписанные в оферту руками, они разошлись бы с ценой на кнопке.
+ * окружении сервера. Цены — метками вида `{{PRICE_PRO_MONTH}}` из `PLAN_PRICES`:
+ * вписанные в оферту руками, они разошлись бы с ценой на кнопке. Метка на
+ * каждый тариф и период, потому что тарифов больше одного, и «цена в месяц» без
+ * названия тарифа ничего не значит.
  */
 export function fillDocumentDetails(
   text: string,
@@ -41,10 +43,12 @@ export function fillDocumentDetails(
     SELLER_INN: seller?.inn,
     SELLER_EMAIL: seller?.email,
     SELLER_PHONE: seller?.phone,
-    PRICE_MONTH: formatMoney(PLAN_PRICES.month),
-    PRICE_YEAR: formatMoney(PLAN_PRICES.year),
+    PRICE_PRO_MONTH: formatMoney(PLAN_PRICES.pro.month),
+    PRICE_PRO_YEAR: formatMoney(PLAN_PRICES.pro.year),
+    PRICE_MULTISTREAM_MONTH: formatMoney(PLAN_PRICES.multistream.month),
+    PRICE_MULTISTREAM_YEAR: formatMoney(PLAN_PRICES.multistream.year),
   };
-  return text.replace(/\{\{((?:SELLER|PRICE)_[A-Z]+)\}\}/g, (token, key: string) =>
+  return text.replace(/\{\{((?:SELLER|PRICE)_[A-Z_]+)\}\}/g, (token, key: string) =>
     key in values ? escape(values[key] ?? missingValue()) : token,
   );
 }

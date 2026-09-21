@@ -32,7 +32,10 @@ export async function chatChannels(
   if (userIds.length === 0) return result;
 
   const rows = await prisma.channel.findMany({
-    where: { userId: { in: userIds }, platform: { in: ['TWITCH', 'YOUTUBE'] } },
+    // Только включённые: выключенная площадка не работает нигде — ни в опросе
+    // метрик, ни в событиях, ни в чате. На тарифе с одной площадкой их две, и
+    // чат второй идти не должен.
+    where: { userId: { in: userIds }, isEnabled: true, platform: { in: ['TWITCH', 'YOUTUBE'] } },
     // Twitch раньше YouTube, внутри площадки — по времени подключения: порядок
     // подписей в окне эфира не должен прыгать от запроса к запросу.
     orderBy: [{ platform: 'asc' }, { createdAt: 'asc' }],

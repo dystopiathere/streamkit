@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { Redis } from 'ioredis';
+import { buyPlan } from './plans';
 import { connectTwitch, connectYouTube } from './platforms';
 
 /**
@@ -15,6 +16,9 @@ test('окно эфира показывает чат канала, виджет
   page,
   context,
 }) => {
+  const registered = page.waitForResponse((response) =>
+    response.url().includes('/api/auth/register'),
+  );
   await page.goto('/register');
   await page.getByLabel('Отображаемое имя').fill('E2E Эфир');
   await page.getByLabel('Электронная почта').fill(`e2e-stream-${Date.now()}@example.com`);
@@ -25,6 +29,11 @@ test('окно эфира показывает чат канала, виджет
   await page.getByRole('button', { name: 'Создать аккаунт' }).click();
   await expect(page).toHaveURL(/\/widgets$/);
   await page.getByRole('button', { name: 'Только необходимые' }).click();
+
+  // Две площадки одновременно — от тарифа «Мультистрим»: на бесплатном активна
+  // одна, и вторая не подключилась бы вовсе. Мультичат без второй проверять нечем.
+  const { accessToken } = (await (await registered).json()) as { accessToken: string };
+  await buyPlan(page, accessToken, 'multistream');
 
   await test.step('без площадок и чата окно объясняет, что подключить', async () => {
     await page.getByRole('link', { name: 'Эфир', exact: true }).click();

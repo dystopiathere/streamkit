@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { HttpClient } from '../../common/http/http-client.service';
+import { BillingModule } from '../billing/billing.module';
 import { EventsModule } from '../events/events.module';
 import { ConnectorManager, ConnectorScheduler } from './connector-manager.service';
 import { DonationSourcesController } from './donation-sources.controller';
@@ -22,7 +23,7 @@ import { YouTubeProvider } from './youtube.provider';
  * Ничего долгоживущего не поднимает: все провайдеры здесь — про запрос-ответ.
  */
 @Module({
-  imports: [EventsModule],
+  imports: [EventsModule, BillingModule],
   controllers: [IntegrationsController, DonationSourcesController],
   providers: [
     HttpClient,

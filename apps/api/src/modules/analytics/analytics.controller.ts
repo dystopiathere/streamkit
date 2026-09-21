@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Delete,
   Get,
@@ -6,6 +7,7 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Query,
   Req,
 } from '@nestjs/common';
@@ -17,11 +19,13 @@ import {
   type Channel,
   type ChannelSummary,
   type DonationTotal,
+  type SetChannelEnabledInput,
+  setChannelEnabledSchema,
 } from '@streamkit/contracts';
 import type { Request } from 'express';
 import { AuditService } from '../../common/audit/audit.service';
 import { type AuthenticatedUser, CurrentUser } from '../../common/auth/auth.decorators';
-import { zodQuery } from '../../common/pipes/zod-validation.pipe';
+import { zodBody, zodQuery } from '../../common/pipes/zod-validation.pipe';
 import { AnalyticsService } from './analytics.service';
 
 // Жёсткий лимитер auth предназначен только для входа и регистрации;
@@ -55,6 +59,29 @@ export class AnalyticsController {
     @Query(zodQuery(analyticsQuerySchema)) query: AnalyticsQuery,
   ): Promise<AnalyticsSeries> {
     return this.analytics.series(user.id, id, query.range, query.timeZone);
+  }
+
+  /**
+   * Включить или выключить площадку.
+   *
+   * Не то же, что отключить: выключенный канал остаётся подключённым со своими
+   * токенами и историей, просто не работает. На тарифе с одной площадкой
+   * включение одной выключает остальные.
+   */
+  @Patch('channels/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async setEnabled(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zodBody(setChannelEnabledSchema)) body: SetChannelEnabledInput,
+    @Req() request: Request,
+  ): Promise<void> {
+    await this.analytics.setChannelEnabled(
+      user.id,
+      id,
+      body.isEnabled,
+      this.audit.contextFromRequest(request),
+    );
   }
 
   /** Отключение площадки: канал, учётные данные и снимки метрик уходят вместе. */

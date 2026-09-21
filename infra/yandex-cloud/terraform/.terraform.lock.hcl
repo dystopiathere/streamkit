@@ -5,7 +5,7 @@ provider "registry.terraform.io/hashicorp/random" {
   version     = "3.9.1"
   constraints = ">= 3.6.0"
   hashes = [
-    "h1:g40qr7yDmIpaur4SsK5BcOda3HSo1RJ6zHVMqN4EJ+0=",
+    "h1:7uiStw0Rl9KOdX5UNMG/sp9nyadoD4LZekQTiYlYPhE=",
   ]
 }
 
@@ -13,6 +13,6 @@ provider "registry.terraform.io/yandex-cloud/yandex" {
   version     = "0.228.0"
   constraints = ">= 0.140.0"
   hashes = [
-    "h1:JA2WLoSEIA0hAYC1Y/oPScK/hGuxkGuhVHcfdpp6jPY=",
+    "h1:K3JnwxUvdQY2GMLHsn1xMdh9w5Q1jIeuvHUfpUoIXPg=",
   ]
 }

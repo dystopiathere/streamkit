@@ -89,6 +89,10 @@ export const MESSAGES_EN: Readonly<Record<string, string>> = {
     'The payment service did not respond. Please try again.',
   'Платёжный сервис не вернул страницу оплаты': 'The payment service did not return a payment page',
   'Подписки нет': 'You have no subscription',
+  'Больше виджетов на этом тарифе создать нельзя — платные тарифы без ограничения':
+    'Your plan allows no more widgets — paid plans have no limit',
+  'Тариф не позволяет подключить ещё одну площадку':
+    'Your plan does not allow connecting another platform',
   // Отказы снятия подарочных дней. Действие только для сотрудника, но словарь
   // собирается по файлам, а billing — не админка: пусть перевод будет.
   'Подарочных дней у этой подписки нет': 'This subscription has no gifted days',

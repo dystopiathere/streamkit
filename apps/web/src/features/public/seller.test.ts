@@ -21,8 +21,8 @@ describe('реквизиты и цены в тексте документа', ()
   });
 
   it('цены в оферте берутся из тарифа, а не вписываются руками', () => {
-    expect(fillDocumentDetails('{{PRICE_MONTH}} / {{PRICE_YEAR}}', undefined)).toBe(
-      `${formatMoney(PLAN_PRICES.month)} / ${formatMoney(PLAN_PRICES.year)}`,
+    expect(fillDocumentDetails('{{PRICE_PRO_MONTH}} / {{PRICE_MULTISTREAM_YEAR}}', undefined)).toBe(
+      `${formatMoney(PLAN_PRICES.pro.month)} / ${formatMoney(PLAN_PRICES.multistream.year)}`,
     );
   });
 

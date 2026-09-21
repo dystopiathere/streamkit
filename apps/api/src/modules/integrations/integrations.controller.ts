@@ -1,4 +1,14 @@
-import { Controller, Get, Logger, Param, Post, Query, Req, Res } from '@nestjs/common';
+import {
+  Controller,
+  ForbiddenException,
+  Get,
+  Logger,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import {
   type AuthorizeResponse,
@@ -114,11 +124,18 @@ export class IntegrationsController {
       // — в журнал: аудит пишет только отказ по state, а сбой обмена кода у
       // площадки иначе не оставлял следа нигде.
       this.logger.warn({ err: error, platform }, 'Подключение площадки не завершено');
-      response.redirect(this.dashboardUrl(platform, 'failed'));
+      // Лимит тарифа — не сбой: стример сделал всё правильно, просто площадок
+      // на его тарифе меньше. Метка своя, и страница объясняет, что делать, а
+      // не предлагает «попробовать ещё раз».
+      const status = error instanceof ForbiddenException ? 'plan-limit' : 'failed';
+      response.redirect(this.dashboardUrl(platform, status));
     }
   }
 
-  private dashboardUrl(platform: string, status: 'connected' | 'cancelled' | 'failed'): string {
+  private dashboardUrl(
+    platform: string,
+    status: 'connected' | 'cancelled' | 'failed' | 'plan-limit',
+  ): string {
     const base = this.config.webBaseUrl.replace(/\/+$/, '');
     return `${base}/analytics?platform=${encodeURIComponent(platform)}&status=${status}`;
   }

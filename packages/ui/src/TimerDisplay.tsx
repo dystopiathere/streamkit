@@ -5,6 +5,7 @@ import {
   timerRemainingSeconds,
 } from '@streamkit/contracts';
 import { useEffect, useState } from 'react';
+import { slotCss, WidgetFrame } from './slots';
 import { textStyleToCss } from './text-style';
 
 export interface TimerDisplayProps {
@@ -60,29 +61,28 @@ export function TimerDisplay({ config, state }: TimerDisplayProps): React.JSX.El
     : config.initialSeconds;
 
   const text = textStyleToCss(config.text);
+  const halfSize = Math.round(config.text.fontSize * 0.5);
 
   return (
-    <div
-      data-testid="timer-display"
+    <WidgetFrame
+      testId="timer-display"
+      background={config.background}
       style={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         gap: 4,
         padding: 16,
-        boxSizing: 'border-box',
       }}
     >
       {config.title ? (
-        <div style={{ ...text, fontSize: Math.round(config.text.fontSize * 0.5) }}>
-          {config.title}
-        </div>
+        <div style={{ ...text, ...slotCss(config.slots.title, halfSize) }}>{config.title}</div>
       ) : null}
 
       <div
         style={{
           ...text,
-          fontSize: config.text.fontSize,
+          ...slotCss(config.slots.clock, config.text.fontSize),
           fontWeight: 700,
           // Моноширинные цифры: без них строка дёргается на каждой секунде,
           // потому что единица уже остальных цифр.
@@ -91,6 +91,6 @@ export function TimerDisplay({ config, state }: TimerDisplayProps): React.JSX.El
       >
         {formatDuration(remaining, config.showHours)}
       </div>
-    </div>
+    </WidgetFrame>
   );
 }

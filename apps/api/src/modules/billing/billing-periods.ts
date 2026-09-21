@@ -1,5 +1,11 @@
-import type { BillingPeriod as PrismaBillingPeriod } from '@prisma/client';
-import { type BillingPeriod, GRACE_DAYS, type SubscriptionStatus } from '@streamkit/contracts';
+import type { BillingPeriod as PrismaBillingPeriod, Plan as PrismaPlan } from '@prisma/client';
+import {
+  type BillingPeriod,
+  GRACE_DAYS,
+  type PaidPlan,
+  type Plan,
+  type SubscriptionStatus,
+} from '@streamkit/contracts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -44,8 +50,29 @@ export function subscriptionStatus(
   return 'expired';
 }
 
-export function hasRoomsAccess(status: SubscriptionStatus): boolean {
-  return status === 'active' || status === 'grace';
+/**
+ * Действующий тариф.
+ *
+ * Считается из той же пары, что и статус: тариф записан в подписке, но даёт он
+ * что-то только пока период не кончился. Истёкшая подписка — это `free`, а не
+ * «Про, которым нельзя пользоваться»: иначе каждый гейт пришлось бы сверять с
+ * двумя полями сразу и однажды забыть.
+ */
+export function effectivePlan(
+  subscription: { plan: PrismaPlan; currentPeriodEnd: Date | null; autoRenew: boolean } | null,
+  now: Date,
+): Plan {
+  if (!subscription) return 'free';
+  const status = subscriptionStatus(subscription, now);
+  return status === 'active' || status === 'grace' ? toContractPlan(subscription.plan) : 'free';
+}
+
+export function toContractPlan(plan: PrismaPlan): PaidPlan {
+  return plan === 'MULTISTREAM' ? 'multistream' : 'pro';
+}
+
+export function toPrismaPlan(plan: PaidPlan): PrismaPlan {
+  return plan === 'multistream' ? 'MULTISTREAM' : 'PRO';
 }
 
 export function toContractPeriod(period: PrismaBillingPeriod): BillingPeriod {

@@ -1,8 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { applyPlanToConfig, configSchemaFor, PLAN_FEATURES } from '@streamkit/contracts';
 import { Client } from 'pg';
+import { AuditService } from '../../common/audit/audit.service';
+import { type BusMessage, RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AppConfig } from '../../config/app-config.service';
 import { TokenService } from '../auth/token.service';
+import { effectivePlan } from '../billing/billing-periods';
+import { toContractWidgetType } from '../widgets/widget.mappers';
 
 /** Таблицы событий Umami 3 с колонкой created_at. Сессии — отдельно, см. ниже. */
 const SITE_STATS_EVENT_TABLES = [
@@ -26,6 +31,8 @@ export class MaintenanceService {
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
     private readonly config: AppConfig,
+    private readonly audit: AuditService,
+    private readonly bus: RealtimeBus,
   ) {}
 
   /**
@@ -203,5 +210,125 @@ export class MaintenanceService {
       this.logger.log({ count: result.count, retentionDays }, 'Удалены старые согласия гостей');
     }
     return result.count;
+  }
+
+  /**
+   * Лишние активные площадки после окончания платного тарифа.
+   *
+   * Подключить вторую площадку на тарифе с одной нельзя, но кончиться тариф
+   * может у того, кто подключил её, пока имел право. Отбирать подключение
+   * (удалять канал с токенами и метриками) за неоплату нельзя — это его данные;
+   * поэтому обе площадки остаются, а работает одна. Здесь и решается, какая:
+   * самая старая, то есть подключённая первой. Стример вправе переключить
+   * (`PlatformConnectionService.setEnabled`).
+   *
+   * Ночью, а не в момент окончания периода: статус подписки нигде не хранится и
+   * никем не переключается (`docs/adr/0011`), а сутки лишней работы второй
+   * площадки — не та цена, за которую стоит заводить ещё одно расписание.
+   *
+   * @returns сколько каналов выключено.
+   */
+  async enforcePlatformLimits(now = new Date()): Promise<number> {
+    const users = await this.prisma.user.findMany({
+      where: { channels: { some: { isEnabled: true } } },
+      select: {
+        id: true,
+        status: true,
+        subscription: { select: { plan: true, currentPeriodEnd: true, autoRenew: true } },
+        channels: {
+          where: { isEnabled: true },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, platform: true },
+        },
+      },
+    });
+
+    let disabled = 0;
+    for (const user of users) {
+      // Без настроенной оплаты лимитов нет вовсе: так в разработке и в
+      // самостоятельной установке, где продавать некому.
+      const limit = this.config.billing
+        ? PLAN_FEATURES[effectivePlan(user.subscription, now)].platforms
+        : null;
+      if (limit === null || user.channels.length <= limit) continue;
+
+      const extra = user.channels.slice(limit);
+      await this.prisma.channel.updateMany({
+        where: { id: { in: extra.map((channel) => channel.id) } },
+        data: { isEnabled: false },
+      });
+      disabled += extra.length;
+      await this.audit.record('integration.channel.toggled', user.id, {
+        metadata: {
+          platforms: extra.map((channel) => channel.platform.toLowerCase()),
+          isEnabled: false,
+          reason: 'plan_limit',
+        },
+      });
+      this.logger.log({ userId: user.id, count: extra.length }, 'Площадки сверх тарифа выключены');
+    }
+    return disabled;
+  }
+
+  /**
+   * Продвинутое оформление у тех, чей платный тариф уже кончился.
+   *
+   * Урезает его `applyPlanToConfig` на выходе к оверлею, но открытая в OBS сцена
+   * конфиг не перезапрашивает: она получила его при подключении и живёт весь
+   * эфир. Без этого шага стример, у которого «Про» кончился ночью, до
+   * перезапуска сцены видел бы в кадре оформление, за которое больше не платит.
+   *
+   * Берутся только владельцы с ИСТЁКШЕЙ подпиской, а не все, у кого тарифа нет:
+   * у остальных оверлеи и так получили базовый конфиг, и рассылать им нечего.
+   *
+   * @returns сколько виджетов переопубликовано.
+   */
+  async refreshStyling(now = new Date()): Promise<number> {
+    if (!this.config.billing) return 0;
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        subscription: { currentPeriodEnd: { lt: now } },
+        widgets: { some: {} },
+      },
+      select: {
+        id: true,
+        subscription: { select: { plan: true, currentPeriodEnd: true, autoRenew: true } },
+        widgets: { select: { id: true, type: true, isEnabled: true, config: true } },
+      },
+    });
+
+    let republished = 0;
+    for (const user of users) {
+      const features = PLAN_FEATURES[effectivePlan(user.subscription, now)];
+      if (features.advancedStyling) continue;
+
+      for (const widget of user.widgets) {
+        const type = toContractWidgetType(widget.type);
+        const stored = configSchemaFor(type).safeParse(widget.config);
+        if (!stored.success) continue;
+        const basic = applyPlanToConfig(stored.data, features);
+        // Ничего продвинутого в конфиге нет — и сообщение шины не нужно: оверлей
+        // на него перерисовывается, а перерисовка в эфире не бесплатна.
+        if (JSON.stringify(basic) === JSON.stringify(stored.data)) continue;
+
+        // Приведение as: конфиг в сообщении шины типизирован объединением по
+        // типу виджета, а урезание работает по полям и типа не знает.
+        await this.bus.publish({
+          kind: 'widget-config',
+          userId: user.id,
+          widgetId: widget.id,
+          isEnabled: widget.isEnabled,
+          type,
+          config: basic,
+        } as BusMessage);
+        republished += 1;
+      }
+    }
+
+    if (republished > 0) {
+      this.logger.log({ count: republished }, 'Оформление виджетов приведено к тарифу');
+    }
+    return republished;
   }
 }

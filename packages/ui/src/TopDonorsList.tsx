@@ -1,4 +1,5 @@
 import { type TopDonorsState, type TopDonorsWidgetConfig, formatMoney } from '@streamkit/contracts';
+import { slotCss, WidgetFrame } from './slots';
 import { textStyleToCss } from './text-style';
 
 export interface TopDonorsListProps {
@@ -21,56 +22,70 @@ export function TopDonorsList({ config, state }: TopDonorsListProps): React.JSX.
   const rowSize = Math.round(config.text.fontSize * 0.7);
 
   return (
-    <div
-      data-testid="top-donors"
+    <WidgetFrame
+      testId="top-donors"
+      background={config.background}
       style={{
         display: 'flex',
         flexDirection: 'column',
         gap: 6,
         padding: 16,
-        boxSizing: 'border-box',
       }}
     >
       {config.title ? (
-        <div style={{ ...text, fontSize: config.text.fontSize, fontWeight: 700 }}>
+        <div
+          style={{ ...text, ...slotCss(config.slots.title, config.text.fontSize), fontWeight: 700 }}
+        >
           {config.title}
         </div>
       ) : null}
 
-      {entries.map((entry, index) => (
-        <div
-          key={entry.username}
-          style={{
-            ...text,
-            fontSize: rowSize,
-            display: 'flex',
-            alignItems: 'baseline',
-            gap: 10,
-          }}
-        >
-          {/* Место числом, а не медалью: медали читаются только для первых трёх,
-              а список бывает до десяти. */}
-          <span style={{ opacity: 0.6, fontVariantNumeric: 'tabular-nums' }}>{index + 1}</span>
-          <span
+      {/* Список — один элемент кадра, а не строки по отдельности: перетаскивать
+          каждую строку отдельно бессмысленно, их число меняется само. */}
+      <div
+        style={{
+          ...slotCss(config.slots.list, rowSize),
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+        }}
+      >
+        {entries.map((entry, index) => (
+          <div
+            key={entry.username}
             style={{
-              flex: 1,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
+              ...text,
+              fontSize: config.slots.list.fontSize ?? rowSize,
+              color: config.slots.list.color ?? text.color,
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: 10,
             }}
           >
-            {entry.username}
-          </span>
-          {config.showAmounts ? (
-            <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-              {formatMoney({
-                amountMinor: entry.amountMinor,
-                currency: state?.currency ?? config.currency,
-              })}
+            {/* Место числом, а не медалью: медали читаются только для первых трёх,
+              а список бывает до десяти. */}
+            <span style={{ opacity: 0.6, fontVariantNumeric: 'tabular-nums' }}>{index + 1}</span>
+            <span
+              style={{
+                flex: 1,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {entry.username}
             </span>
-          ) : null}
-        </div>
-      ))}
-    </div>
+            {config.showAmounts ? (
+              <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                {formatMoney({
+                  amountMinor: entry.amountMinor,
+                  currency: state?.currency ?? config.currency,
+                })}
+              </span>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </WidgetFrame>
   );
 }

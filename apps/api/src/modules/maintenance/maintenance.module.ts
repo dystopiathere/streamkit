@@ -64,6 +64,12 @@ export class MaintenanceScheduler {
         await this.maintenance.purgeExpiredConsents(CONSENT_RETENTION_DAYS);
         await this.maintenance.purgeOldVisitorConsents(VISITOR_CONSENT_RETENTION_DAYS);
         await this.maintenance.purgeOldSiteStats(SITE_STATS_RETENTION_DAYS);
+        // Не уборка, а приведение к тарифу: у кого платный кончился, активной
+        // остаётся одна площадка. Ничего не удаляется — см. enforcePlatformLimits.
+        await this.maintenance.enforcePlatformLimits();
+        // И то же для оформления: открытая в OBS сцена конфиг не перезапрашивает,
+        // поэтому продвинутое оформление у истёкшего тарифа снимается рассылкой.
+        await this.maintenance.refreshStyling();
       });
     } catch (error) {
       // Упавшая уборка не должна ронять воркер: живые коннекторы важнее.

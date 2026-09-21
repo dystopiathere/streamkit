@@ -9,6 +9,7 @@ process.env.SELLER_EMAIL = 'support@example.ru';
 import {
   guestIdentity,
   MAX_RENEWAL_ATTEMPTS,
+  PLAN_FEATURES,
   PLAN_PRICES,
   type RoomParticipant,
 } from '@streamkit/contracts';
@@ -19,6 +20,7 @@ import { MAILER, type MailMessage, type Mailer } from '../src/common/mail/mailer
 import { BillingService } from '../src/modules/billing/billing.service';
 import { MaintenanceModule } from '../src/modules/maintenance/maintenance.module';
 import { MaintenanceService } from '../src/modules/maintenance/maintenance.service';
+import { OAuthStateService } from '../src/modules/integrations/oauth-state.service';
 import {
   type ChargeSavedRequest,
   type CreatePaymentRequest,
@@ -27,6 +29,7 @@ import {
   type ProviderPayment,
 } from '../src/modules/billing/payment-gateway';
 import { ROOM_MEDIA_SERVER, type RoomMediaServer } from '../src/modules/rooms/livekit.service';
+import { WidgetsService } from '../src/modules/widgets/widgets.service';
 import { createHarness, registrationPayload, type TestHarness } from './harness';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -218,11 +221,15 @@ describe('Подписка на платформу (feature)', () => {
     };
   }
 
-  async function checkout(token: string, period: 'month' | 'year' = 'month') {
+  async function checkout(
+    token: string,
+    period: 'month' | 'year' = 'month',
+    plan: 'multistream' | 'pro' = 'pro',
+  ) {
     const response = await request(server())
       .post('/api/billing/checkout')
       .set(auth(token))
-      .send({ period, acceptOffer: true })
+      .send({ plan, period, acceptOffer: true })
       .expect(201);
     const payment = await harness.prisma.payment.findUniqueOrThrow({
       where: { id: response.body.paymentId as string },
@@ -241,8 +248,8 @@ describe('Подписка на платформу (feature)', () => {
   }
 
   /** Оформил и оплатил месяц: подписка активна, способ оплаты сохранён. */
-  async function subscribed(token: string): Promise<string> {
-    const { payment } = await checkout(token);
+  async function subscribed(token: string, plan: 'multistream' | 'pro' = 'pro'): Promise<string> {
+    const { payment } = await checkout(token, 'month', plan);
     gateway.pay(payment.providerPaymentId!);
     await notify(payment.providerPaymentId!).expect(200);
     return payment.id;
@@ -271,13 +278,13 @@ describe('Подписка на платформу (feature)', () => {
       status: 'PENDING',
       kind: 'INITIAL',
       period: 'YEAR',
-      amountMinor: PLAN_PRICES.year.amountMinor,
+      amountMinor: PLAN_PRICES.pro.year.amountMinor,
       currency: 'RUB',
     });
     expect(gateway.created[0]).toMatchObject({
       paymentId: payment.id,
       customerEmail: owner.email,
-      amountMinor: PLAN_PRICES.year.amountMinor,
+      amountMinor: PLAN_PRICES.pro.year.amountMinor,
     });
     expect(gateway.created[0]!.returnUrl).toContain(`/billing?payment=${payment.id}`);
 
@@ -303,7 +310,7 @@ describe('Подписка на платформу (feature)', () => {
     await request(server())
       .post('/api/billing/checkout')
       .set(auth(owner.token))
-      .send({ period: 'month', acceptOffer: true })
+      .send({ plan: 'pro', period: 'month', acceptOffer: true })
       .expect(503);
     const payment = await harness.prisma.payment.findFirstOrThrow({
       where: { userId: owner.userId },
@@ -317,7 +324,7 @@ describe('Подписка на платформу (feature)', () => {
     const response = await request(server())
       .post('/api/billing/checkout')
       .set(auth(owner.token))
-      .send({ period: 'month', acceptOffer: true })
+      .send({ plan: 'pro', period: 'month', acceptOffer: true })
       .expect(503);
     expect(response.body.message).toMatch(/отклонил/);
     const payment = await harness.prisma.payment.findFirstOrThrow({
@@ -460,7 +467,7 @@ describe('Подписка на платформу (feature)', () => {
     await request(server())
       .post('/api/billing/checkout')
       .set(auth(owner.token))
-      .send({ period: 'year', acceptOffer: true })
+      .send({ plan: 'pro', period: 'year', acceptOffer: true })
       .expect(409);
     await request(server())
       .get(`/api/billing/payments/${paymentId}`)
@@ -471,6 +478,221 @@ describe('Подписка на платформу (feature)', () => {
   /* ---------------------------------------------------------------- */
   /* Комнаты                                                            */
   /* ---------------------------------------------------------------- */
+
+  it('на бесплатном тарифе виджетов не больше лимита, платный снимает ограничение', async () => {
+    const owner = await streamer();
+    const limit = PLAN_FEATURES.free.widgets!;
+
+    for (let index = 0; index < limit; index += 1) {
+      await request(server())
+        .post('/api/widgets')
+        .set(auth(owner.token))
+        .send({ name: `Виджет ${index}`, type: 'alerts', config: {} })
+        .expect(201);
+    }
+
+    const denied = await request(server())
+      .post('/api/widgets')
+      .set(auth(owner.token))
+      .send({ name: 'Лишний', type: 'alerts', config: {} })
+      .expect(402);
+    expect(denied.body.code).toBe('widget_limit');
+
+    // «Мультистрим» снимает ограничение, и уже созданные никуда не деваются.
+    await subscribed(owner.token, 'multistream');
+    await request(server())
+      .post('/api/widgets')
+      .set(auth(owner.token))
+      .send({ name: 'Пятый', type: 'alerts', config: {} })
+      .expect(201);
+    const widgets = await request(server()).get('/api/widgets').set(auth(owner.token)).expect(200);
+    expect(widgets.body).toHaveLength(limit + 1);
+  });
+
+  it('продвинутое оформление хранится всегда, а в кадр идёт только с «Про»', async () => {
+    const owner = await streamer();
+    const advanced = {
+      slots: { title: { x: 25, y: 10, color: '#FF0000', fontSize: 64 } },
+      background: { imageUrl: 'https://example.com/bg.png', opacity: 0.5 },
+      barImageUrl: 'https://example.com/bar.png',
+      text: { fontFamily: 'Oswald' },
+    };
+    const created = await request(server())
+      .post('/api/widgets')
+      .set(auth(owner.token))
+      .send({ name: 'Цель', type: 'goal', config: advanced })
+      .expect(201);
+    const widgetId = created.body.id as string;
+
+    // Настройки сохранены целиком: конец тарифа ничего не стирает, и вернувшийся
+    // «Про» обязан показать ровно то, что настроил стример.
+    const stored = await request(server())
+      .get(`/api/widgets/${widgetId}`)
+      .set(auth(owner.token))
+      .expect(200);
+    expect(stored.body.config).toMatchObject(advanced);
+
+    // А оверлей на бесплатном тарифе получает базовый конфиг.
+    const widgets = harness.app.get(WidgetsService);
+    const link = await widgets.createOverlayToken(owner.userId, widgetId, null);
+    // Токен возвращается один раз и только в ссылке: в БД лежит его хэш.
+    const raw = new URL(link.url).searchParams.get('token')!;
+    const basic = await widgets.resolveOverlayToken(raw);
+    expect(basic?.widget.config).toMatchObject({
+      slots: { title: { x: null, y: null, color: null, fontSize: null } },
+      background: { imageUrl: null, color: null },
+      barImageUrl: null,
+      text: { fontFamily: 'Inter' },
+    });
+
+    // С «Про» — тот же токен и всё оформление на месте.
+    await subscribed(owner.token, 'pro');
+    const full = await widgets.resolveOverlayToken(raw);
+    expect(full?.widget.config).toMatchObject(advanced);
+  });
+
+  it('после окончания «Про» уборка рассылает оверлеям базовое оформление', async () => {
+    const owner = await streamer();
+    await subscribed(owner.token, 'pro');
+    await request(server())
+      .post('/api/widgets')
+      .set(auth(owner.token))
+      .send({ name: 'Цель', type: 'goal', config: { slots: { title: { x: 10, y: 10 } } } })
+      .expect(201);
+
+    // Тариф кончился: открытая в OBS сцена конфиг не перезапрашивает, и снять
+    // оформление может только рассылка.
+    await harness.prisma.subscription.update({
+      where: { userId: owner.userId },
+      data: { currentPeriodEnd: new Date(Date.now() - DAY_MS), autoRenew: false },
+    });
+
+    const maintenance = harness.app.get(MaintenanceService);
+    expect(await maintenance.refreshStyling()).toBe(1);
+    // Проход идемпотентен по результату: он снова разошлёт тот же базовый
+    // конфиг. Отмечать «уже разослано» значило бы хранить ещё одно состояние,
+    // а цена — одно сообщение шины в сутки на виджет.
+    expect(await maintenance.refreshStyling()).toBe(1);
+
+    // У оплаченного тарифа рассылать нечего.
+    await harness.prisma.subscription.update({
+      where: { userId: owner.userId },
+      data: { currentPeriodEnd: new Date(Date.now() + DAY_MS) },
+    });
+    expect(await maintenance.refreshStyling()).toBe(0);
+  });
+
+  it('комнаты — только в «Про»: «Мультистрим» их не открывает', async () => {
+    const owner = await streamer();
+    await subscribed(owner.token, 'multistream');
+
+    const view = await request(server())
+      .get('/api/billing/subscription')
+      .set(auth(owner.token))
+      .expect(200);
+    expect(view.body).toMatchObject({
+      plan: 'multistream',
+      roomsAccess: false,
+      features: { rooms: false, platforms: null, widgets: null, advancedStyling: false },
+    });
+
+    await request(server())
+      .post('/api/rooms')
+      .set(auth(owner.token))
+      .send({ name: 'Подкаст' })
+      .expect(402);
+  });
+
+  it('смена тарифа меняет сумму продления и требует нового письма о списании', async () => {
+    const owner = await streamer();
+    await subscribed(owner.token);
+    // Письмо о текущем конце периода уже ушло — после смены тарифа оно называет
+    // не ту сумму, и списывать по нему нельзя.
+    await harness.prisma.subscription.updateMany({
+      where: { userId: owner.userId },
+      data: { renewalNoticeFor: new Date(), renewalNoticeSentAt: new Date() },
+    });
+
+    const changed = await request(server())
+      .patch('/api/billing/subscription')
+      .set(auth(owner.token))
+      .send({ plan: 'multistream' })
+      .expect(200);
+
+    // Доступ до конца оплаченного периода не меняется: «Про» ещё действует.
+    expect(changed.body).toMatchObject({
+      plan: 'pro',
+      nextPlan: 'multistream',
+      roomsAccess: true,
+      renewalAmount: PLAN_PRICES.multistream.month,
+    });
+    const row = await harness.prisma.subscription.findUniqueOrThrow({
+      where: { userId: owner.userId },
+    });
+    expect(row.renewalNoticeFor).toBeNull();
+  });
+
+  it('вторую площадку на тарифе с одной не подключить, а лишняя выключается уборкой', async () => {
+    const owner = await streamer();
+    const twitch = await harness.prisma.channel.create({
+      data: {
+        userId: owner.userId,
+        platform: 'TWITCH',
+        externalId: 'tw-1',
+        login: 'streamer',
+        displayName: 'Стример',
+      },
+    });
+
+    // Подключение второй площадки на бесплатном тарифе — отказ с меткой, по
+    // которой дашборд объясняет, что делать.
+    const states = harness.app.get(OAuthStateService);
+    const state = await states.issue(owner.userId, 'youtube');
+    const response = await request(server())
+      .get(`/api/integrations/youtube/callback?code=code&state=${state}`)
+      .set('Cookie', `sk_oauth_state=${state}`)
+      .expect(302);
+    expect(response.headers.location).toContain('status=plan-limit');
+    expect(await harness.prisma.channel.count({ where: { userId: owner.userId } })).toBe(1);
+
+    // А если площадок уже две (подключались на платном тарифе) — ночная уборка
+    // оставляет активной самую старую, не удаляя вторую.
+    const youtube = await harness.prisma.channel.create({
+      data: {
+        userId: owner.userId,
+        platform: 'YOUTUBE',
+        externalId: 'UC' + 'y'.repeat(22),
+        login: '@streamer',
+        displayName: 'Стример на YouTube',
+      },
+    });
+    expect(await harness.app.get(MaintenanceService).enforcePlatformLimits()).toBe(1);
+    const channels = await harness.prisma.channel.findMany({
+      where: { userId: owner.userId },
+      select: { id: true, isEnabled: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(channels).toEqual([
+      { id: twitch.id, isEnabled: true },
+      { id: youtube.id, isEnabled: false },
+    ]);
+
+    // Стример выбирает, какая из двух работает: включение одной выключает другую.
+    await request(server())
+      .patch(`/api/channels/${youtube.id}`)
+      .set(auth(owner.token))
+      .send({ isEnabled: true })
+      .expect(204);
+    const switched = await harness.prisma.channel.findMany({
+      where: { userId: owner.userId },
+      select: { id: true, isEnabled: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(switched).toEqual([
+      { id: twitch.id, isEnabled: false },
+      { id: youtube.id, isEnabled: true },
+    ]);
+  });
 
   it('комнаты закрыты без подписки и открыты с ней', async () => {
     const owner = await streamer();
@@ -669,7 +891,7 @@ describe('Подписка на платформу (feature)', () => {
     expect(await billing.sendRenewalNotices(now)).toBe(0);
     expect(mailer.sent).toHaveLength(1);
     expect(mailer.sent[0]!.to).toBe(owner.email);
-    expect(mailer.sent[0]!.text).toContain('490');
+    expect(mailer.sent[0]!.text).toContain(String(PLAN_PRICES.pro.month.amountMinor / 100));
     expect(mailer.sent[0]!.text).toContain('/billing');
 
     // Через сутки окно продления уже открыто, но трёх дней с письма нет.
@@ -738,7 +960,7 @@ describe('Подписка на платформу (feature)', () => {
       .set(auth(token))
       .send({ period: 'year' })
       .expect(200);
-    expect(view.body.renewalAmount).toEqual(PLAN_PRICES.year);
+    expect(view.body.renewalAmount).toEqual(PLAN_PRICES.pro.year);
 
     await billing.renewDue();
     expect(gateway.charged).toHaveLength(0);
@@ -763,7 +985,7 @@ describe('Подписка на платформу (feature)', () => {
     expect(gateway.charged).toHaveLength(1);
     expect(gateway.charged[0]).toMatchObject({
       paymentMethodId: 'pm-secret-4444',
-      amountMinor: PLAN_PRICES.month.amountMinor,
+      amountMinor: PLAN_PRICES.pro.month.amountMinor,
     });
     const row = await harness.prisma.subscription.findUniqueOrThrow({ where: { userId } });
     // Оплаченные 12 часов не теряются: новый период начинается с конца старого.

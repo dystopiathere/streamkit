@@ -144,6 +144,27 @@ export function useResetDonations() {
   });
 }
 
+/**
+ * Включение и выключение площадки.
+ *
+ * На тарифе с одной площадкой включение одной выключает остальные — решает это
+ * сервер, поэтому список каналов перезапрашивается целиком, а не правится на
+ * месте. Вместе с ним обновляется окно эфира: каналы чата там те же.
+ */
+export function useSetChannelEnabled() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ channelId, isEnabled }: { channelId: string; isEnabled: boolean }) =>
+      api.patch<void>(`/channels/${channelId}`, { isEnabled }),
+    onSuccess: async () => {
+      await Promise.all([
+        client.invalidateQueries({ queryKey: analyticsKeys.channels }),
+        client.invalidateQueries({ queryKey: ['stream', 'overview'] }),
+      ]);
+    },
+  });
+}
+
 export function useDisconnectChannel() {
   const client = useQueryClient();
   return useMutation({

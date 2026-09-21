@@ -11,7 +11,12 @@ import type {
   WidgetState,
   WidgetType,
 } from '@streamkit/contracts';
-import { defaultAlertWidgetConfig, defaultWidgetConfig, type Language } from '@streamkit/contracts';
+import {
+  applyPlanToConfig,
+  defaultAlertWidgetConfig,
+  defaultWidgetConfig,
+  type Language,
+} from '@streamkit/contracts';
 import {
   AlertAnimationStyles,
   AlertCard,
@@ -21,6 +26,7 @@ import {
   TimerDisplay,
   TopDonorsList,
 } from '@streamkit/ui';
+import { usePlanFeatures } from '@/features/billing/PlanPaywall';
 import { currentLanguage } from '@/lib/locale';
 
 /**
@@ -81,6 +87,21 @@ function withDefaults(type: WidgetType, config: Record<string, unknown>): Record
   return { ...defaultWidgetConfig(type).config, ...config };
 }
 
+/**
+ * Предпросмотр показывает то, что уйдёт в кадр, — с учётом тарифа.
+ *
+ * Без «Про» продвинутое оформление остаётся в настройках, но в кадр не идёт
+ * (сервер урезает конфиг на выходе к оверлею той же функцией). Если бы
+ * предпросмотр рисовал его, стример настраивал бы раскладку, видел её в
+ * редакторе и не находил на стриме — самая дорогая разновидность расхождения.
+ */
+function usePlanConfig(config: Record<string, unknown>): Record<string, unknown> {
+  const features = usePlanFeatures();
+  // Пока тариф не загрузился, показываем как есть: мигать оформлением у того,
+  // кто заплатил, хуже, чем один кадр показать лишнее тому, кто нет.
+  return features ? applyPlanToConfig(config, features) : config;
+}
+
 function Surface({
   type,
   config: raw,
@@ -92,7 +113,7 @@ function Surface({
   state: WidgetState | null;
   alertScenario: AlertEventType;
 }): React.JSX.Element | null {
-  const config = withDefaults(type, raw);
+  const config = usePlanConfig(withDefaults(type, raw));
   // Примеры — на языке дашборда: русский «Зритель» в английском интерфейсе
   // выглядел бы непереведённым куском, а не данными.
   const sample = SAMPLES[currentLanguage()];

@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ALERT_ANIMATIONS,
+  ALERT_SLOTS,
   alertWidgetConfigSchema,
+  applyPlanToConfig,
+  BASIC_ALERT_ANIMATIONS,
+  EMPTY_BACKGROUND,
+  EMPTY_SLOT,
+  type GoalWidgetConfig,
+  goalWidgetConfigSchema,
+  WIDGET_SLOTS,
+  type WidgetType,
   configSchemaFor,
   defaultAlertWidgetConfig,
   defaultWidgetConfig,
@@ -277,5 +287,90 @@ describe('формат длительности', () => {
     expect(formatDuration(125, false)).toBe('02:05');
     // А вот когда час набрался — показывает, иначе 01:00:05 стало бы 00:05.
     expect(formatDuration(3605, false)).toBe('01:00:05');
+  });
+});
+
+describe('продвинутое оформление', () => {
+  const PRO = { advancedStyling: true };
+  const FREE = { advancedStyling: false };
+
+  it('слоты и фон по умолчанию пустые — виджет выглядит как до раскладки', () => {
+    const goal = defaultWidgetConfig('goal').config as GoalWidgetConfig;
+    expect(goal.slots.title).toEqual(EMPTY_SLOT);
+    expect(goal.slots.bar.x).toBeNull();
+    expect(goal.background).toEqual(EMPTY_BACKGROUND);
+  });
+
+  it('позиция — проценты кадра: за сотню не пускает', () => {
+    const ok = goalWidgetConfigSchema.safeParse({ slots: { title: { x: 50, y: 12.5 } } });
+    expect(ok.success).toBe(true);
+    expect(goalWidgetConfigSchema.safeParse({ slots: { title: { x: 101 } } }).success).toBe(false);
+    expect(goalWidgetConfigSchema.safeParse({ slots: { title: { y: -1 } } }).success).toBe(false);
+  });
+
+  it('у каждого типа с раскладкой свои элементы, и они есть в схеме', () => {
+    for (const [type, slots] of Object.entries(WIDGET_SLOTS)) {
+      const config = defaultWidgetConfig(type as WidgetType).config as {
+        slots?: Record<string, unknown>;
+      };
+      // Алерты держат слоты в сценариях: оформление у них на тип события.
+      const actual = type === 'alerts' ? ALERT_SLOTS : Object.keys(config.slots ?? {});
+      expect([...actual].sort()).toEqual([...slots].sort());
+    }
+  });
+
+  it('незнакомый шрифт из старого конфига подменяется, а не ломает чтение', () => {
+    const config = goalWidgetConfigSchema.parse({ text: { fontFamily: 'Arial' } });
+    expect(config.text.fontFamily).toBe('Inter');
+    expect(goalWidgetConfigSchema.parse({ text: { fontFamily: 'Caveat' } }).text.fontFamily).toBe(
+      'Caveat',
+    );
+  });
+
+  it('без тарифа «Про» позиции, цвета, фон, картинки и шрифт снимаются', () => {
+    const configured = goalWidgetConfigSchema.parse({
+      slots: { title: { x: 10, y: 20, color: '#FF0000', fontSize: 64 } },
+      background: { imageUrl: 'https://example.com/bg.png', color: '#101010', opacity: 0.5 },
+      barImageUrl: 'https://example.com/bar.png',
+      trackImageUrl: 'https://example.com/track.png',
+      text: { fontFamily: 'Oswald', color: '#00FF00' },
+    });
+
+    const basic = applyPlanToConfig(configured, FREE);
+    expect(basic.slots.title).toEqual(EMPTY_SLOT);
+    expect(basic.background).toEqual(EMPTY_BACKGROUND);
+    expect(basic.barImageUrl).toBeNull();
+    expect(basic.trackImageUrl).toBeNull();
+    expect(basic.text.fontFamily).toBe('Inter');
+    // Всё, что не относится к продвинутому оформлению, остаётся как есть: цвет
+    // текста стример настраивал и на бесплатном тарифе.
+    expect(basic.text.color).toBe('#00FF00');
+    expect(basic.title).toBe(configured.title);
+
+    // Настройки не удалены: с тарифом возвращается ровно то же, что было.
+    expect(applyPlanToConfig(configured, PRO)).toEqual(configured);
+  });
+
+  it('продвинутая анимация заменяется базовой, а не выбрасывается', () => {
+    const configured = alertWidgetConfigSchema.parse({
+      scenarios: {
+        donation: { animationIn: 'flip', animationOut: 'shake', slots: { title: { x: 5 } } },
+      },
+    });
+    const basic = applyPlanToConfig(configured, FREE);
+    expect(basic.scenarios.donation.animationIn).toBe('zoom');
+    expect(basic.scenarios.donation.animationOut).toBe('bounce');
+    expect(basic.scenarios.donation.slots.title).toEqual(EMPTY_SLOT);
+    // Базовые анимации остаются собой.
+    expect(basic.scenarios.follow.animationIn).toBe('slide-up');
+  });
+
+  it('базовых анимаций пять, и все они есть в общем списке', () => {
+    expect(BASIC_ALERT_ANIMATIONS).toHaveLength(5);
+    for (const animation of BASIC_ALERT_ANIMATIONS) {
+      expect(ALERT_ANIMATIONS).toContain(animation);
+    }
+    // Продвинутых тоже есть — иначе тариф нечем наполнить.
+    expect(ALERT_ANIMATIONS.length).toBeGreaterThan(BASIC_ALERT_ANIMATIONS.length);
   });
 });

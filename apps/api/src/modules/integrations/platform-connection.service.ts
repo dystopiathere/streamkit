@@ -1,8 +1,15 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import type { AvailablePlatform, Platform } from '@streamkit/contracts';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
 import { RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { BillingService } from '../billing/billing.service';
 import { chatChannelsOf, toChannelRefs } from '../chat/chat-channel';
 import { OAuthStateService } from './oauth-state.service';
 import { PlatformRegistry } from './platform-registry.service';
@@ -27,6 +34,7 @@ export class PlatformConnectionService {
     private readonly state: OAuthStateService,
     private readonly audit: AuditService,
     private readonly bus: RealtimeBus,
+    private readonly billing: BillingService,
   ) {}
 
   async listAvailable(userId: string): Promise<AvailablePlatform[]> {
@@ -84,6 +92,12 @@ export class PlatformConnectionService {
       throw new BadRequestException('Ссылка подключения недействительна, начните заново');
     }
 
+    // Лимит площадок — до обмена кода: получить и сохранить токены площадки,
+    // которую мы всё равно не подключим, значит завести мёртвые учётные данные.
+    // Повторное подключение той же площадки разрешено всегда: это единственный
+    // способ починить протухший доступ.
+    await this.requirePlatformSlot(state.userId, platform);
+
     const provider = this.registry.require(platform);
     const tokens = await provider.exchangeCode(code);
     const identity = await provider.fetchIdentity(tokens.accessToken);
@@ -119,6 +133,73 @@ export class PlatformConnectionService {
     this.logger.log({ platform, userId: state.userId }, 'Площадка подключена');
 
     return { userId: state.userId };
+  }
+
+  /**
+   * Есть ли на тарифе место под ещё одну площадку.
+   *
+   * Отказ — 403, а не 402: контроллер приводит его к возврату на «Аналитику» с
+   * меткой `plan-limit`, и страница объясняет, что делать. Коду ответа здесь
+   * значения не придаётся — ответ отдаётся редиректом, а не телом.
+   *
+   * Уже подключённая площадка место не занимает: повторное подключение — это
+   * починка протухшего доступа, и запрещать её значило бы запереть стримера
+   * без возможности вернуть свой же канал.
+   */
+  private async requirePlatformSlot(userId: string, platform: Platform): Promise<void> {
+    const { platforms: limit } = await this.billing.planFeatures(userId);
+    if (limit === null) return;
+
+    const connected = await this.prisma.channel.findMany({
+      where: { userId },
+      select: { platform: true },
+    });
+    const prisma = toPrismaPlatform(platform);
+    if (connected.some((channel) => channel.platform === prisma)) return;
+    if (connected.length >= limit) {
+      throw new ForbiddenException('Тариф не позволяет подключить ещё одну площадку');
+    }
+  }
+
+  /**
+   * Включение и выключение площадки.
+   *
+   * Выключенный канал не опрашивается, не читает чат и не присылает события —
+   * так тариф с одной площадкой работает у стримера, подключившего две: обе
+   * остаются на месте, работает выбранная. Поэтому включение одной выключает
+   * остальные, и обе операции идут одной транзакцией: между ними не должно
+   * быть мгновения, когда активны обе или ни одна.
+   */
+  async setEnabled(
+    userId: string,
+    channelId: string,
+    isEnabled: boolean,
+    context: AuditContext = {},
+  ): Promise<void> {
+    const channel = await this.prisma.channel.findFirst({
+      where: { id: channelId, userId },
+      select: { id: true, platform: true },
+    });
+    if (!channel) throw new NotFoundException('Канал не найден');
+
+    const { platforms: limit } = await this.billing.planFeatures(userId);
+    const exclusive = isEnabled && limit !== null && limit <= 1;
+
+    await this.prisma.$transaction(async (tx) => {
+      if (exclusive) {
+        await tx.channel.updateMany({
+          where: { userId, id: { not: channelId } },
+          data: { isEnabled: false },
+        });
+      }
+      await tx.channel.update({ where: { id: channelId }, data: { isEnabled } });
+    });
+
+    await this.announceChatChannels(userId);
+    await this.audit.record('integration.channel.toggled', userId, {
+      ...context,
+      metadata: { platform: channel.platform.toLowerCase(), isEnabled },
+    });
   }
 
   /** Отключение: канал и учётные данные уходят вместе со снимками метрик. */

@@ -141,3 +141,17 @@ variable "postbox_dkim" {
     error_message = "postbox_dkim.value — строка из консоли Postbox вида v=DKIM1;...;p=..., без кавычек."
   }
 }
+
+variable "yandex_dkim" {
+  description = "Запись DKIM Yandex 360 для почты: полное имя (точку в конце dns.tf добавит сам) и значение TXT. null — запись ещё не заведена"
+  type = object({
+    name  = string
+    value = string
+  })
+  default = null
+
+  validation {
+    condition     = var.yandex_dkim == null || (!strcontains(var.yandex_dkim.value, "\"") && startswith(var.yandex_dkim.value, "v=DKIM1"))
+    error_message = "yandex_dkim.value — строка Yandex 360 вида v=DKIM1;...;p=..., без кавычек."
+  }
+}

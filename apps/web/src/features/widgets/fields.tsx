@@ -43,7 +43,8 @@ export function NumberField({
   label,
   step = 1,
   hint,
-}: BaseProps & { step?: number; hint?: string }): React.JSX.Element {
+  nullable = false,
+}: BaseProps & { step?: number; hint?: string; nullable?: boolean }): React.JSX.Element {
   return (
     <div>
       <Label htmlFor={name}>{label}</Label>
@@ -53,8 +54,20 @@ export function NumberField({
         step={step}
         {...describeField(name, { hint: Boolean(hint), error: errorAt(form, name) })}
         // valueAsNumber обязателен: без него в схему уедет строка, и Zod
-        // отвергнет форму с невнятной ошибкой про тип.
-        {...form.register(name, { valueAsNumber: true })}
+        // отвергнет форму с невнятной ошибкой про тип. У необязательного поля
+        // его мало: пустой ввод даёт NaN, а схема ждёт число или null — и форма
+        // отказывалась бы сохраняться из-за стёртой позиции элемента.
+        {...(nullable
+          ? form.register(name, {
+              // `null` проверяется наравне с пустой строкой: через `setValueAs`
+              // проходит и сохранённое значение поля, а `Number(null)` — это
+              // ноль. Без проверки незаданная позиция элемента превращалась бы
+              // при открытии формы в «0 % по горизонтали», то есть элемент
+              // уезжал бы в угол кадра сам.
+              setValueAs: (value: unknown) =>
+                value === '' || value === null || value === undefined ? null : Number(value),
+            })
+          : form.register(name, { valueAsNumber: true }))}
       />
       {hint ? <FieldHint id={name}>{hint}</FieldHint> : null}
       <FieldError id={name} message={errorAt(form, name)} />
@@ -112,6 +125,58 @@ export function ColorField({ form, name, label }: BaseProps): React.JSX.Element 
       </div>
       <FieldError id={`${name}-hex`} message={errorAt(form, name)} />
     </div>
+  );
+}
+
+/**
+ * Цвет, который может быть не задан.
+ *
+ * `<input type="color">` пустого значения не имеет вовсе — он всегда чем-то
+ * закрашен, — поэтому «не задан» выражается галочкой рядом. Без неё фон виджета
+ * нельзя было бы вернуть в прозрачный: любое прикосновение к палитре навсегда
+ * заливало бы кадр цветом.
+ */
+export function NullableColorField({ form, name, label }: BaseProps): React.JSX.Element {
+  return (
+    <Controller
+      control={form.control}
+      name={name}
+      render={({ field }) => {
+        const set = typeof field.value === 'string' && field.value.length > 0;
+        const value = set ? field.value : '#000000';
+        return (
+          <div>
+            <Label htmlFor={name}>{label}</Label>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                className="h-4 w-4 shrink-0"
+                checked={set}
+                aria-label={`${label} — задать`}
+                onChange={(event) => field.onChange(event.target.checked ? value : null)}
+              />
+              <input
+                id={name}
+                type="color"
+                className="h-9 w-12 shrink-0 rounded border border-border-strong bg-bg"
+                value={value}
+                disabled={!set}
+                onChange={(event) => field.onChange(event.target.value)}
+              />
+              <Input
+                aria-label={`${label}, HEX`}
+                spellCheck={false}
+                value={set ? field.value : ''}
+                disabled={!set}
+                {...describeField(`${name}-hex`, { error: errorAt(form, name) })}
+                onChange={(event) => field.onChange(event.target.value || null)}
+              />
+            </div>
+            <FieldError id={`${name}-hex`} message={errorAt(form, name)} />
+          </div>
+        );
+      }}
+    />
   );
 }
 

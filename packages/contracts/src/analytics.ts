@@ -38,6 +38,14 @@ export const channelSchema = z.object({
   connectedAt: isoDateSchema,
   /** Когда метрики собирались в последний раз. null — ещё ни разу. */
   lastSyncedAt: isoDateSchema.nullable(),
+  /**
+   * Работает ли канал: собираются метрики, читается чат, идут события.
+   *
+   * Выключенным он бывает на тарифе, где активна одна площадка: подключены обе,
+   * но работает выбранная. Отключение — это не выключение: оно удаляет канал
+   * вместе с токенами и снимками.
+   */
+  isEnabled: z.boolean(),
   syncState: channelSyncStateSchema,
   /**
    * Выданных площадкой прав меньше, чем нужно сейчас: канал подключали до
@@ -223,3 +231,13 @@ export const authorizeResponseSchema = z.object({
   url: z.string().url(),
 });
 export type AuthorizeResponse = z.infer<typeof authorizeResponseSchema>;
+
+/**
+ * Включение площадки.
+ *
+ * Нужно там, где активной может быть одна: подключены обе, работает выбранная.
+ * Литерал `true` не ставим — выключить канал стример тоже вправе, например,
+ * чтобы перестать тратить квоту YouTube на канал, который сейчас не в эфире.
+ */
+export const setChannelEnabledSchema = z.object({ isEnabled: z.boolean() });
+export type SetChannelEnabledInput = z.infer<typeof setChannelEnabledSchema>;

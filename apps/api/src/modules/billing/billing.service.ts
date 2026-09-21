@@ -14,7 +14,10 @@ import {
   type CheckoutResult,
   GRACE_DAYS,
   MAX_RENEWAL_ATTEMPTS,
+  type PaidPlan,
   type PaymentView,
+  PLAN_FEATURES,
+  type PlanFeatures,
   PLAN_PRICES,
   type SubscriptionView,
 } from '@streamkit/contracts';
@@ -28,10 +31,12 @@ import { LEGAL_DOCUMENTS } from '../privacy/legal-documents';
 import {
   addBillingPeriod,
   DAY_MS,
-  hasRoomsAccess,
+  effectivePlan,
   subscriptionStatus,
   toContractPeriod,
+  toContractPlan,
   toPrismaPeriod,
+  toPrismaPlan,
 } from './billing-periods';
 import { PAYMENT_GATEWAY, type PaymentGateway, type ProviderPayment } from './payment-gateway';
 import { renewalNoticeMessage } from './renewal-notice';
@@ -119,6 +124,12 @@ export class BillingService {
     const status = subscriptionStatus(row, now);
     return {
       status,
+      plan: effectivePlan(row, now),
+      // Тариф следующего периода отдаём, только пока есть что продлевать:
+      // у истёкшей подписки «продлится Про» — обещание, которого нет. Пустой
+      // `nextPlan` значит «сменить не просили», то есть продлится текущий.
+      nextPlan: row && status !== 'expired' ? toContractPlan(row.nextPlan ?? row.plan) : null,
+      features: await this.planFeatures(userId, now),
       period: row ? toContractPeriod(row.period) : null,
       currentPeriodEnd: row?.currentPeriodEnd?.toISOString() ?? null,
       autoRenew: row?.autoRenew ?? false,
@@ -133,24 +144,37 @@ export class BillingService {
   }
 
   /**
-   * Открыты ли приватные комнаты владельцу.
+   * Что доступно владельцу прямо сейчас.
    *
-   * Без настроенной оплаты — всегда да: так в разработке и в самостоятельной
-   * установке, где продавать некому.
+   * Одна точка на все гейты: лимит виджетов, число площадок, комнаты,
+   * продвинутое оформление. Считает сервер, а не клиент, из-за двух особых
+   * случаев, которые из названия тарифа не выводятся.
+   *
+   * Без настроенной оплаты открыто всё: так в разработке и в самостоятельной
+   * установке, где продавать некому. Заблокированному аккаунту закрыты
+   * комнаты — гость и оверлей получают отказ при входе, а вебхук выгоняет
+   * вошедших раньше; остальное блокировка гасит своими средствами.
    */
-  async roomsAccess(userId: string, now = new Date()): Promise<boolean> {
+  async planFeatures(userId: string, now = new Date()): Promise<PlanFeatures> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         status: true,
-        subscription: { select: { currentPeriodEnd: true, autoRenew: true } },
+        subscription: { select: { plan: true, currentPeriodEnd: true, autoRenew: true } },
       },
     });
-    // Заблокированному аккаунту комнаты закрыты при любой подписке: гость и
-    // оверлей получают отказ при входе, а вебхук выгоняет вошедших раньше.
-    if (!user || user.status !== 'ACTIVE') return false;
-    if (!this.configured) return true;
-    return hasRoomsAccess(subscriptionStatus(user.subscription, now));
+    if (!user) return PLAN_FEATURES.free;
+    if (!this.configured) {
+      return { ...PLAN_FEATURES.pro, rooms: user.status === 'ACTIVE' };
+    }
+
+    const features = PLAN_FEATURES[effectivePlan(user.subscription, now)];
+    return user.status === 'ACTIVE' ? features : { ...features, rooms: false };
+  }
+
+  /** Открыты ли приватные комнаты владельцу. */
+  async roomsAccess(userId: string, now = new Date()): Promise<boolean> {
+    return (await this.planFeatures(userId, now)).rooms;
   }
 
   async requireRoomsAccess(userId: string): Promise<void> {
@@ -194,6 +218,7 @@ export class BillingService {
    */
   async checkout(
     userId: string,
+    plan: PaidPlan,
     period: BillingPeriod,
     context: AuditContext = {},
   ): Promise<CheckoutResult> {
@@ -207,15 +232,21 @@ export class BillingService {
     const existing = await this.prisma.subscription.findUnique({ where: { userId } });
     // Следующий период поверх действующего приходит продлением, а не отдельной
     // оплатой: так у подписки один источник продлений и один способ оплаты.
-    if (hasRoomsAccess(subscriptionStatus(existing, now))) {
+    // Смена тарифа действующей подписки — тоже не оплата, а выбор тарифа
+    // следующего периода (`update`): доплат и пересчёта остатка у нас нет.
+    if (effectivePlan(existing, now) !== 'free') {
       throw new ConflictException('Подписка уже действует');
     }
 
-    const price = PLAN_PRICES[period];
+    const price = PLAN_PRICES[plan][period];
     const payment = await this.prisma.$transaction(async (tx) => {
-      // Цена продления фиксируется здесь же: по ней будут списываться
-      // следующие периоды, пока стример сам не сменит период.
+      // Тариф и цена продления фиксируются здесь же: по ним будут списываться
+      // следующие периоды, пока стример сам их не сменит.
       const renewal = {
+        plan: toPrismaPlan(plan),
+        // Оплата отменяет прежний выбор тарифа на следующий период: стример
+        // только что выбрал заново, и продлевать надо оплаченное.
+        nextPlan: null,
         period: toPrismaPeriod(period),
         renewalAmountMinor: price.amountMinor,
         renewalCurrency: price.currency,
@@ -239,6 +270,7 @@ export class BillingService {
           userId,
           subscriptionId: subscription.id,
           kind: 'INITIAL',
+          plan: toPrismaPlan(plan),
           period: toPrismaPeriod(period),
           amountMinor: price.amountMinor,
           currency: price.currency,
@@ -252,7 +284,7 @@ export class BillingService {
         paymentId: payment.id,
         amountMinor: payment.amountMinor,
         currency: payment.currency,
-        description: describe(period),
+        description: describe(plan, period),
         customerEmail: user.email,
         returnUrl: `${this.config.webBaseUrl.replace(/\/+$/, '')}/billing?payment=${payment.id}`,
       });
@@ -290,7 +322,7 @@ export class BillingService {
     });
     await this.audit.record('billing.checkout.created', userId, {
       ...context,
-      metadata: { paymentId: payment.id, period },
+      metadata: { paymentId: payment.id, plan, period },
     });
 
     if (!provider.confirmationUrl) {
@@ -449,7 +481,7 @@ export class BillingService {
    */
   async update(
     userId: string,
-    input: { autoRenew?: boolean; period?: BillingPeriod },
+    input: { autoRenew?: boolean; period?: BillingPeriod; plan?: PaidPlan },
     context: AuditContext = {},
   ): Promise<SubscriptionView> {
     const row = await this.prisma.subscription.findUnique({ where: { userId } });
@@ -459,19 +491,31 @@ export class BillingService {
       throw new ConflictException('Нет сохранённого способа оплаты — оформите подписку заново');
     }
 
-    const periodChanged = input.period !== undefined && toPrismaPeriod(input.period) !== row.period;
+    // Тариф и период следующего периода меняются вместе: цена зависит от пары,
+    // и пересчитать её по одному полю нельзя. Не переданное остаётся прежним —
+    // прежним выбором на следующий период, а не тарифом оплаченного.
+    const plan = input.plan ?? toContractPlan(row.nextPlan ?? row.plan);
+    const period = input.period ?? toContractPeriod(row.period);
+    const renewalChanged =
+      toPrismaPlan(plan) !== (row.nextPlan ?? row.plan) || toPrismaPeriod(period) !== row.period;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.subscription.update({
         where: { id: row.id },
         data: {
-          // Новый период — новая сумма списания, и прежнее письмо о списании
-          // называло другую. Нужно новое письмо, а с ним и новые три дня.
-          ...(periodChanged && input.period
+          // Новый тариф или период — новая сумма списания, и прежнее письмо о
+          // списании называло другую. Нужно новое письмо, а с ним и новые три
+          // дня. Доступ до конца оплаченного периода остаётся прежним: смена
+          // применяется при продлении, доплат и пересчёта остатка нет.
+          ...(renewalChanged
             ? {
-                period: toPrismaPeriod(input.period),
-                renewalAmountMinor: PLAN_PRICES[input.period].amountMinor,
-                renewalCurrency: PLAN_PRICES[input.period].currency,
+                // Тариф оплаченного периода (`plan`) не трогается: доступ до
+                // его конца остаётся прежним. NULL — выбор совпал с действующим
+                // тарифом, то есть смену отменили.
+                nextPlan: toPrismaPlan(plan) === row.plan ? null : toPrismaPlan(plan),
+                period: toPrismaPeriod(period),
+                renewalAmountMinor: PLAN_PRICES[plan][period].amountMinor,
+                renewalCurrency: PLAN_PRICES[plan][period].currency,
                 renewalNoticeFor: null,
                 renewalNoticeSentAt: null,
               }
@@ -504,6 +548,12 @@ export class BillingService {
       await this.audit.record('billing.autorenew.changed', userId, {
         ...context,
         metadata: { autoRenew: input.autoRenew },
+      });
+    }
+    if (renewalChanged) {
+      await this.audit.record('billing.plan.changed', userId, {
+        ...context,
+        metadata: { plan, period },
       });
     }
     return this.subscription(userId);
@@ -551,12 +601,16 @@ export class BillingService {
         await tx.subscription.create({
           data: {
             userId,
+            // Подарок — это «Про»: дарят доступ к тому, что иначе не получить,
+            // а не к тарифу подешевле. Месяц без автопродления: списывать нечем
+            // и не на что, согласия на списания пользователь не давал.
+            plan: 'PRO',
             period: 'MONTH',
             currentPeriodEnd: end,
             autoRenew: false,
             giftedDays: days,
-            renewalAmountMinor: PLAN_PRICES.month.amountMinor,
-            renewalCurrency: PLAN_PRICES.month.currency,
+            renewalAmountMinor: PLAN_PRICES.pro.month.amountMinor,
+            renewalCurrency: PLAN_PRICES.pro.month.currency,
           },
         });
       }
@@ -795,6 +849,9 @@ export class BillingService {
           userId: subscription.userId,
           subscriptionId: subscription.id,
           kind: 'RENEWAL',
+          // Платим за СЛЕДУЮЩИЙ период, значит и за выбранный на него тариф:
+          // смена применяется этим списанием. Письмо считало сумму по нему же.
+          plan: subscription.nextPlan ?? subscription.plan,
           period: subscription.period,
           // Цена подписки, а не текущий прайс: её и называло письмо о списании.
           amountMinor: subscription.renewalAmountMinor,
@@ -829,7 +886,7 @@ export class BillingService {
         paymentId: row.id,
         amountMinor: row.amountMinor,
         currency: row.currency,
-        description: describe(toContractPeriod(row.period)),
+        description: describe(toContractPlan(row.plan), toContractPeriod(row.period)),
         customerEmail: subscription.user.email,
         paymentMethodId: this.crypto.decrypt(subscription.paymentMethodEncrypted),
       });
@@ -950,6 +1007,12 @@ export class BillingService {
           currentPeriodEnd: end,
           renewalFailures: 0,
           nextRenewalAttemptAt: null,
+          // Оплаченный тариф становится действующим, и выбор на следующий
+          // период исполнен. Тариф берётся из платежа, а не из `nextPlan`
+          // подписки: списали ровно за то, что в платеже, и доступ обязан
+          // совпасть с деньгами, даже если выбор успели сменить после списания.
+          plan: row.plan,
+          nextPlan: null,
           ...(method?.saved
             ? {
                 paymentMethodEncrypted: this.crypto.encrypt(method.id),
@@ -967,10 +1030,12 @@ export class BillingService {
   }
 }
 
-function describe(period: BillingPeriod): string {
+/** Назначение платежа для ЮKassa: его видит стример в истории банка. */
+function describe(plan: PaidPlan, period: BillingPeriod): string {
+  const title = plan === 'pro' ? '«Про»' : '«Мультистрим»';
   return period === 'year'
-    ? 'Подписка StreamKit «Про» на 1 год'
-    : 'Подписка StreamKit «Про» на 1 месяц';
+    ? `Подписка StreamKit ${title} на 1 год`
+    : `Подписка StreamKit ${title} на 1 месяц`;
 }
 
 export function toPaymentView(row: Payment): PaymentView {
@@ -978,6 +1043,7 @@ export function toPaymentView(row: Payment): PaymentView {
     id: row.id,
     amountMinor: row.amountMinor,
     currency: row.currency as PaymentView['currency'],
+    plan: toContractPlan(row.plan),
     period: toContractPeriod(row.period),
     kind: row.kind === 'RENEWAL' ? 'renewal' : 'initial',
     status:

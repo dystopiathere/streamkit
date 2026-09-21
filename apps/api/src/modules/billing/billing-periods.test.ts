@@ -1,6 +1,6 @@
-import { GRACE_DAYS } from '@streamkit/contracts';
+import { GRACE_DAYS, PLAN_FEATURES } from '@streamkit/contracts';
 import { describe, expect, it } from 'vitest';
-import { addBillingPeriod, DAY_MS, subscriptionStatus } from './billing-periods';
+import { addBillingPeriod, DAY_MS, effectivePlan, subscriptionStatus } from './billing-periods';
 
 const utc = (iso: string) => new Date(iso);
 
@@ -53,5 +53,47 @@ describe('состояние подписки', () => {
   it('после льготных дней — expired', () => {
     const late = new Date(end.getTime() + GRACE_DAYS * DAY_MS);
     expect(subscriptionStatus({ currentPeriodEnd: end, autoRenew: true }, late)).toBe('expired');
+  });
+});
+
+describe('действующий тариф', () => {
+  const end = utc('2026-10-15T00:00:00Z');
+  const inside = utc('2026-10-01T00:00:00Z');
+
+  it('без подписки — бесплатный', () => {
+    expect(effectivePlan(null, inside)).toBe('free');
+    expect(effectivePlan({ plan: 'PRO', currentPeriodEnd: null, autoRenew: false }, inside)).toBe(
+      'free',
+    );
+  });
+
+  it('внутри оплаченного периода — тариф из подписки', () => {
+    expect(effectivePlan({ plan: 'PRO', currentPeriodEnd: end, autoRenew: true }, inside)).toBe(
+      'pro',
+    );
+    expect(
+      effectivePlan({ plan: 'MULTISTREAM', currentPeriodEnd: end, autoRenew: false }, inside),
+    ).toBe('multistream');
+  });
+
+  it('в льготные дни тариф ещё действует, после них — нет', () => {
+    const grace = new Date(end.getTime() + DAY_MS);
+    const late = new Date(end.getTime() + GRACE_DAYS * DAY_MS);
+    expect(effectivePlan({ plan: 'PRO', currentPeriodEnd: end, autoRenew: true }, grace)).toBe(
+      'pro',
+    );
+    expect(effectivePlan({ plan: 'PRO', currentPeriodEnd: end, autoRenew: true }, late)).toBe(
+      'free',
+    );
+    // Без автопродления льготных дней нет: тариф кончается вместе с периодом.
+    expect(effectivePlan({ plan: 'PRO', currentPeriodEnd: end, autoRenew: false }, grace)).toBe(
+      'free',
+    );
+  });
+
+  it('истёкшая подписка не открывает ничего сверх бесплатного', () => {
+    const late = new Date(end.getTime() + 365 * DAY_MS);
+    const plan = effectivePlan({ plan: 'PRO', currentPeriodEnd: end, autoRenew: true }, late);
+    expect(PLAN_FEATURES[plan]).toEqual(PLAN_FEATURES.free);
   });
 });

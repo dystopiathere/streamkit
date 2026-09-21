@@ -1,7 +1,16 @@
-import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Widget as PrismaWidget } from '@prisma/client';
 import {
   type AlertWidgetConfig,
+  applyPlanToConfig,
   configSchemaFor,
   type CreatedOverlayToken,
   type CreateWidgetInput,
@@ -21,6 +30,7 @@ import { CryptoService } from '../../common/crypto/crypto.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { validationError } from '../../common/pipes/zod-validation.pipe';
 import { AppConfig } from '../../config/app-config.service';
+import { BillingService } from '../billing/billing.service';
 import { chatChannelsOf } from '../chat/chat-channel';
 import { ROOM_MEDIA_SERVER, type RoomMediaServer } from '../rooms/livekit.service';
 import { WidgetStateService } from './widget-state.service';
@@ -33,6 +43,34 @@ import {
 
 const CHAT_NEEDS_PLATFORM =
   'Виджет чата показывает чат ваших каналов — сначала подключите Twitch или YouTube в разделе «Аналитика»';
+
+/**
+ * Лимит виджетов исчерпан: 402 с кодом, по которому интерфейс показывает, где
+ * взять больше.
+ *
+ * Проверяется только при создании. Настроенные виджеты не отбираются, когда
+ * платный тариф кончился: они ничего нам не стоят, пока оверлей закрыт, а
+ * погасшая посреди эфира сцена в OBS — это то, о чём стример узнает от зрителей.
+ */
+const WIDGET_LIMIT_REACHED =
+  'Больше виджетов на этом тарифе создать нельзя — платные тарифы без ограничения';
+
+export class WidgetLimitException extends HttpException {
+  constructor() {
+    // Числа в тексте нет намеренно: оно живёт в PLAN_FEATURES и показывается
+    // счётчиком в дашборде, а строка сообщения обязана переводиться словарём —
+    // собранная шаблоном, она в MESSAGES_EN не попадёт и уедет к английскому
+    // стримеру по-русски.
+    super(
+      {
+        statusCode: HttpStatus.PAYMENT_REQUIRED,
+        code: 'widget_limit',
+        message: WIDGET_LIMIT_REACHED,
+      },
+      HttpStatus.PAYMENT_REQUIRED,
+    );
+  }
+}
 
 export interface ResolvedOverlayToken {
   tokenId: string;
@@ -55,6 +93,7 @@ export class WidgetsService {
     private readonly bus: RealtimeBus,
     private readonly config: AppConfig,
     private readonly state: WidgetStateService,
+    private readonly billing: BillingService,
     @Inject(ROOM_MEDIA_SERVER) private readonly media: RoomMediaServer,
   ) {}
 
@@ -71,6 +110,13 @@ export class WidgetsService {
   }
 
   async create(userId: string, input: CreateWidgetInput): Promise<Widget> {
+    // Лимит тарифа — до всякой валидации: отказ по тарифу не должен зависеть
+    // от того, заполнил ли стример форму без ошибок.
+    const { widgets: limit } = await this.billing.planFeatures(userId);
+    if (limit !== null && (await this.prisma.widget.count({ where: { userId } })) >= limit) {
+      throw new WidgetLimitException();
+    }
+
     // Прогоняем через схему ещё раз: дефолты должны попасть в БД целиком,
     // иначе старые записи будут отличаться от новых набором полей.
     const config = configSchemaFor(input.type).parse(input.config);
@@ -138,13 +184,19 @@ export class WidgetsService {
 
     const result = toContractWidget(row);
     // Открытый в OBS оверлей подхватит новые настройки без перезагрузки сцены.
+    //
+    // В кадр уходит конфиг, приведённый к тарифу: продвинутое оформление
+    // хранится целиком (стример его настроил, и после оплаты оно обязано
+    // вернуться), но без «Про» рисуется базовым. Урезание — здесь, на выходе, а
+    // не при сохранении: иначе тариф, кончившийся на один день, стирал бы
+    // раскладку навсегда.
     await this.bus.publish({
       kind: 'widget-config',
       userId,
       widgetId,
       isEnabled: result.isEnabled,
       type: result.type,
-      config: result.config,
+      config: applyPlanToConfig(result.config, await this.billing.planFeatures(userId)),
     } as BusMessage);
 
     // Состояние идёт следом отдельным сообщением, и это обязательно: часть
@@ -292,13 +344,23 @@ export class WidgetsService {
     // снова работают, — но и не открываются, пока блокировка действует.
     if (row.widget.user.status !== 'ACTIVE') return null;
 
+    const widget = parseWidgetConfig(row.widget.type, row.widget.config);
     return {
       tokenId: row.id,
       widgetId: row.widgetId,
       userId: row.widget.userId,
       name: row.widget.name,
       isEnabled: row.widget.isEnabled,
-      widget: parseWidgetConfig(row.widget.type, row.widget.config),
+      // Тариф спрашивается на каждое подключение оверлея, а не кэшируется: сцена
+      // в OBS открывается раз в эфир, и «Про», оплаченный минуту назад, обязан
+      // работать сразу.
+      widget: {
+        ...widget,
+        config: applyPlanToConfig(
+          widget.config,
+          await this.billing.planFeatures(row.widget.userId),
+        ),
+      } as ResolvedOverlayToken['widget'],
     };
   }
 

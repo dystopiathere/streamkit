@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { buyPlan } from './plans';
 import { connectYouTube } from './platforms';
 
 /**
@@ -134,4 +135,71 @@ test('таймер запускается из дашборда и идёт в �
   await expect
     .poll(async () => overlayPage.getByTestId('timer-display').textContent(), { timeout: 15_000 })
     .not.toContain('01:00:00');
+});
+
+/**
+ * Продвинутое оформление доходит до кадра.
+ *
+ * Здесь проверяется то, чего не видит ни один другой тест: раскладка ставится в
+ * браузере, уезжает в конфиг и применяется РЕНДЕРЕРОМ в собранном оверлее.
+ * Интеграционный тест видит только конфиг, юнит-тест — только стили. Что без
+ * «Про» оформление до кадра не доходит, проверяет интеграционный тест: там тариф
+ * можно отобрать, не проходя оплату заново.
+ */
+test('переставленный заголовок цели оказывается в кадре там же', async ({ page, context }) => {
+  test.setTimeout(90_000);
+  const registered = page.waitForResponse((response) =>
+    response.url().includes('/api/auth/register'),
+  );
+  await registerStreamer(page, 'e2e-styling');
+  const { accessToken } = (await (await registered).json()) as { accessToken: string };
+
+  // Раскладка — в «Про»: без него блок оформления заблокирован.
+  await buyPlan(page, accessToken, 'pro');
+
+  await page.getByPlaceholder('Название виджета').fill('Цель с раскладкой');
+  await page.getByLabel('Тип виджета').selectOption('goal');
+  await page.getByRole('button', { name: 'Новый виджет' }).click();
+  await page.getByRole('link', { name: 'Настроить «Цель с раскладкой»' }).click();
+
+  // Клавиатурой, а не мышью: это и есть требование доступности — раскладка
+  // обязана работать без указателя (и в тесте не зависит от размера кадра).
+  const element = page.getByRole('button', { name: /Заголовок:/ });
+  await element.click();
+  for (let step = 0; step < 3; step += 1) await page.keyboard.press('Shift+ArrowLeft');
+  for (let step = 0; step < 2; step += 1) await page.keyboard.press('Shift+ArrowDown');
+  // first: поля X и Y есть у каждого элемента кадра, а подписи у них одни и те
+  // же. Первый блок — заголовок: порядок задан GOAL_SLOTS в контрактах.
+  await expect(page.getByLabel('X, % кадра').first()).toHaveValue('20');
+  await expect(page.getByLabel('Y, % кадра').first()).toHaveValue('40');
+
+  const saved = page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/widgets/') &&
+      response.request().method() === 'PATCH' &&
+      response.ok(),
+  );
+  // В форме и в блоке управления состоянием кнопки называются одинаково:
+  // сохраняем именно форму настроек.
+  await page.locator('form').getByRole('button', { name: 'Сохранить' }).click();
+  await saved;
+
+  // Ссылка выпускается здесь же: мы уже в редакторе, и возвращаться в список
+  // виджетов ради чужого хелпера незачем.
+  await page.getByRole('button', { name: 'Создать ссылку' }).click();
+  const field = page.locator('input[readonly]').first();
+  await expect(field).toHaveValue(/token=/, { timeout: 10_000 });
+
+  const overlayPage = await context.newPage();
+  await overlayPage.goto(await field.inputValue());
+
+  const title = overlayPage.getByTestId('goal-bar').getByText('Цель', { exact: true });
+  await expect(title).toBeVisible({ timeout: 15_000 });
+  // Позиция — проценты кадра с переносом на половину размера: элемент вынут из
+  // потока, а не просто подкрашен.
+  await expect(title).toHaveCSS('position', 'absolute');
+  const box = await title.boundingBox();
+  const frame = overlayPage.viewportSize()!;
+  expect(box!.x + box!.width / 2).toBeLessThan(frame.width * 0.3);
+  expect(box!.y + box!.height / 2).toBeGreaterThan(frame.height * 0.3);
 });

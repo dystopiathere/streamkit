@@ -171,6 +171,19 @@ export class AnalyticsService {
       .sort((a, b) => b.amountMinor - a.amountMinor);
   }
 
+  /**
+   * Включение и выключение площадки — через сервис подключений: там же лежит
+   * правило «активной может быть одна» и рассылка каналов чата.
+   */
+  async setChannelEnabled(
+    userId: string,
+    channelId: string,
+    isEnabled: boolean,
+    context: AuditContext = {},
+  ): Promise<void> {
+    await this.connections.setEnabled(userId, channelId, isEnabled, context);
+  }
+
   /** Отключение площадки вместе со снимками (каскадом по внешнему ключу). */
   async disconnect(userId: string, channelId: string, context: AuditContext = {}): Promise<void> {
     const channel = await this.requireOwned(userId, channelId);

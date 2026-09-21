@@ -53,6 +53,65 @@ export const ALERT_KEYFRAMES = `
   from { opacity: 1; transform: scale3d(1, 1, 1); }
   to { opacity: 0; transform: scale3d(0.7, 0.7, 1); }
 }
+
+/* Анимации продвинутого оформления (тариф «Про»). Уход у них зеркальный входу:
+   алерт, приехавший сверху, уходит вверх — иначе движение читается как рывок. */
+@keyframes sk-slide-down {
+  from { opacity: 0; transform: translate3d(0, -24px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes sk-out-slide-down {
+  from { opacity: 1; transform: translate3d(0, 0, 0); }
+  to { opacity: 0; transform: translate3d(0, 24px, 0); }
+}
+@keyframes sk-slide-right {
+  from { opacity: 0; transform: translate3d(-32px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes sk-out-slide-right {
+  from { opacity: 1; transform: translate3d(0, 0, 0); }
+  to { opacity: 0; transform: translate3d(32px, 0, 0); }
+}
+@keyframes sk-pop {
+  0% { opacity: 0; transform: scale3d(0.2, 0.2, 1); }
+  60% { opacity: 1; transform: scale3d(1.12, 1.12, 1); }
+  100% { opacity: 1; transform: scale3d(1, 1, 1); }
+}
+@keyframes sk-out-pop {
+  from { opacity: 1; transform: scale3d(1, 1, 1); }
+  to { opacity: 0; transform: scale3d(0.2, 0.2, 1); }
+}
+@keyframes sk-flip {
+  from { opacity: 0; transform: perspective(800px) rotate3d(1, 0, 0, 90deg); }
+  to { opacity: 1; transform: perspective(800px) rotate3d(1, 0, 0, 0deg); }
+}
+@keyframes sk-out-flip {
+  from { opacity: 1; transform: perspective(800px) rotate3d(1, 0, 0, 0deg); }
+  to { opacity: 0; transform: perspective(800px) rotate3d(1, 0, 0, -90deg); }
+}
+@keyframes sk-shake {
+  0% { opacity: 0; transform: translate3d(0, 0, 0); }
+  20% { opacity: 1; transform: translate3d(-10px, 0, 0); }
+  40% { transform: translate3d(9px, 0, 0); }
+  60% { transform: translate3d(-6px, 0, 0); }
+  80% { transform: translate3d(3px, 0, 0); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes sk-out-shake {
+  0% { opacity: 1; transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(8px, 0, 0); }
+  100% { opacity: 0; transform: translate3d(-24px, 0, 0); }
+}
+@keyframes sk-swing {
+  0% { opacity: 0; transform: rotate3d(0, 0, 1, -12deg); }
+  50% { opacity: 1; transform: rotate3d(0, 0, 1, 8deg); }
+  75% { transform: rotate3d(0, 0, 1, -4deg); }
+  100% { opacity: 1; transform: rotate3d(0, 0, 1, 0deg); }
+}
+@keyframes sk-out-swing {
+  from { opacity: 1; transform: rotate3d(0, 0, 1, 0deg); }
+  to { opacity: 0; transform: rotate3d(0, 0, 1, 14deg); }
+}
 `;
 
 /** Длительность анимации ухода. Учитывается в очереди показа. */

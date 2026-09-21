@@ -83,6 +83,7 @@ export function toContractChannel(row: PrismaChannel, grantedScopes: string[] = 
     avatarUrl: row.avatarUrl,
     connectedAt: row.createdAt.toISOString(),
     lastSyncedAt: row.lastSyncedAt?.toISOString() ?? null,
+    isEnabled: row.isEnabled,
     syncState: SYNC_STATE_FROM_PRISMA[row.syncState],
     needsReconnect: missingScopes(row.platform, grantedScopes),
     // syncError наружу не отдаётся: это текст ошибки площадки, он нужен в логах

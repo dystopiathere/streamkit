@@ -1,6 +1,8 @@
 import {
+  ALERT_ANIMATIONS,
   ALERT_EVENT_TYPES,
   ALERT_TEMPLATE_VARS,
+  BASIC_ALERT_ANIMATIONS,
   type AlertEventType,
   CHAT_PLATFORMS,
   CURRENCIES,
@@ -14,9 +16,11 @@ import { Link } from 'react-router-dom';
 import { Button, Card, cn } from '@streamkit/app-kit';
 import { toast } from 'sonner';
 import { useChannels } from '@/features/analytics/queries';
+import { usePlanAccess } from '@/features/billing/PlanPaywall';
 import { useRooms } from '@/features/rooms/queries';
 import { ApiError } from '@/lib/api';
 import { useSendTestAlert } from './queries';
+import { AdvancedStylingCard } from './AdvancedStyling';
 import {
   CheckboxField,
   CheckboxGroupField,
@@ -29,7 +33,6 @@ import {
   TextStyleFields,
 } from './fields';
 
-const ANIMATIONS = ['fade', 'slide-up', 'slide-left', 'zoom', 'bounce'] as const;
 const LAYOUTS = ['center', 'banner', 'side'] as const;
 
 /**
@@ -208,8 +211,22 @@ const COUNT_THRESHOLDS: Partial<Record<AlertEventType, string>> = {
   raid: 'widgets.field.minRaiders',
 };
 
-/** Что копирует «оформление в остальные сценарии»: вид, но не тексты, медиа и пороги. */
-const DESIGN_FIELDS = ['layout', 'durationMs', 'animationIn', 'animationOut', 'text'] as const;
+/**
+ * Что копирует «оформление в остальные сценарии»: вид, но не тексты, медиа и пороги.
+ *
+ * Продвинутое оформление копируется тоже — раскладка и фон это и есть вид, и
+ * расставлять элементы заново в каждом из восьми сценариев никто не станет.
+ * Картинка и звук не копируются: они у сценария свои по смыслу.
+ */
+const DESIGN_FIELDS = [
+  'layout',
+  'durationMs',
+  'animationIn',
+  'animationOut',
+  'text',
+  'slots',
+  'background',
+] as const;
 
 function ScenarioFields({
   form,
@@ -224,7 +241,10 @@ function ScenarioFields({
   const prefix = `scenarios.${type}.`;
   const at = (field: string): string => `${prefix}${field}`;
   const countLabel = COUNT_THRESHOLDS[type];
-  const animationOptions = ANIMATIONS.map((value) => ({
+  // Без «Про» в списке только базовые анимации: показывать выбор, который сервер
+  // всё равно заменит базовым, хуже, чем не показывать его вовсе.
+  const advanced = usePlanAccess('advancedStyling');
+  const animationOptions = (advanced ? ALERT_ANIMATIONS : BASIC_ALERT_ANIMATIONS).map((value) => ({
     value,
     label: t(`widgets.animation.${value}`),
   }));
@@ -376,6 +396,10 @@ function ScenarioFields({
           </Button>
         </div>
       </div>
+
+      {/* Оформление у сценариев своё: донат и фолловер выглядят по-разному, и
+          раскладка в кадре — часть этой разницы. */}
+      <AdvancedStylingCard form={form} type="alerts" prefix={prefix} />
     </div>
   );
 }
@@ -428,6 +452,8 @@ function GoalFields({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.E
         </div>
         <TextStyleFields form={form} labels={textLabels} />
       </Card>
+
+      <AdvancedStylingCard form={form} type="goal" />
     </>
   );
 }
@@ -482,6 +508,8 @@ function TimerFields({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.
         <h2 className="font-medium">{t('widgets.section.appearance')}</h2>
         <TextStyleFields form={form} labels={textLabels} />
       </Card>
+
+      <AdvancedStylingCard form={form} type="timer" />
     </>
   );
 }
@@ -520,6 +548,8 @@ function TopDonorsFields({ form }: { form: UseFormReturn<FieldValues> }): React.
         <h2 className="font-medium">{t('widgets.section.appearance')}</h2>
         <TextStyleFields form={form} labels={textLabels} />
       </Card>
+
+      <AdvancedStylingCard form={form} type="top-donors" />
     </>
   );
 }
@@ -618,6 +648,8 @@ function ChatFields({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.E
         <h2 className="font-medium">{t('widgets.section.appearance')}</h2>
         <TextStyleFields form={form} labels={textLabels} withHighlight />
       </Card>
+
+      <AdvancedStylingCard form={form} type="chat" />
     </>
   );
 }
@@ -702,6 +734,10 @@ function GuestsFields({ form }: { form: UseFormReturn<FieldValues> }): React.JSX
         <h2 className="font-medium">{t('widgets.section.appearance')}</h2>
         <TextStyleFields form={form} labels={textLabels} />
       </Card>
+
+      {/* Раскладки и фона у гостей нет — плитки занимают кадр целиком, — но
+          шрифт имён настраивается: они подписаны прямо в кадре. */}
+      <AdvancedStylingCard form={form} type="guests" />
     </>
   );
 }

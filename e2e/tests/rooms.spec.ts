@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { buyPlan } from './plans';
 
 /**
  * Приватная комната целиком, через настоящий LiveKit.
@@ -38,34 +39,9 @@ async function registerStreamer(page: Page): Promise<string> {
   await banner.waitFor({ state: 'visible', timeout: 5_000 }).catch(() => undefined);
   if (await banner.isVisible()) await banner.click();
   const accessToken = ((await (await registered).json()) as { accessToken: string }).accessToken;
-  await subscribe(page, accessToken);
+  // Без «Про» комнаты закрыты — и это проверяет billing.spec.
+  await buyPlan(page, accessToken, 'pro');
   return accessToken;
-}
-
-/**
- * Тариф «Про» стримеру — если оплата на сервере настроена: без него комнаты
- * закрыты. Через API и страницу подтверждения фальшивой ЮKassa, а не через
- * интерфейс: сам путь оплаты проверяет billing.spec.ts.
- */
-async function subscribe(page: Page, accessToken: string): Promise<void> {
-  const headers = { Authorization: `Bearer ${accessToken}` };
-  const subscription = await page.request.get(`${API_URL}/api/billing/subscription`, { headers });
-  const view = (await subscription.json()) as { roomsAccess: boolean };
-  if (view.roomsAccess) return;
-
-  const checkout = await page.request.post(`${API_URL}/api/billing/checkout`, {
-    headers,
-    data: { period: 'month', acceptOffer: true },
-  });
-  expect(checkout.status()).toBe(201);
-  const { confirmationUrl } = (await checkout.json()) as { confirmationUrl: string };
-  await page.request.get(confirmationUrl, { maxRedirects: 0 });
-  await expect
-    .poll(async () => {
-      const response = await page.request.get(`${API_URL}/api/billing/subscription`, { headers });
-      return ((await response.json()) as { roomsAccess: boolean }).roomsAccess;
-    })
-    .toBe(true);
 }
 
 /** Комната с одним приглашением. Стример остаётся на странице комнаты. */

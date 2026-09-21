@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   BILLING_PERIODS,
   checkoutInputSchema,
+  PAID_PLANS,
+  PLAN_FEATURES,
   PLAN_PRICES,
+  PLANS,
   updateSubscriptionSchema,
 } from './billing.js';
 import { minorToDecimalString } from './common.js';
@@ -24,19 +27,51 @@ describe('сумма строкой для платёжного API', () => {
 });
 
 describe('тариф', () => {
-  it('цены целые и положительные для каждого периода', () => {
-    for (const period of BILLING_PERIODS) {
-      expect(Number.isInteger(PLAN_PRICES[period].amountMinor)).toBe(true);
-      expect(PLAN_PRICES[period].amountMinor).toBeGreaterThan(0);
+  it('цены целые и положительные у каждого тарифа и периода', () => {
+    for (const plan of PAID_PLANS) {
+      for (const period of BILLING_PERIODS) {
+        expect(Number.isInteger(PLAN_PRICES[plan][period].amountMinor)).toBe(true);
+        expect(PLAN_PRICES[plan][period].amountMinor).toBeGreaterThan(0);
+      }
     }
   });
 
-  it('оплата без согласия с офертой отвергается схемой', () => {
-    expect(checkoutInputSchema.safeParse({ period: 'month' }).success).toBe(false);
-    expect(checkoutInputSchema.safeParse({ period: 'month', acceptOffer: false }).success).toBe(
-      false,
-    );
-    expect(checkoutInputSchema.safeParse({ period: 'year', acceptOffer: true }).success).toBe(true);
+  it('год дешевле двенадцати месяцев: иначе годовой тариф не имеет смысла', () => {
+    for (const plan of PAID_PLANS) {
+      expect(PLAN_PRICES[plan].year.amountMinor).toBeLessThan(
+        PLAN_PRICES[plan].month.amountMinor * 12,
+      );
+    }
+  });
+
+  it('старший тариф не беднее младшего', () => {
+    // Тариф дороже — значит, в нём есть всё, что в дешёвом, и что-то сверх.
+    // Разъехавшаяся таблица означала бы, что «Про» за 499 ₽ даёт меньше, чем
+    // «Мультистрим» за 199 ₽, и заметил бы это оплативший.
+    const order = PLANS;
+    for (let i = 1; i < order.length; i += 1) {
+      const lower = PLAN_FEATURES[order[i - 1]!];
+      const upper = PLAN_FEATURES[order[i]!];
+      expect(upper.widgets === null || upper.widgets >= (lower.widgets ?? 0)).toBe(true);
+      expect(upper.platforms === null || upper.platforms >= (lower.platforms ?? 0)).toBe(true);
+      expect(!lower.rooms || upper.rooms).toBe(true);
+      expect(!lower.advancedStyling || upper.advancedStyling).toBe(true);
+    }
+  });
+
+  it('оплата без согласия с офертой и без тарифа отвергается схемой', () => {
+    expect(checkoutInputSchema.safeParse({ plan: 'pro', period: 'month' }).success).toBe(false);
+    expect(
+      checkoutInputSchema.safeParse({ plan: 'pro', period: 'month', acceptOffer: false }).success,
+    ).toBe(false);
+    // Бесплатный тариф не оплачивается: его нет среди платных.
+    expect(
+      checkoutInputSchema.safeParse({ plan: 'free', period: 'year', acceptOffer: true }).success,
+    ).toBe(false);
+    expect(
+      checkoutInputSchema.safeParse({ plan: 'multistream', period: 'year', acceptOffer: true })
+        .success,
+    ).toBe(true);
   });
 
   it('автопродление включается обратно только с согласием на списания', () => {

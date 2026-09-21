@@ -116,7 +116,8 @@ export function PaymentTable({
         {
           key: 'kind',
           header: t('payments.kind'),
-          cell: (row) => `${t(`paymentKind.${row.kind}`)} · ${t(`period.${row.period}`)}`,
+          cell: (row) =>
+            `${t(`plan.${row.plan}`)} · ${t(`paymentKind.${row.kind}`)} · ${t(`period.${row.period}`)}`,
         },
         {
           key: 'status',

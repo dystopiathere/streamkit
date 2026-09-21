@@ -5,6 +5,7 @@ import {
   renderTemplate,
 } from '@streamkit/contracts';
 import type { CSSProperties } from 'react';
+import { slotCss, WidgetFrame } from './slots';
 
 export interface AlertCardProps {
   event: Pick<AlertEvent, 'username' | 'message' | 'amount' | 'count' | 'type'>;
@@ -93,16 +94,14 @@ export function AlertCard({ event, config, animate = true }: AlertCardProps): Re
   };
 
   return (
-    <div
-      data-testid="alert-card"
+    <WidgetFrame
+      testId="alert-card"
+      background={config.background}
       style={{
         display: 'flex',
         flexDirection: 'column',
         gap: 12,
-        width: '100%',
-        height: '100%',
         padding: 24,
-        boxSizing: 'border-box',
         animation: animate ? `sk-${config.animationIn} 400ms ease-out both` : undefined,
         ...LAYOUT_STYLES[config.layout],
       }}
@@ -111,11 +110,25 @@ export function AlertCard({ event, config, animate = true }: AlertCardProps): Re
         <img
           src={config.imageUrl}
           alt=""
-          style={{ maxWidth: 320, maxHeight: 240, objectFit: 'contain' }}
+          referrerPolicy="no-referrer"
+          style={{
+            maxWidth: 320,
+            maxHeight: 240,
+            objectFit: 'contain',
+            ...slotCss(config.slots.image, config.text.fontSize),
+          }}
         />
       ) : null}
 
-      <div style={{ ...textStyle, fontSize: config.text.fontSize, fontWeight: 700 }}>
+      <div
+        style={{
+          ...textStyle,
+          ...slotCss(config.slots.title, config.text.fontSize),
+          fontWeight: 700,
+        }}
+      >
+        {/* Подсветка — свой цвет, и цвет слота её не заменяет: слот задаёт цвет
+            самой строки, а подсветка выделяет в ней имя и сумму. */}
         {renderHighlighted(config.titleTemplate, vars, config.text.highlightColor)}
       </div>
 
@@ -123,7 +136,7 @@ export function AlertCard({ event, config, animate = true }: AlertCardProps): Re
         <div
           style={{
             ...textStyle,
-            fontSize: Math.round(config.text.fontSize * 0.6),
+            ...slotCss(config.slots.message, Math.round(config.text.fontSize * 0.6)),
             fontWeight: 400,
             maxWidth: '90%',
             wordBreak: 'break-word',
@@ -132,6 +145,6 @@ export function AlertCard({ event, config, animate = true }: AlertCardProps): Re
           {message}
         </div>
       ) : null}
-    </div>
+    </WidgetFrame>
   );
 }

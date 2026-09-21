@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button, Card, usePageTitle } from '@streamkit/app-kit';
-import { RoomsPaywall, useRoomsAccess } from '@/features/billing/RoomsPaywall';
+import { PlanPaywall, usePlanAccess } from '@/features/billing/PlanPaywall';
 import { MicrophoneSettings } from '@/features/rooms/MicrophoneSettings';
 import { RoomInvites } from '@/features/rooms/RoomInvites';
 import { RoomStage } from '@/features/rooms/RoomStage';
@@ -40,7 +40,7 @@ export function RoomPage(): React.JSX.Element {
   const invites = useInvites(id);
   const [access, setAccess] = useState<RoomAccess | null>(null);
   const [withCamera, setWithCamera] = useState(false);
-  const roomsAccess = useRoomsAccess();
+  const roomsAccess = usePlanAccess('rooms');
   usePageTitle(room.data?.name);
 
   // Обработчики стабильны не ради порядка: у `LiveKitRoom` они в зависимостях
@@ -80,7 +80,7 @@ export function RoomPage(): React.JSX.Element {
         </h1>
       </div>
 
-      <RoomsPaywall />
+      <PlanPaywall gate="rooms" />
 
       <Card className="space-y-4">
         {access ? (

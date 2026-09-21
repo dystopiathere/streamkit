@@ -7,6 +7,7 @@ import {
   MINOR_UNITS_PER_MAJOR,
   uuidSchema,
 } from './common.js';
+import { type PlanFeatures } from './billing.js';
 import { CHAT_PLATFORMS, type ChatPlatform } from './chat.js';
 import { GUEST_LAYOUTS, MAX_GUESTS_PER_ROOM } from './rooms.js';
 import { type AlertEvent, type AlertEventType, alertEventTypeSchema } from './events.js';
@@ -17,7 +18,50 @@ export const widgetTypeSchema = z.enum(WIDGET_TYPES);
 export type WidgetType = z.infer<typeof widgetTypeSchema>;
 
 export const alertLayoutSchema = z.enum(['banner', 'center', 'side']);
-export const alertAnimationSchema = z.enum(['fade', 'slide-up', 'slide-left', 'zoom', 'bounce']);
+
+/**
+ * Анимации появления и ухода алерта.
+ *
+ * Первые пять — на любом тарифе, остальные входят в продвинутое оформление
+ * (`PLAN_FEATURES.advancedStyling`). Порядок здесь значим: `BASIC_ALERT_ANIMATIONS`
+ * отрезается от начала, а `applyPlanToConfig` заменяет продвинутую анимацию
+ * базовой, а не выбрасывает алерт целиком.
+ */
+export const ALERT_ANIMATIONS = [
+  'fade',
+  'slide-up',
+  'slide-left',
+  'zoom',
+  'bounce',
+  'slide-down',
+  'slide-right',
+  'pop',
+  'flip',
+  'shake',
+  'swing',
+] as const;
+export const BASIC_ALERT_ANIMATIONS = ALERT_ANIMATIONS.slice(0, 5) as readonly AlertAnimation[];
+export const alertAnimationSchema = z.enum(ALERT_ANIMATIONS);
+export type AlertAnimation = (typeof ALERT_ANIMATIONS)[number];
+
+/**
+ * Шрифты, которые платформа отдаёт сама (`@streamkit/ui/fonts`).
+ *
+ * Список закрытый, и это не ограничение ради ограничения: шрифт, которого нет
+ * на машине с OBS, молча подменяется системным — а машина с OBS не наша. Своими
+ * файлами шрифт гарантированно есть и в предпросмотре, и в кадре.
+ */
+export const FONT_FAMILIES = [
+  'Inter',
+  'Roboto',
+  'Montserrat',
+  'Oswald',
+  'Rubik',
+  'Unbounded',
+  'Merriweather',
+  'Caveat',
+] as const;
+export type FontFamily = (typeof FONT_FAMILIES)[number];
 
 /**
  * Оформление текста. Общее для всех типов виджетов: задача у них одна — текст
@@ -25,7 +69,11 @@ export const alertAnimationSchema = z.enum(['fade', 'slide-up', 'slide-left', 'z
  * читаемым на светлом кадре.
  */
 export const textStyleSchema = z.object({
-  fontFamily: z.string().min(1).max(64).default('Inter'),
+  // `catch`, а не просто enum: до появления своих шрифтов поле было свободной
+  // строкой, и в сохранённых конфигах может лежать «Arial». Такой шрифт и раньше
+  // подменялся системным на машине с OBS — теперь он подменяется явно, а не
+  // роняет чтение всего конфига.
+  fontFamily: z.enum(FONT_FAMILIES).catch('Inter').default('Inter'),
   fontSize: z.number().int().min(8).max(200).default(32),
   color: hexColorSchema.default('#FFFFFF'),
   highlightColor: hexColorSchema.default('#8B5CF6'),
@@ -34,6 +82,101 @@ export const textStyleSchema = z.object({
   uppercase: z.boolean().default(false),
 });
 export type TextStyle = z.infer<typeof textStyleSchema>;
+
+/* ------------------------------------------------------------------ */
+/* Продвинутое оформление: раскладка, цвета по элементам, фон           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Элемент кадра: где он стоит и чем отличается от общего оформления текста.
+ *
+ * Позиция — ПРОЦЕНТЫ кадра, а не пиксели: размер браузер-сорса в OBS задаёт
+ * стример, и один и тот же виджет живёт в кадре 1920×1080 и в углу 400×200.
+ * Пиксельные координаты разъехались бы у каждого по-своему, и «поправить» их
+ * было бы нечем — в дашборде размера кадра не знают.
+ *
+ * `null` значит «как раньше»: позиция — в обычном потоке (виджет остаётся таким,
+ * каким был до появления раскладки), цвет и размер — общие из `text`. Пустой
+ * объект — обратная совместимость сохранённых конфигов и вид на бесплатном
+ * тарифе: `applyPlanToConfig` возвращает слоты именно в это состояние.
+ */
+export const widgetSlotSchema = z.object({
+  x: z.number().min(0).max(100).nullable().default(null),
+  y: z.number().min(0).max(100).nullable().default(null),
+  color: hexColorSchema.nullable().default(null),
+  fontSize: z.number().int().min(8).max(200).nullable().default(null),
+});
+export type WidgetSlot = z.infer<typeof widgetSlotSchema>;
+
+/** Пустой слот — им же `applyPlanToConfig` заменяет настроенные без тарифа. */
+export const EMPTY_SLOT: WidgetSlot = { x: null, y: null, color: null, fontSize: null };
+
+/**
+ * Схема набора слотов по их именам.
+ *
+ * Имена — у каждого типа свои (у цели полоса, у таймера часы), поэтому набор
+ * строится из списка, а не объявляется общим объектом: лишний слот в форме
+ * настроек означал бы элемент, которого в кадре нет.
+ */
+function slotsSchema<T extends string>(slots: readonly T[]) {
+  // Значение по умолчанию (`prefault({})`) ставится на месте применения, а не
+  // здесь: внутри обобщённой функции набор ключей ещё неизвестен, и пустой объект
+  // не проходит проверку типов.
+  return z.object(
+    Object.fromEntries(slots.map((slot) => [slot, widgetSlotSchema.prefault({})])) as {
+      [K in T]: z.ZodPrefault<typeof widgetSlotSchema>;
+    },
+  );
+}
+
+export const ALERT_SLOTS = ['image', 'title', 'message'] as const;
+export const GOAL_SLOTS = ['title', 'bar', 'amount'] as const;
+export const TIMER_SLOTS = ['title', 'clock'] as const;
+export const TOP_DONORS_SLOTS = ['title', 'list'] as const;
+
+/**
+ * У каких типов есть фон.
+ *
+ * У гостей его нет: кадр занимают плитки с видео, и подложка под ними не видна
+ * ни при какой раскладке. Шрифт при этом настраивается и у них — имена гостей
+ * подписаны в кадре.
+ */
+export function hasWidgetBackground(type: WidgetType): boolean {
+  return type !== 'guests';
+}
+
+/** Имена элементов кадра по типу виджета. Чат и гости раскладку не получают. */
+export const WIDGET_SLOTS = {
+  alerts: ALERT_SLOTS,
+  goal: GOAL_SLOTS,
+  timer: TIMER_SLOTS,
+  'top-donors': TOP_DONORS_SLOTS,
+} as const;
+
+/**
+ * Фон виджета: цвет, картинка и как её вписать.
+ *
+ * Прозрачный фон остаётся значением по умолчанию: виджет живёт поверх игры, и
+ * непрозрачная подложка «по умолчанию» закрыла бы её первым же включением.
+ */
+export const BACKGROUND_FITS = ['cover', 'contain', 'tile'] as const;
+export const widgetBackgroundSchema = z.object({
+  color: hexColorSchema.nullable().default(null),
+  imageUrl: httpsUrlSchema.nullable().default(null),
+  fit: z.enum(BACKGROUND_FITS).default('cover'),
+  opacity: z.number().min(0).max(1).default(1),
+  cornerRadius: z.number().int().min(0).max(96).default(0),
+});
+export type WidgetBackground = z.infer<typeof widgetBackgroundSchema>;
+
+/** Фон без картинки и цвета — вид на бесплатном тарифе. */
+export const EMPTY_BACKGROUND: WidgetBackground = {
+  color: null,
+  imageUrl: null,
+  fit: 'cover',
+  opacity: 1,
+  cornerRadius: 0,
+};
 
 export const alertSoundSchema = z.object({
   enabled: z.boolean().default(false),
@@ -81,6 +224,9 @@ function alertScenarioSchema(
       sound: alertSoundSchema.prefault({}),
       animationIn: alertAnimationSchema.default('slide-up'),
       animationOut: alertAnimationSchema.default('fade'),
+      /** Раскладка и фон — у каждого сценария свои: донат и фолловер выглядят по-разному. */
+      slots: slotsSchema(ALERT_SLOTS).prefault({}),
+      background: widgetBackgroundSchema.prefault({}),
     })
     .prefault({});
 }
@@ -165,6 +311,16 @@ export const goalWidgetConfigSchema = z.object({
   showAmounts: z.boolean().default(true),
   barColor: hexColorSchema.default('#9167EA'),
   trackColor: hexColorSchema.default('#2A2B3680'),
+  /**
+   * Картинки вместо полосы: заполнение и дорожка.
+   *
+   * Заполнение ОБРЕЗАЕТСЯ по прогрессу, а не растягивается: растянутая картинка
+   * на 10 % прогресса — это сплющенная картинка, и выглядит она как ошибка.
+   */
+  barImageUrl: httpsUrlSchema.nullable().default(null),
+  trackImageUrl: httpsUrlSchema.nullable().default(null),
+  slots: slotsSchema(GOAL_SLOTS).prefault({}),
+  background: widgetBackgroundSchema.prefault({}),
   text: textStyleSchema.prefault({}),
 });
 export type GoalWidgetConfig = z.infer<typeof goalWidgetConfigSchema>;
@@ -199,6 +355,8 @@ export const timerWidgetConfigSchema = z.object({
     .max(30 * 24 * 3600)
     .default(24 * 3600),
   showHours: z.boolean().default(true),
+  slots: slotsSchema(TIMER_SLOTS).prefault({}),
+  background: widgetBackgroundSchema.prefault({}),
   text: textStyleSchema.prefault({}),
 });
 export type TimerWidgetConfig = z.infer<typeof timerWidgetConfigSchema>;
@@ -239,6 +397,8 @@ export const topDonorsWidgetConfigSchema = z.object({
   limit: z.number().int().min(1).max(10).default(5),
   currency: currencySchema.default('RUB'),
   showAmounts: z.boolean().default(true),
+  slots: slotsSchema(TOP_DONORS_SLOTS).prefault({}),
+  background: widgetBackgroundSchema.prefault({}),
   text: textStyleSchema.prefault({}),
 });
 export type TopDonorsWidgetConfig = z.infer<typeof topDonorsWidgetConfigSchema>;
@@ -304,6 +464,8 @@ export const chatWidgetConfigSchema = z.object({
   showPlatform: z.boolean().default(true),
   /** Ник цветом, который выбрал сам автор. Иначе — цветом подсветки виджета. */
   useAuthorColors: z.boolean().default(true),
+  /** Фон есть, раскладки нет: в виджете чата один элемент — сама лента. */
+  background: widgetBackgroundSchema.prefault({}),
   text: textStyleSchema.prefault({}),
 });
 export type ChatWidgetConfig = z.infer<typeof chatWidgetConfigSchema>;
@@ -384,6 +546,96 @@ export function configSchemaFor(
   type: WidgetType,
 ): z.ZodType<Record<string, unknown>, Record<string, unknown>> {
   return WIDGET_CONFIG_SCHEMAS[type];
+}
+
+/**
+ * Конфиг, приведённый к тарифу: без продвинутого оформления, если его нет.
+ *
+ * Настройки продвинутого оформления НЕ удаляются из базы — стример их сделал, и
+ * после оплаты они обязаны вернуться такими же. Поэтому урезание происходит на
+ * выходе: сервер прогоняет через эту функцию конфиг, который уезжает в оверлей,
+ * а дашборд — конфиг для предпросмотра. Реализация одна, потому что расхождение
+ * между «что в кадре» и «что в предпросмотре» замечают уже на записи эфира.
+ *
+ * Что снимается: позиции элементов и их цвета (слоты пустеют), фон, картинки
+ * вместо полосы цели, шрифт (остаётся `Inter`) и анимации сверх базовых —
+ * последние заменяются, а не выбрасываются: алерт без анимации выглядел бы
+ * поломкой, а не ограничением тарифа.
+ *
+ * Тип не проверяется: функция смотрит на поля, а не на `type`. Новый тип с
+ * `slots` или `background` получает урезание автоматически — забыть его здесь
+ * нельзя, в отличие от списка типов.
+ */
+export function applyPlanToConfig<T extends Record<string, unknown>>(
+  config: T,
+  features: Pick<PlanFeatures, 'advancedStyling'>,
+): T {
+  if (features.advancedStyling) return config;
+
+  const result: Record<string, unknown> = { ...config };
+  for (const [key, value] of Object.entries(result)) {
+    if (key === 'slots' && isRecord(value)) {
+      result[key] = Object.fromEntries(Object.keys(value).map((slot) => [slot, { ...EMPTY_SLOT }]));
+      continue;
+    }
+    if (key === 'background' && isRecord(value)) {
+      result[key] = { ...EMPTY_BACKGROUND };
+      continue;
+    }
+    if ((key === 'barImageUrl' || key === 'trackImageUrl') && value !== null) {
+      result[key] = null;
+      continue;
+    }
+    if (key === 'text' && isRecord(value)) {
+      result[key] = { ...value, fontFamily: 'Inter' };
+      continue;
+    }
+    if ((key === 'animationIn' || key === 'animationOut') && typeof value === 'string') {
+      result[key] = basicAnimation(value);
+      continue;
+    }
+    // Сценарии алертов: у каждого свои слоты, фон, шрифт и анимации.
+    if (key === 'scenarios' && isRecord(value)) {
+      result[key] = Object.fromEntries(
+        Object.entries(value).map(([type, scenario]) => [
+          type,
+          isRecord(scenario) ? applyPlanToConfig(scenario, features) : scenario,
+        ]),
+      );
+    }
+  }
+  return result as T;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Базовая замена продвинутой анимации.
+ *
+ * Пары подобраны по направлению и характеру движения: «вниз» становится
+ * «вверх», «вправо» — «влево», а прыжок и тряска — «bounce». Незнакомое
+ * значение — `fade`: она есть всегда.
+ */
+function basicAnimation(animation: string): AlertAnimation {
+  if ((BASIC_ALERT_ANIMATIONS as readonly string[]).includes(animation)) {
+    return animation as AlertAnimation;
+  }
+  switch (animation) {
+    case 'slide-down':
+      return 'slide-up';
+    case 'slide-right':
+      return 'slide-left';
+    case 'pop':
+    case 'flip':
+      return 'zoom';
+    case 'shake':
+    case 'swing':
+      return 'bounce';
+    default:
+      return 'fade';
+  }
 }
 
 /**

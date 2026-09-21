@@ -138,7 +138,8 @@ test('у каждого события свой сценарий: текст ф�
 
   // Свой заголовок у фолловера, рейд выключен. Сохраняются все сценарии сразу.
   await page.getByRole('tab', { name: 'Фолловер' }).click();
-  await page.getByLabel('Заголовок').fill('Спасибо за фоллов, {username}!');
+  // exact: «Заголовок» называет и поле шаблона, и элемент кадра в раскладке.
+  await page.getByLabel('Заголовок', { exact: true }).fill('Спасибо за фоллов, {username}!');
   await page.getByRole('tab', { name: 'Рейд' }).click();
   await page.getByLabel('Показывать это оповещение').uncheck();
   const saved = page.waitForResponse(

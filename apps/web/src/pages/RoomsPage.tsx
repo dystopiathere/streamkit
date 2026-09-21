@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, ButtonLink, Card, Input, usePageTitle } from '@streamkit/app-kit';
-import { RoomsPaywall, useRoomsAccess } from '@/features/billing/RoomsPaywall';
+import { PlanPaywall, usePlanAccess } from '@/features/billing/PlanPaywall';
 import { useCreateRoom, useDeleteRoom, useRooms } from '@/features/rooms/queries';
 
 export function RoomsPage(): React.JSX.Element {
@@ -10,7 +10,7 @@ export function RoomsPage(): React.JSX.Element {
   const rooms = useRooms();
   const createRoom = useCreateRoom();
   const deleteRoom = useDeleteRoom();
-  const roomsAccess = useRoomsAccess();
+  const roomsAccess = usePlanAccess('rooms');
   usePageTitle(t('rooms.title'));
 
   const handleCreate = async (): Promise<void> => {
@@ -33,7 +33,7 @@ export function RoomsPage(): React.JSX.Element {
         <p className="max-w-2xl text-sm text-muted">{t('rooms.description')}</p>
       </div>
 
-      <RoomsPaywall />
+      <PlanPaywall gate="rooms" />
 
       <Card>
         <div className="flex flex-wrap gap-3">

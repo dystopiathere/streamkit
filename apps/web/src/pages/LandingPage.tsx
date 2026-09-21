@@ -1,4 +1,4 @@
-import { MAX_GUESTS_PER_ROOM, PLAN_PRICES } from '@streamkit/contracts';
+import { MAX_GUESTS_PER_ROOM, PAID_PLANS, type Plan, PLAN_PRICES } from '@streamkit/contracts';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
@@ -12,6 +12,7 @@ import {
   useCollapsibleMenu,
   usePageTitle,
 } from '@streamkit/app-kit';
+import { planFeatureList } from '@/features/billing/plan-features';
 import { PublicFooter } from '@/features/public/PublicFooter';
 import { missingValue, useSeller } from '@/features/public/seller';
 import { useAuthStore } from '@/lib/auth-store';
@@ -119,26 +120,36 @@ export function LandingPage(): React.JSX.Element {
           <h2 id="pricing-title" className="text-xl font-semibold">
             {t('public.pricing.title')}
           </h2>
-          <div className="grid gap-4 md:grid-cols-2">
+          {/* Состав тарифов — из PLAN_FEATURES: те же числа, что проверяет
+              сервер. Отдельный текст на странице разошёлся бы с лимитом на
+              первой же правке, и узнал бы об этом оплативший. */}
+          <div className="grid gap-4 md:grid-cols-3">
             <Card className="space-y-3">
-              <h3 className="font-medium">{t('public.pricing.free.name')}</h3>
+              <h3 className="font-medium">{t('billing.plans.free.name')}</h3>
               <p className="text-3xl tabular-nums">
                 {formatMoney({ amountMinor: 0, currency: 'RUB' })}
               </p>
-              <p className="text-sm text-muted">{t('public.pricing.free.text')}</p>
+              <PlanFeatures plan="free" />
             </Card>
-            <Card className="space-y-3 border-accent/60">
-              <h3 className="font-medium">{t('public.pricing.pro.name')}</h3>
-              <p className="text-3xl tabular-nums">
-                {t('public.pricing.pro.month', { amount: formatMoney(PLAN_PRICES.month) })}
-              </p>
-              <p className="text-sm tabular-nums">
-                {t('public.pricing.pro.year', { amount: formatMoney(PLAN_PRICES.year) })}
-              </p>
-              <p className="text-sm text-muted">
-                {t('public.pricing.pro.text', { guests: MAX_GUESTS_PER_ROOM })}
-              </p>
-            </Card>
+            {PAID_PLANS.map((plan) => (
+              <Card key={plan} className={cn('space-y-3', plan === 'pro' && 'border-accent/60')}>
+                <h3 className="font-medium">{t(`billing.plans.${plan}.name`)}</h3>
+                <p className="text-3xl tabular-nums">
+                  {t('public.pricing.month', {
+                    amount: formatMoney(PLAN_PRICES[plan].month),
+                  })}
+                </p>
+                <p className="text-sm tabular-nums">
+                  {t('public.pricing.year', { amount: formatMoney(PLAN_PRICES[plan].year) })}
+                </p>
+                <PlanFeatures plan={plan} />
+                {plan === 'pro' ? (
+                  <p className="text-sm text-muted">
+                    {t('public.pricing.pro.guests', { guests: MAX_GUESTS_PER_ROOM })}
+                  </p>
+                ) : null}
+              </Card>
+            ))}
           </div>
           <p className="text-xs text-muted">
             {t('public.pricing.note')}{' '}
@@ -195,5 +206,17 @@ export function LandingPage(): React.JSX.Element {
 
       <PublicFooter />
     </div>
+  );
+}
+
+/** Состав тарифа списком. Те же строки, что на странице «Тариф» в дашборде. */
+function PlanFeatures({ plan }: { plan: Plan }): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <ul className="space-y-1 text-sm text-muted">
+      {planFeatureList(plan, t).map((feature) => (
+        <li key={feature}>{feature}</li>
+      ))}
+    </ul>
   );
 }

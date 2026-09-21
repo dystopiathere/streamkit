@@ -36,6 +36,11 @@
     "logout": "Выйти",
     "signedInAs": "Вы вошли как {{email}}"
   },
+  "plan": {
+    "free": "Бесплатный",
+    "multistream": "Мультистрим",
+    "pro": "Про"
+  },
   "role": {
     "user": "Стример",
     "support": "Поддержка",
@@ -233,6 +238,8 @@
     "noSessions": "Активных сессий нет",
     "subscription": "Подписка",
     "subStatus": "Состояние",
+    "subPlan": "Тариф",
+    "subNextPlan": "Со следующего периода: {{plan}}",
     "subUntil": "Оплачено до",
     "subAutoRenew": "Автопродление",
     "subAmount": "Сумма продления",

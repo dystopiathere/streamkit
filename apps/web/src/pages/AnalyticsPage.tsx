@@ -218,6 +218,10 @@ function useConnectionResult(): void {
 
     if (status === 'connected') {
       toast.success(t('analytics.connected', { platform: platform ?? '' }));
+    } else if (status === 'plan-limit') {
+      // Не ошибка: стример сделал всё правильно, просто на его тарифе площадок
+      // меньше. Тост объясняет, что делать, и не предлагает «попробовать ещё раз».
+      toast.error(t('analytics.connectPlanLimit'), { duration: 8_000 });
     } else if (status === 'failed') {
       toast.error(t('analytics.connectFailed'));
     }

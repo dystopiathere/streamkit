@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button, ButtonLink, Card, Input, selectClasses, usePageTitle } from '@streamkit/app-kit';
+import { Link } from 'react-router-dom';
+import { usePlanFeatures } from '@/features/billing/PlanPaywall';
 import {
   useCreateWidget,
   useDeleteWidget,
@@ -17,6 +19,12 @@ export function WidgetsPage(): React.JSX.Element {
   const [type, setType] = useState<WidgetType>('alerts');
 
   const widgets = useWidgets();
+  const limit = usePlanFeatures()?.widgets ?? null;
+  const used = widgets.data?.length ?? 0;
+  // Пока подписка или список не загрузились, кнопка остаётся активной: отказ по
+  // лимиту всё равно придёт с сервера, а мигающая выключенная кнопка у того,
+  // кто заплатил, — хуже.
+  const limitReached = limit !== null && used >= limit;
   const createWidget = useCreateWidget();
   const deleteWidget = useDeleteWidget();
   const testAlert = useSendTestAlert();
@@ -104,11 +112,24 @@ export function WidgetsPage(): React.JSX.Element {
           <Button
             onClick={handleCreate}
             isLoading={createWidget.isPending}
-            disabled={name.trim().length === 0}
+            disabled={name.trim().length === 0 || limitReached}
           >
             {t('widgets.create')}
           </Button>
         </div>
+        {limit !== null ? (
+          <p className="mt-3 text-xs text-muted">
+            {t('widgets.limit', { used, limit })}
+            {limitReached ? (
+              <>
+                {' '}
+                <Link to="/billing" className="underline hover:text-fg">
+                  {t('widgets.limitAction')}
+                </Link>
+              </>
+            ) : null}
+          </p>
+        ) : null}
       </Card>
 
       {widgets.isLoading ? (

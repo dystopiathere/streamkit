@@ -7,6 +7,7 @@ import {
   useChannelSummary,
   useConnectPlatform,
   useDisconnectChannel,
+  useSetChannelEnabled,
 } from './queries';
 import { MetricChart } from './MetricChart';
 import { intlLocale } from '@/lib/locale';
@@ -21,6 +22,7 @@ export function ChannelCard({ channel, range }: ChannelCardProps): React.JSX.Ele
   const summary = useChannelSummary(channel.id, range);
   const series = useChannelSeries(channel.id, range);
   const disconnect = useDisconnectChannel();
+  const setEnabled = useSetChannelEnabled();
   // Отключение стирает все собранные метрики сразу и безвозвратно — как и
   // обещает политика. Одним случайным нажатием такое не делается.
   const [confirming, setConfirming] = useState(false);
@@ -51,6 +53,19 @@ export function ChannelCard({ channel, range }: ChannelCardProps): React.JSX.Ele
           </p>
         </div>
 
+        {/* Выключенная площадка не опрашивается, не читает чат и не шлёт
+            события: так работает тариф с одной активной площадкой у того, кто
+            подключил две. Включение одной выключает другую — это делает сервер. */}
+        {channel.isEnabled ? null : (
+          <Button
+            variant="secondary"
+            isLoading={setEnabled.isPending}
+            aria-label={t('analytics.activateNamed', { name: channel.displayName })}
+            onClick={() => setEnabled.mutate({ channelId: channel.id, isEnabled: true })}
+          >
+            {t('analytics.activate')}
+          </Button>
+        )}
         <Button
           variant="ghost"
           aria-label={t('analytics.disconnectNamed', { name: channel.displayName })}
@@ -70,6 +85,12 @@ export function ChannelCard({ channel, range }: ChannelCardProps): React.JSX.Ele
           {t('analytics.disconnectText')}
         </ConfirmDialog>
       </header>
+
+      {channel.isEnabled ? null : (
+        <p className="rounded-lg border border-border bg-surface-hover px-3 py-2 text-sm text-muted">
+          {t('analytics.inactive')}
+        </p>
+      )}
 
       <SyncNotice channel={channel} />
 

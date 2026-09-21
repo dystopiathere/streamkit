@@ -54,6 +54,8 @@
     "title": "Widgets",
     "empty": "No widgets yet. Create your first one and get a link for OBS.",
     "create": "New widget",
+    "limit": "{{used}} of {{limit}} widgets created on the free plan.",
+    "limitAction": "Lift the limit",
     "namePlaceholder": "Widget name",
     "enabled": "On",
     "disabled": "Off",
@@ -75,7 +77,11 @@
       "state": "Controls",
       "chat": "Chat",
       "guests": "Guests",
-      "media": "Image and sound"
+      "media": "Image and sound",
+      "advanced": "Advanced styling",
+      "layout": "Frame layout",
+      "background": "Background",
+      "barImages": "Bar images"
     },
     "field": {
       "layout": "Layout",
@@ -131,7 +137,17 @@
       "minMonths": "Minimum months subscribed",
       "minBits": "Minimum bits",
       "minRaiders": "Minimum raid viewers",
-      "showPlatform": "Platform icon next to the name"
+      "showPlatform": "Platform icon next to the name",
+      "fontFamily": "Font",
+      "backgroundColor": "Background color",
+      "backgroundImage": "Background image",
+      "backgroundFit": "Image fit",
+      "backgroundOpacity": "Background opacity (0–1)",
+      "barImage": "Fill image",
+      "trackImage": "Track image",
+      "x": "X, % of frame",
+      "y": "Y, % of frame",
+      "size": "Size"
     },
     "templateHint": "Available variables: {{vars}}",
     "tokens": {
@@ -175,7 +191,10 @@
       "roomDeleted": "This widget's room was deleted — it will show nothing in OBS. Pick another room and save.",
       "gapMs": "One queue for all scenarios: alerts follow each other with this pause.",
       "minCount": "0 — show all.",
-      "imageUrl": "An https link to an image or GIF. Empty — no image."
+      "imageUrl": "An https link to an image or GIF. Empty — no image.",
+      "advanced": "Element layout, font, background and images. Included in the Pro plan.",
+      "layout": "Drag an element with the mouse, or select it with the keyboard and move it with the arrow keys (hold Shift for 10% steps). “Back to flow” clears the position.",
+      "barImage": "The image is cropped to the progress, not stretched."
     },
     "state": {
       "raised": "Raised",
@@ -211,14 +230,22 @@
     "layout": {
       "center": "Centered",
       "banner": "Top banner",
-      "side": "Side"
+      "side": "Side",
+      "element": "{{element}}: {{x}}% across, {{y}}% down",
+      "reset": "Back to flow"
     },
     "animation": {
       "fade": "Fade",
       "slide-up": "Slide up",
       "slide-left": "Slide left",
       "zoom": "Zoom",
-      "bounce": "Bounce"
+      "bounce": "Bounce",
+      "slide-down": "Down from top",
+      "slide-right": "In from left",
+      "pop": "Pop",
+      "flip": "Flip",
+      "shake": "Shake",
+      "swing": "Swing"
     },
     "chat": {
       "platformTwitch": "Twitch chat: twitch.tv/{{channel}}",
@@ -227,6 +254,20 @@
       "none": "The widget shows only your own channels' chat. Connect Twitch or YouTube — otherwise OBS stays empty.",
       "connect": "Connect in Analytics",
       "youtubeHint": "YouTube chat appears within two minutes after your stream starts and uses the daily YouTube quota shared across the service. Untick it if you don't need it on screen."
+    },
+    "backgroundFit": {
+      "cover": "Cover",
+      "contain": "Contain",
+      "tile": "Tile"
+    },
+    "slot": {
+      "image": "Image",
+      "title": "Title",
+      "message": "Message",
+      "bar": "Bar",
+      "amount": "Amounts",
+      "clock": "Clock",
+      "list": "List"
     }
   },
   "sources": {
@@ -347,7 +388,7 @@
       "PERSONAL_DATA": "Consent to personal data processing",
       "COOKIE_ANALYTICS": "Visit statistics (cookies)",
       "MARKETING": "Marketing emails",
-      "SUBSCRIPTION_OFFER": "Pro plan offer and recurring charges"
+      "SUBSCRIPTION_OFFER": "Paid plans offer and recurring charges"
     }
   },
   "cookies": {
@@ -374,6 +415,10 @@
     "liveHours": "Live",
     "hoursSuffix": "h",
     "noValue": "—",
+    "activate": "Make active",
+    "activateNamed": "Make {{name}} the active platform",
+    "inactive": "This platform is not active: your plan runs one at a time. Metrics, chat and events are paused — press “Make active” to switch to it.",
+    "connectPlanLimit": "Your plan allows one platform. Get Multistream or disconnect the platform you already have.",
     "youtubeRounding": "YouTube rounds the subscriber count in the API itself: below a thousand it is rounded to the nearest ten, so five subscribers arrive as zero. The exact number is in YouTube Studio.",
     "reset": {
       "title": "Reset donation history",
@@ -534,7 +579,7 @@
   },
   "billing": {
     "title": "Plan",
-    "description": "Widgets, alerts, chat and analytics are free. Private rooms are part of the Pro plan: guest video goes through our media server.",
+    "description": "Alerts, chat and analytics work on any plan. A paid one lifts the limits on widgets and platforms, and Pro adds private rooms and advanced styling.",
     "notConfigured": "Payments are not configured on this server — private rooms are available for free.",
     "choosePeriod": "Billing period",
     "period": {
@@ -545,14 +590,36 @@
       "month": "Renews every month",
       "year": "Two months free compared to paying monthly"
     },
-    "plan": {
-      "name": "Pro plan",
-      "includes": "Private rooms: guests join by link without signing up, plus a guests widget for OBS."
+    "plans": {
+      "free": {
+        "name": "Free"
+      },
+      "multistream": {
+        "name": "Multistream"
+      },
+      "pro": {
+        "name": "Pro"
+      }
     },
+    "features": {
+      "widgets_one": "{{count}} widget",
+      "widgets_other": "Up to {{count}} widgets",
+      "widgetsUnlimited": "Unlimited widgets",
+      "platforms_one": "One platform of your choice",
+      "platforms_other": "{{count}} platforms",
+      "platformsUnlimited": "All platforms at once: multistream",
+      "rooms": "Private rooms with guests",
+      "styling": "Advanced widget styling"
+    },
+    "choosePlan": "Choose a plan",
+    "freeIncludes": "Alerts, chat, analytics and widgets work without paying — a plan lifts the limits.",
+    "nextPlan": "Plan from the next period",
+    "planChanges": "From {{date}} the subscription renews on the {{plan}} plan. Nothing changes until then.",
+    "perMonth": "{{amount}} per month",
     "pay": "Pay {{amount}}",
     "offer": {
       "accept": "I accept the",
-      "link": "Pro plan offer",
+      "link": "paid plans offer",
       "recurring": {
         "month": "and agree to an automatic charge of {{amount}} once a month. We will email you about every charge at least three days in advance. You can turn off renewal on this page at any time — access stays until the end of the paid period.",
         "year": "and agree to an automatic charge of {{amount}} once a year. We will email you about every charge at least three days in advance. You can turn off renewal on this page at any time — access stays until the end of the paid period."
@@ -575,9 +642,16 @@
       "pending": "The payment is still processing. This usually takes less than a minute; the page will update by itself once YooKassa confirms the payment."
     },
     "paywall": {
-      "title": "Private rooms are part of the Pro plan",
-      "expiredTitle": "Your Pro plan subscription has ended",
-      "hint": "Your rooms and invites are saved. You can call guests and put them into OBS after paying.",
+      "rooms": {
+        "title": "Private rooms are part of the Pro plan",
+        "expired": "Your Pro plan subscription has ended",
+        "hint": "Your rooms and invites are saved. You can call guests and put them into OBS after paying."
+      },
+      "advancedStyling": {
+        "title": "Advanced styling is part of the Pro plan",
+        "expired": "Your Pro plan subscription has ended",
+        "hint": "Your settings are saved. On stream the widget uses the basic styling until the plan is paid."
+      },
       "action": "Choose a plan"
     },
     "history": {
@@ -641,18 +715,13 @@
     },
     "pricing": {
       "title": "Plans and pricing",
-      "free": {
-        "name": "Free",
-        "text": "All widgets, donation alerts, Twitch chat and channel analytics. No time limit."
-      },
+      "month": "{{amount}} per month",
+      "year": "or {{amount}} per year",
       "pro": {
-        "name": "Pro plan",
-        "month": "{{amount}} per month",
-        "year": "or {{amount}} per year",
-        "text": "Everything in Free plus private rooms: up to {{guests}} guests by link without signing up, and a guests widget for OBS."
+        "guests": "Up to {{guests}} guests in a room by link, without signing up."
       },
       "note": "Prices are in Russian rubles and are final. Full terms are in the",
-      "offer": "Pro plan offer."
+      "offer": "paid plans offer."
     },
     "delivery": {
       "title": "How you get the service",
@@ -666,7 +735,7 @@
       "methods": "Pay by bank card, via SBP (Faster Payments System), SberPay, T-Pay or YooMoney on the secure YooKassa payment page.",
       "card": "Card details are entered on the YooKassa side and are never passed to us. The receipt is issued automatically at the time of payment.",
       "renewal": "The plan renews automatically using the saved payment method. We email you about every charge at least three days in advance. You can turn off renewal with one button in the Plan section — access stays until the end of the paid period.",
-      "refund": "You can cancel the plan at any time: we refund the remaining full days of the period within 10 days of your email to the support address in the Contacts section. See the Pro plan offer for details."
+      "refund": "You can cancel the plan at any time: we refund the remaining full days of the period within 10 days of your email to the support address in the Contacts section. See the paid plans offer for details."
     },
     "contacts": {
       "title": "Contacts",
@@ -689,7 +758,7 @@
         "contact": "Contact and language"
       },
       "terms": "Terms of Service",
-      "offer": "Pro plan offer",
+      "offer": "Paid plans offer",
       "privacy": "Privacy Policy",
       "personalData": "Personal data consent",
       "cookies": "Cookies",

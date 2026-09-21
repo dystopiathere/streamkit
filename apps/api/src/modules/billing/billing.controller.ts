@@ -78,7 +78,12 @@ export class BillingController {
     @Body(zodBody(checkoutInputSchema)) body: CheckoutInput,
     @Req() request: Request,
   ): Promise<CheckoutResult> {
-    return this.billing.checkout(user.id, body.period, this.audit.contextFromRequest(request));
+    return this.billing.checkout(
+      user.id,
+      body.plan,
+      body.period,
+      this.audit.contextFromRequest(request),
+    );
   }
 
   @Get('payments')

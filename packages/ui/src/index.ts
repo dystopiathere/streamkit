@@ -20,6 +20,7 @@ export {
   type ParticipantLayoutProps,
   type ParticipantTile,
 } from './ParticipantLayout';
+export { isPositioned, slotCss, WidgetBackgroundLayer, WidgetFrame } from './slots';
 export { textStyleToCss } from './text-style';
 export { TimerDisplay, type TimerDisplayProps } from './TimerDisplay';
 export { TopDonorsList, type TopDonorsListProps } from './TopDonorsList';

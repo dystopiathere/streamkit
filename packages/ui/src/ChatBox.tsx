@@ -6,6 +6,7 @@ import {
 } from '@streamkit/contracts';
 import { useEffect, useState } from 'react';
 import { PlatformIcon } from './PlatformIcon';
+import { WidgetFrame } from './slots';
 import { textStyleToCss } from './text-style';
 
 export interface ChatBoxProps {
@@ -35,15 +36,18 @@ export function ChatBox({ config, messages }: ChatBoxProps): React.JSX.Element |
   const rows = config.newestFirst ? [...visible].reverse() : visible;
 
   return (
-    <div
-      data-testid="chat-box"
+    <WidgetFrame
+      testId="chat-box"
+      background={config.background}
       style={{
         display: 'flex',
         flexDirection: 'column',
         gap: 6,
-        width: '100%',
         padding: 16,
-        boxSizing: 'border-box',
+        // Лента снизу вверх: новые строки выдавливают старые за верхний край, а
+        // не растягивают кадр вниз. Раскладки у чата нет — элемент один.
+        justifyContent: config.newestFirst ? 'flex-start' : 'flex-end',
+        overflow: 'hidden',
       }}
     >
       {rows.map((message) => (
@@ -87,7 +91,7 @@ export function ChatBox({ config, messages }: ChatBoxProps): React.JSX.Element |
           ))}
         </div>
       ))}
-    </div>
+    </WidgetFrame>
   );
 }
 

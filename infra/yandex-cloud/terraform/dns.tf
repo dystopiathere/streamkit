@@ -94,3 +94,36 @@ resource "yandex_dns_recordset" "turn" {
   ttl     = 300
   data    = [local.livekit_public_ip]
 }
+
+# MX-запись (прием почты)
+resource "yandex_dns_recordset" "yandex_mx" {
+  zone_id = yandex_dns_zone.main.id
+  name    = "@"
+  type    = "MX"
+  ttl     = 21600
+  data    = ["10 mx.yandex.net."]
+}
+
+# DKIM-запись (электронная подпись писем, берется из панели Яндекс 360)
+resource "yandex_dns_recordset" "yandex_dkim" {
+  count = var.yandex_dkim == null ? 0 : 1
+
+  zone_id = yandex_dns_zone.main.id
+  name    = "${trimsuffix(var.yandex_dkim.name, ".")}."
+  type    = "TXT"
+  ttl     = 3600
+  data = [
+    join(" ", [
+      for chunk in regexall(".{1,255}", var.yandex_dkim.value) : "\"${chunk}\""
+    ])
+  ]
+
+  lifecycle {
+    # Короткое имя вида «mail._domainkey» после добавления точки стало бы
+    # записью в корне DNS, вне зоны.
+    precondition {
+      condition     = endswith(trimsuffix(var.yandex_dkim.name, "."), ".${var.domain}")
+      error_message = "yandex_dkim.name — полное имя Yandex 360, например mail._domainkey.${var.domain}"
+    }
+  }
+}

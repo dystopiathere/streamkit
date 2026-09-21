@@ -24,9 +24,15 @@ test('главная без входа показывает цены, получ
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
+  // Три тарифа: бесплатный и два платных, у каждого платного — обе цены.
   const pricing = page.locator('#pricing');
   await expect(pricing.getByText('Бесплатный')).toBeVisible();
-  await expect(pricing.getByText(/490\s₽ в месяц/)).toBeVisible();
+  // Заголовками, а не текстом: «мультистрим» встречается и в составе тарифов.
+  await expect(pricing.getByRole('heading', { name: 'Мультистрим' })).toBeVisible();
+  await expect(pricing.getByRole('heading', { name: 'Про', exact: true })).toBeVisible();
+  await expect(pricing.getByText(/199\s₽ в месяц/)).toBeVisible();
+  await expect(pricing.getByText(/1\s900\s₽ в год/)).toBeVisible();
+  await expect(pricing.getByText(/499\s₽ в месяц/)).toBeVisible();
   await expect(pricing.getByText(/4\s900\s₽ в год/)).toBeVisible();
 
   await expect(page.locator('#delivery')).toContainText('Физической доставки нет');
@@ -45,11 +51,12 @@ test('главная без входа показывает цены, получ
   await expect(requisites).toContainText('самозанятый');
 
   // Оферта открывается из подвала, с подставленными реквизитами и ценой.
-  await page.getByRole('link', { name: 'Оферта тарифа «Про»' }).click();
+  await page.getByRole('link', { name: 'Оферта платных тарифов' }).click();
   await expect(page).toHaveURL(/\/legal\/subscription$/);
   const offer = page.getByRole('article');
   await expect(offer).toContainText(seller.inn!);
-  await expect(offer).toContainText(/490\s₽ за один календарный месяц/);
+  await expect(offer).toContainText(/499\s₽ за один календарный месяц/);
+  await expect(offer).toContainText(/199\s₽ за один календарный месяц/);
   await expect(offer).not.toContainText('{{');
   // Markdown отрисован разметкой, а не выведен как есть.
   await expect(offer.getByRole('heading', { level: 1 })).toBeVisible();

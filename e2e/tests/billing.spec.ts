@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * Тариф «Про» целиком: от закрытых комнат до оплаты и отключения продления.
+ * Платный тариф целиком: от закрытых комнат до оплаты, смены тарифа и
+ * отключения продления.
  *
  * ЮKassa — фальшивая (`fake-yookassa.mjs`), но путь настоящий: браузер уходит
  * на страницу оплаты, та шлёт уведомление в API и возвращает браузер назад, а
@@ -45,9 +46,11 @@ test('стример оформляет тариф «Про», получает 
   await page.getByPlaceholder('Название комнаты').fill('Вечерний эфир');
   await expect(page.getByRole('button', { name: 'Новая комната' })).toBeDisabled();
 
-  // Оплата: без согласия с офертой кнопка не нажимается.
+  // Оплата: выбираются тариф и период, и без согласия с офертой кнопка не
+  // нажимается.
   await page.getByRole('link', { name: 'Выбрать тариф' }).click();
   await expect(page).toHaveURL(/\/billing$/);
+  await page.getByRole('radio', { name: /^Про/ }).check();
   await page.getByRole('radio', { name: /Месяц/ }).check();
   const pay = page.getByRole('button', { name: /^Оплатить/ });
   await expect(pay).toBeDisabled();
@@ -70,8 +73,17 @@ test('стример оформляет тариф «Про», получает 
   await page.getByRole('button', { name: 'Новая комната' }).click();
   await expect(page.getByRole('link', { name: 'Открыть' })).toBeVisible();
 
-  // Отключение продления — одной кнопкой; доступ доживает оплаченный период.
+  // Смена тарифа на «Мультистрим» действует со следующего продления: комнаты
+  // остаются открытыми до конца оплаченного периода (оферта, 2.5).
   // exact: без него «Тариф» находит и «Тарифы» в карте сайта в подвале.
+  await page.getByRole('link', { name: 'Тариф', exact: true }).click();
+  await page.getByRole('button', { name: 'Мультистрим' }).click();
+  await expect(page.getByText(/подписка продлится по тарифу «Мультистрим»/)).toBeVisible();
+  await page.getByRole('link', { name: 'Комнаты' }).click();
+  await expect(page.getByRole('link', { name: 'Открыть' })).toBeVisible();
+  await expect(page.getByText('Приватные комнаты — в тарифе «Про»')).toHaveCount(0);
+
+  // Отключение продления — одной кнопкой; доступ доживает оплаченный период.
   await page.getByRole('link', { name: 'Тариф', exact: true }).click();
   await page.getByRole('button', { name: 'Отключить автопродление' }).click();
   await expect(page.getByTestId('subscription-status')).toContainText('Автопродление выключено');

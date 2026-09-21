@@ -1,5 +1,5 @@
 import type {
-  BillingPeriod,
+  CheckoutInput,
   CheckoutResult,
   PaymentView,
   SubscriptionView,
@@ -68,8 +68,8 @@ export function useReturnedPayment(id: string | null) {
 
 export function useCheckout() {
   return useMutation({
-    mutationFn: (period: BillingPeriod) =>
-      api.post<CheckoutResult>('/billing/checkout', { period, acceptOffer: true }),
+    mutationFn: (input: Omit<CheckoutInput, 'acceptOffer'>) =>
+      api.post<CheckoutResult>('/billing/checkout', { ...input, acceptOffer: true }),
   });
 }
 

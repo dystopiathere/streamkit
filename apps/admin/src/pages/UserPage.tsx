@@ -261,6 +261,25 @@ function UserCard({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
                 value: <Status namespace="subscription" value={detail.subscription.status} />,
               },
               {
+                label: t('user.subPlan'),
+                // Действующий тариф и тариф следующего периода — разные вещи:
+                // смена применяется при продлении, и по одному полю разобраться
+                // в обращении «мне не открылись комнаты» невозможно.
+                value: (
+                  <>
+                    {t(`plan.${detail.subscription.plan}`)}
+                    {detail.subscription.nextPlan &&
+                    detail.subscription.nextPlan !== detail.subscription.plan ? (
+                      <span className="block text-xs text-muted">
+                        {t('user.subNextPlan', {
+                          plan: t(`plan.${detail.subscription.nextPlan}`),
+                        })}
+                      </span>
+                    ) : null}
+                  </>
+                ),
+              },
+              {
                 label: t('user.subUntil'),
                 value: formatDate(detail.subscription.currentPeriodEnd),
               },
