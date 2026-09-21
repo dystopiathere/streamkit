@@ -100,23 +100,18 @@ jobs:
           cache-from: type=gha,scope=release-${{ matrix.image }}
           cache-to: type=gha,scope=release-${{ matrix.image }},mode=max
 
-  # Сторонние образы — копией в свой реестр. ВМ тянут всё только из cr.yandex и
-  # не зависят от доступности и лимитов Docker Hub. Версии здесь и в deploy.sh
-  # меняются вместе.
-  mirror:
-    name: Сторонние образы
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Вход в Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: cr.yandex
-          username: json_key
-          password: ${{ secrets.YC_REGISTRY_KEY }}
-
-      - name: Копирование
+      # Сторонние образы — копией в свой реестр. ВМ тянут всё только из
+      # cr.yandex и не зависят от доступности и лимитов Docker Hub. Версии здесь
+      # и в deploy.sh меняются вместе.
+      #
+      # Шагом задания API, а не отдельным заданием: копия нужна только при
+      # смене версии, а отдельное задание на каждом выпуске стоило минуту,
+      # даже когда копировать было нечего. Уже скопированная версия
+      # пропускается без обращения к Docker Hub. Шаг идёт ДО сканирования: упавшее
+      # сканирование пропустило бы его, и новая версия Caddy не попала бы в реестр.
+      - name: Сторонние образы
+        if: matrix.image == 'api'
+        timeout-minutes: 15
         env:
           REGISTRY: ${{ vars.YC_REGISTRY }}
         run: |
@@ -125,6 +120,10 @@ jobs:
           # переносит индекс Docker Hub целиком, с манифестами аттестаций, и
           # Container Registry его не принимает. ВМ — linux/amd64.
           copy() {
+            if docker manifest inspect "${REGISTRY}/mirror/$2" >/dev/null 2>&1; then
+              echo "$2 уже в реестре"
+              return
+            fi
             docker pull --platform linux/amd64 "$1"
             docker tag "$1" "${REGISTRY}/mirror/$2"
             docker push "${REGISTRY}/mirror/$2"
@@ -133,3 +132,18 @@ jobs:
           copy livekit/livekit-server:v1.13.6 livekit-server:v1.13.6
           copy goacme/lego:v4.21.0 lego:v4.21.0
           copy ghcr.io/umami-software/umami:3.3.1 umami:3.3.1
+
+      # Уязвимости в образе API: базовый образ и системные пакеты pnpm audit не
+      # видит. Раньше это делал CI на каждом пуше в main, собирая образ второй
+      # раз; теперь CI собирает образы только в пулреквестах, а на main
+      # проверяется ровно тот образ, что опубликован. Упавшая проверка
+      # оставляет выпуск красным — выкатывать такой тег не нужно.
+      - name: Сканирование образа API
+        if: matrix.image == 'api'
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ vars.YC_REGISTRY }}/streamkit-api:${{ github.event.workflow_run.head_sha }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'HIGH,CRITICAL'

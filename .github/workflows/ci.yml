@@ -3,7 +3,23 @@ name: CI
 on:
   push:
     branches: [main]
+    paths:
+      - '**'
+      # Правка одних заметок — ADR, CLAUDE.md, README — ничего не собирает и не
+      # проверяет: прогон на неё стоил бы двадцать оплаченных минут и выпуск
+      # образов следом. Юридические тексты под это правило НЕ попадают: они
+      # лежат в apps/web/public/legal, отдаются дашбордом и проверяются тестами.
+      - '!docs/**'
+      - '!**/CLAUDE.md'
+      - '!**/README.md'
   pull_request:
+    # Тот же список, повторённый, а не вынесенный якорем YAML: Actions якоря
+    # понимает, а actionlint, которым workflow проверяют перед пушем, — нет.
+    paths:
+      - '**'
+      - '!docs/**'
+      - '!**/CLAUDE.md'
+      - '!**/README.md'
 
 # Новый пуш в ту же ветку отменяет предыдущий прогон: докручивать CI для
 # устаревшего коммита незачем.
@@ -96,34 +112,19 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-  quality:
-    name: Типы, линтер, формат, юнит-тесты
-    runs-on: ubuntu-latest
-    needs: gate
-    if: needs.gate.outputs.verified != 'true'
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      # Prisma Client — сгенерированный код, в репозитории его нет.
-      # Без этого шага падает проверка типов всего, что трогает БД.
-      - run: pnpm --filter @streamkit/api exec prisma generate
-
-      - run: pnpm build
-      - run: pnpm typecheck
-      - run: pnpm lint
-      - run: pnpm format:check
-      - run: pnpm test
-
-  integration:
-    name: Интеграционные тесты
+  # Типы, юнит-, интеграционные и сквозные тесты — ОДНИМ заданием.
+  #
+  # Раньше это были три задания, и каждое ставило зависимости заново, а два из
+  # них ещё и собирали все приложения: минута установки и полторы сборки
+  # оплачивались трижды. GitHub округляет каждое задание вверх до минуты, и на
+  # бесплатном плане (2000 минут в месяц на приватный репозиторий) это решало,
+  # хватит ли минут до конца месяца. Сквозной сценарий и так ждал проверки
+  # типов, так что по времени до результата задание почти не теряет.
+  #
+  # Базы две, в одном PostgreSQL: интеграционные тесты и сквозной сценарий
+  # чистят каждый свою, и общая база сделала бы их зависимыми от порядка.
+  checks:
+    name: Типы, линтер, юнит-, интеграционные и сквозные тесты
     runs-on: ubuntu-latest
     needs: gate
     if: needs.gate.outputs.verified != 'true'
@@ -152,9 +153,7 @@ jobs:
           - 6379:6379
 
     env:
-      DATABASE_URL: postgresql://streamkit:streamkit@localhost:5432/streamkit_test?schema=public
       REDIS_URL: redis://localhost:6379
-      NODE_ENV: test
       # Значения тестовые и одноразовые: боевые секреты живут только в
       # окружении деплоя, в CI их быть не должно.
       #
@@ -165,11 +164,11 @@ jobs:
       ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcyEhISE=
       IP_HASH_PEPPER: test-pepper-for-ci
       TOKEN_HASH_PEPPER: test-token-pepper-for-ci
-      CORS_ORIGINS: http://localhost:5173
       OVERLAY_BASE_URL: http://localhost:5174
 
     steps:
       - uses: actions/checkout@v7
+
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
@@ -177,69 +176,39 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @streamkit/contracts build
 
-      # Клиент Prisma — сгенерированный код, в репозитории его нет. Без этого
-      # шага падают все четыре набора разом, ещё на импорте: энумы приезжают
-      # undefined, и ошибка выглядит как «Cannot read properties of undefined»,
-      # а не как «клиент не сгенерирован».
+      # Prisma Client — сгенерированный код, в репозитории его нет. Без этого
+      # шага падает проверка типов всего, что трогает БД, а интеграционные
+      # тесты — ещё на импорте: энумы приезжают undefined, и ошибка выглядит как
+      # «Cannot read properties of undefined», а не как «клиент не сгенерирован».
       - run: pnpm --filter @streamkit/api exec prisma generate
 
-      - run: pnpm --filter @streamkit/api exec prisma migrate deploy
-      - run: pnpm --filter @streamkit/api test:int
-
-  e2e:
-    name: Сквозной сценарий
-    runs-on: ubuntu-latest
-    # Пропущенный quality пропускает и это задание.
-    needs: quality
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: streamkit
-          POSTGRES_PASSWORD: streamkit
-          POSTGRES_DB: streamkit_e2e
-        options: >-
-          --health-cmd "pg_isready -U streamkit"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-        ports:
-          - 5432:5432
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-        ports:
-          - 6379:6379
-
-    env:
-      DATABASE_URL: postgresql://streamkit:streamkit@localhost:5432/streamkit_e2e?schema=public
-      REDIS_URL: redis://localhost:6379
-      JWT_SECRET: test-secret-value-for-ci-at-least-32-chars
-      ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcyEhISE=
-      IP_HASH_PEPPER: test-pepper-for-ci
-      TOKEN_HASH_PEPPER: test-token-pepper-for-ci
-      CORS_ORIGINS: http://localhost:5173,http://localhost:5174,http://localhost:5175
-      OVERLAY_BASE_URL: http://localhost:5174
-      VITE_API_URL: http://localhost:3000
-
-    steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @streamkit/api exec prisma generate
+      # Одна сборка на всё задание — та, что нужна сквозному сценарию. Адрес API
+      # вшивается в бандл при сборке: без него сокет дашборда стучится в сам
+      # preview, и падает один сценарий окна эфира — похоже на поломку чата.
       - run: pnpm build
-      - run: pnpm --filter @streamkit/api exec prisma migrate deploy
+        env:
+          VITE_API_URL: http://localhost:3000
+
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm test
+
+      - name: Интеграционные тесты
+        env:
+          DATABASE_URL: postgresql://streamkit:streamkit@localhost:5432/streamkit_test?schema=public
+          NODE_ENV: test
+          CORS_ORIGINS: http://localhost:5173
+        run: |
+          pnpm --filter @streamkit/api exec prisma migrate deploy
+          pnpm --filter @streamkit/api test:int
+
+      # Своя база сквозного сценария — в том же сервере PostgreSQL.
+      - name: База сквозного сценария
+        env:
+          PGPASSWORD: streamkit
+        run: psql -h localhost -U streamkit -d streamkit_test -c 'CREATE DATABASE streamkit_e2e'
 
       # Настоящий LiveKit для сценария с комнатами — шагом, а не в `services`:
       # сервисному контейнеру нельзя задать команду, а режиму --dev она нужна.
@@ -262,7 +231,15 @@ jobs:
           curl --silent --retry 20 --retry-delay 1 --retry-connrefused http://127.0.0.1:7880/
 
       - run: pnpm --filter @streamkit/e2e exec playwright install --with-deps chromium
-      - run: pnpm --filter @streamkit/e2e test:e2e
+
+      - name: Сквозной сценарий
+        env:
+          DATABASE_URL: postgresql://streamkit:streamkit@localhost:5432/streamkit_e2e?schema=public
+          CORS_ORIGINS: http://localhost:5173,http://localhost:5174,http://localhost:5175
+          VITE_API_URL: http://localhost:3000
+        run: |
+          pnpm --filter @streamkit/api exec prisma migrate deploy
+          pnpm --filter @streamkit/e2e test:e2e
 
       - uses: actions/upload-artifact@v7
         if: failure()
@@ -271,8 +248,13 @@ jobs:
           path: e2e/playwright-report/
           retention-days: 7
 
+  # Безопасность и конфигурация прода — одним заданием: каждое по отдельности
+  # шло меньше минуты, а оплачивалось минутой целиком.
+  #
+  # Конфигурация прода — это Terraform, скрипты выкатки и Caddyfile. Ошибка в
+  # них иначе проявилась бы только на выкатке, то есть уже на живом сайте.
   security:
-    name: Проверки безопасности
+    name: Безопасность и инфраструктура прода
     runs-on: ubuntu-latest
     needs: gate
     if: needs.gate.outputs.verified != 'true'
@@ -314,16 +296,6 @@ jobs:
           # них пришлось бы выдавать токену право записи в pull requests.
           GITLEAKS_ENABLE_COMMENTS: false
 
-  # Конфигурация прода: Terraform, скрипты выкатки и Caddyfile. Ошибка в них
-  # иначе проявилась бы только на выкатке — то есть уже на живом сайте.
-  infra:
-    name: Инфраструктура прода
-    runs-on: ubuntu-latest
-    needs: gate
-    if: needs.gate.outputs.verified != 'true'
-    steps:
-      - uses: actions/checkout@v7
-
       - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: 1.9.8
@@ -356,10 +328,17 @@ jobs:
   # логах все три импортировали один и тот же манифест, попаданий в кэш не
   # было, а выгрузка заведомо бесполезного кэша занимала больше половины из
   # восьми минут задания.
+  #
+  # Только в пулреквесте. На main те же пять образов тут же собирает «Выпуск
+  # образов» — уже для публикации, — и сборка здесь была бы второй из того же
+  # коммита: восемь оплаченных минут на каждый пуш. Сломанный образ на main
+  # незамеченным не пройдёт: упадёт выпуск, и выкатывать будет нечего.
+  # Образ API на уязвимости выпуск проверяет сам.
   docker:
     name: Сборка образов (${{ matrix.image }})
     runs-on: ubuntu-latest
-    needs: quality
+    needs: checks
+    if: github.event_name == 'pull_request'
     strategy:
       # Сломанный образ дашборда не должен прятать результат сборки API.
       fail-fast: false

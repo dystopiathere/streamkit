@@ -70,6 +70,17 @@ terraform apply
 в `.gitignore`; в состоянии Terraform — сгенерированные секреты, поэтому бакет
 закрыт и доступ к нему только у сервисного аккаунта `terraform`.
 
+**`.terraform.lock.hcl` хранит хэши провайдеров для всех платформ**, на которых
+его читают: Windows и WSL на машине владельца, Linux в CI, macOS. `terraform init`
+дописывает хэш только СВОЕЙ платформы, и лок, собранный на одной, другая не
+примет: CI падает на «doesn't match any of the checksums previously recorded».
+После смены версии провайдера или `init -upgrade` лок пересобирается так:
+
+```bash
+terraform providers lock -platform=linux_amd64 -platform=windows_amd64 \
+  -platform=darwin_amd64 -platform=darwin_arm64
+```
+
 Классы хостов по умолчанию (`s3-c2-m8`, `hm3-c2-m8`) — проверьте доступность в
 каталоге: `yc managed-postgresql resource-preset list`, `yc managed-redis
 resource-preset list`.
@@ -79,6 +90,20 @@ resource-preset list`.
 У регистратора stream-kit.ru замените NS-серверы на `ns1.yandexcloud.net` и
 `ns2.yandexcloud.net`. Пока делегирование не разошлось (`dig NS stream-kit.ru`),
 Caddy и lego не выпустят сертификаты — первую выкатку делайте после.
+
+**TXT в корне домена** — список `root_txt_records` в `terraform.tfvars`, одной
+записью на все значения (пример — в `terraform.tfvars.example`):
+
+- `google-site-verification=...` — подтверждение в Google Search Console. Без
+  него Google не публикует OAuth-приложение YouTube: «home page URL is not
+  registered to you»;
+- `yandex-verification: ...` — подтверждение домена в Яндекс 360;
+- SPF — кому разрешено отправлять почту от имени домена. **Запись `v=spf1` у
+  домена ровно одна**: две получатель считает ошибкой, и проверку не проходит ни
+  одна. Новый отправитель дописывается в существующую.
+
+Записи в корне Terraform заводит сам; руками в консоли DNS их не добавляйте —
+следующий `apply` перезапишет набор целиком.
 
 ## 4. Секреты, которые заводите вы
 
@@ -133,6 +158,52 @@ yc lockbox secret add-version --id <external_secret_id> --payload '[
 
 До подтверждения письма не уходят, и воркер пишет об этом в лог.
 
+### Почта на домене (Яндекс 360)
+
+Ящики `...@stream-kit.ru` живут в Яндекс 360; письма сервиса по-прежнему уходят
+через Postbox. Все записи заводит Terraform — автонастройку DNS в панели
+Яндекс 360 не включайте, иначе `apply` упрётся в записи, созданные не им.
+
+1. Панель Яндекс 360 → «Домены» → добавить `stream-kit.ru`. Строку
+   `yandex-verification: ...` добавьте в `root_txt_records` и выполните
+   `terraform apply`, затем нажмите «Проверить» в панели.
+2. **MX** (`10 mx.yandex.net.`) задан в `dns.tf` — менять не нужно.
+3. **SPF** — `v=spf1 redirect=_spf.yandex.net` в `root_txt_records`.
+4. **DKIM** — панель → «Домены» → DKIM-подпись: имя (`mail._domainkey.stream-kit.ru`)
+   и значение перенесите в `yandex_dkim`. С DKIM Postbox он не пересекается:
+   у того свой селектор, `postbox`.
+5. **DMARC** — переменная `dmarc`, запись `_dmarc.stream-kit.ru`. Начинать с
+   `v=DMARC1; p=none; rua=mailto:dmarc@stream-kit.ru`: письма не отклоняются, а
+   отчёты получателей показывают, кто отправляет от имени домена. Ящик для
+   `rua` (или его псевдоним) заведите в Яндекс 360 **до** `apply` — отчёты на
+   несуществующий адрес теряются. Ужесточать до `quarantine` или `reject`
+   только когда отчёты за пару недель покажут, что и Яндекс 360, и Postbox
+   проходят проверку: иначе отклоняться начнут собственные письма сервиса,
+   в том числе письма о списании, без которых продление не списывается.
+
+Проверка — запросом к серверам зоны, а не консолью:
+
+```bash
+nslookup -type=MX  stream-kit.ru                   ns1.yandexcloud.net
+nslookup -type=TXT stream-kit.ru                   ns1.yandexcloud.net
+nslookup -type=TXT mail._domainkey.stream-kit.ru   ns1.yandexcloud.net
+nslookup -type=TXT _dmarc.stream-kit.ru            ns1.yandexcloud.net
+```
+
+**Postbox и SPF.** SPF выше разрешает отправку только Яндекс 360. Postbox
+подписывает письма своим DKIM на `stream-kit.ru`, и для DMARC этого хватает,
+но нужна ли ему запись в SPF, документация прямо не говорит. Проверьте на
+живом письме: отправьте письмо сервиса на Gmail и откройте «Показать оригинал».
+Если там `SPF: FAIL` при адресе отправителя на `@stream-kit.ru` — разрешение
+для Postbox дописывается в ту же запись `v=spf1`, а не второй записью.
+
+**Если ящик станет адресом поддержки** (`SELLER_EMAIL`), в нём окажется
+переписка с пользователями — просьбы о возврате и удалении данных, которые
+оферта направляет на почту. Яндекс 360 — ООО «Яндекс», а не «Яндекс.Облако»,
+которое уже указано в политике конфиденциальности (раздел 7): это новый
+получатель данных, и до смены адреса нужна новая редакция политики
+(`docs/legal/README.md`).
+
 ## 5. GitHub
 
 **Репозиторий → Settings → Secrets and variables → Actions:**
@@ -175,8 +246,10 @@ failed». Администратор входит на ВМ как `ops`.
 ## 6. Выпуск и выкатка
 
 1. Слияние в `main` → CI → workflow **«Выпуск образов»** публикует
-   `streamkit-api`, `-migrate`, `-web`, `-overlay`, `-admin` с тегом sha коммита и копирует
-   Caddy, LiveKit и lego в `mirror/`.
+   `streamkit-api`, `-migrate`, `-web`, `-overlay`, `-admin` с тегом sha коммита,
+   проверяет образ API на уязвимости (упавшая проверка — выпуск красный, и
+   «Выкатка» его по умолчанию не возьмёт) и копирует Caddy, LiveKit, lego и
+   Umami в `mirror/`, если этих версий там ещё нет.
 2. **Actions → «Выкатка» → Run workflow**: `tag` можно оставить пустым — возьмётся
    последний коммит `main`, для которого выпуск собрал образы (выбранный sha
    виден в сводке прогона); `target` — `all` на первой выкатке, дальше обычно

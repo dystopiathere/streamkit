@@ -116,7 +116,7 @@ variable "valkey" {
 }
 
 variable "root_txt_records" {
-  description = "Значения TXT в корне домена, например google-site-verification=... из Google Search Console. Пусто — записи нет"
+  description = "Значения TXT в корне домена: google-site-verification=... из Google Search Console, yandex-verification: ... из Яндекс 360, SPF (одна запись v=spf1 на домен). Пусто — записи нет"
   type        = list(string)
   default     = []
 
@@ -139,6 +139,19 @@ variable "postbox_dkim" {
   validation {
     condition     = var.postbox_dkim == null || (!strcontains(var.postbox_dkim.value, "\"") && startswith(var.postbox_dkim.value, "v=DKIM1"))
     error_message = "postbox_dkim.value — строка из консоли Postbox вида v=DKIM1;...;p=..., без кавычек."
+  }
+}
+
+variable "dmarc" {
+  description = "Значение DMARC для _dmarc.<домен>, например v=DMARC1; p=none; rua=mailto:dmarc@stream-kit.ru. null — записи нет"
+  type        = string
+  default     = null
+
+  # try, а не голое «||»: при null правая часть не должна вычисляться вовсе,
+  # а startswith и strcontains на null падают, а не возвращают false.
+  validation {
+    condition     = var.dmarc == null || try(!strcontains(var.dmarc, "\"") && startswith(var.dmarc, "v=DMARC1;") && length(var.dmarc) <= 255, false)
+    error_message = "dmarc — строка вида v=DMARC1; p=none; rua=mailto:..., без кавычек и не длиннее 255 символов."
   }
 }
 

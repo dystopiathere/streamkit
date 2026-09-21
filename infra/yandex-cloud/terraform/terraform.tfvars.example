@@ -11,9 +11,14 @@ admin_ssh_cidrs = ["203.0.113.10/32"]
 admin_ssh_public_key  = "ssh-ed25519 AAAA... admin"
 deploy_ssh_public_key = "ssh-ed25519 AAAA... github-actions-deploy"
 
-# Подтверждение домена для Google Search Console и Yandex 360 (README, раздел 7): без него
-# Google не публикует OAuth-приложение YouTube.
-# root_txt_records = ["google-site-verification=...", "yandex-verification: ..."]
+# TXT в корне домена (README, раздел 3): подтверждение для Google Search Console
+# (без него Google не публикует OAuth-приложение YouTube) и Яндекс 360, и SPF —
+# одной записью v=spf1 на весь домен.
+# root_txt_records = [
+#   "google-site-verification=...",
+#   "yandex-verification: ...",
+#   "v=spf1 redirect=_spf.yandex.net",
+# ]
 
 # Запись DKIM из консоли Postbox (README, раздел «Почта»). До её появления — не задавать.
 # postbox_dkim = {
@@ -21,7 +26,12 @@ deploy_ssh_public_key = "ssh-ed25519 AAAA... github-actions-deploy"
 #   value = "v=DKIM1; k=rsa; p=MIIBIjANBg..."
 # }
 
+# Запись DKIM из панели Яндекс 360 (README, раздел «Почта на домене»).
 # yandex_dkim = {
 #   name  = "mail._domainkey.stream-kit.ru"
 #   value = "v=DKIM1; k=rsa; t=s; p=MIGfMA0..."
 # }
+
+# DMARC (README, раздел «Почта на домене»). Ящик для отчётов должен существовать
+# в Яндекс 360 — отчёты на несуществующий адрес просто теряются.
+# dmarc = "v=DMARC1; p=none; rua=mailto:dmarc@stream-kit.ru"
