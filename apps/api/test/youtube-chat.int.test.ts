@@ -89,6 +89,17 @@ class FakeYouTube {
 
   private route(req: IncomingMessage, res: ServerResponse): void {
     if (req.url?.startsWith('/youtube/v3/liveBroadcasts')) {
+      // Как настоящий Google: фильтр у liveBroadcasts.list ровно один. Поддельный
+      // сервер, принимавший `broadcastStatus` вместе с `mine`, пропустил ошибку,
+      // из-за которой на проде не находился ни один эфир.
+      const query = new URL(req.url, 'http://fake').searchParams;
+      if (['broadcastStatus', 'mine', 'id'].filter((name) => query.has(name)).length !== 1) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({ error: { code: 400, errors: [{ reason: 'incompatibleParameters' }] } }),
+        );
+        return;
+      }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       this.discoveries += 1;
       res.end(

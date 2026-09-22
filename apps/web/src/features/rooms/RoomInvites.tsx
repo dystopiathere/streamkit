@@ -71,7 +71,7 @@ export function RoomInvites({ roomId }: { roomId: string }): React.JSX.Element {
       </div>
 
       {freshUrl ? (
-        <div className="space-y-2 rounded-lg border border-accent/40 bg-accent/10 p-3">
+        <div className="space-y-2 rounded-lg border border-border-strong bg-surface-hover p-3">
           <p id="invite-url-hint" className="text-xs text-muted">
             {t('rooms.invites.oneTimeWarning')}
           </p>

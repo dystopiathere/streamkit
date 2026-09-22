@@ -42,7 +42,7 @@ export function MicrophoneSettings(): React.JSX.Element {
           {PRESETS.map((key) => (
             <label
               key={key}
-              className="flex items-start gap-2 rounded-lg border border-border-strong p-3 text-sm has-[:checked]:border-accent has-[:checked]:bg-accent/10 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent"
+              className="flex items-start gap-2 rounded-lg border border-border-strong p-3 text-sm has-[:checked]:border-fg has-[:checked]:bg-surface-hover has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent"
             >
               <input
                 type="radio"

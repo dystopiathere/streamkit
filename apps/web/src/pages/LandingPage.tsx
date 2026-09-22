@@ -6,6 +6,7 @@ import {
   ButtonLink,
   Card,
   cn,
+  Logo,
   MainContent,
   MenuButton,
   SkipLink,
@@ -14,11 +15,29 @@ import {
 } from '@streamkit/app-kit';
 import { planFeatureList } from '@/features/billing/plan-features';
 import { PublicFooter } from '@/features/public/PublicFooter';
+import { TestCard } from '@/features/public/TestCard';
 import { missingValue, useSeller } from '@/features/public/seller';
 import { useAuthStore } from '@/lib/auth-store';
 import { formatMoney } from '@/lib/locale';
 
-const FEATURES = ['alerts', 'widgets', 'chat', 'analytics', 'rooms', 'obs'] as const;
+/**
+ * Возможности и полоса таблицы у каждой — та же, что у типа виджета в дашборде:
+ * цвет, увиденный на главной, потом встречается в редакторе на том же месте.
+ * У того, что виджетом не является (аналитика, ссылка OBS), полоса серая:
+ * чужой цвет размыл бы правило «цвет = тип виджета».
+ */
+const FEATURES = [
+  ['alerts', 'alerts'],
+  ['widgets', 'goal'],
+  ['chat', 'chat'],
+  ['analytics', null],
+  ['rooms', 'guests'],
+  ['obs', null],
+] as const;
+
+/** Заголовок раздела главной — табличкой, как h1, но на ступень меньше. */
+const SECTION_TITLE =
+  'font-[family-name:var(--font-display)] text-2xl font-semibold tracking-wide uppercase';
 const ANCHORS = ['pricing', 'delivery', 'contacts'] as const;
 const MENU_ID = 'landing-menu';
 
@@ -41,13 +60,9 @@ export function LandingPage(): React.JSX.Element {
     <div className="flex min-h-screen flex-col">
       <SkipLink />
       <header className="border-b border-border bg-surface">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
-          <Link
-            to="/"
-            aria-label={t('nav.home')}
-            className="mr-auto py-2 font-semibold tracking-tight"
-          >
-            StreamKit
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
+          <Link to="/" aria-label={t('nav.home')} className="mr-auto py-2">
+            <Logo />
           </Link>
           {/* Вход и панель видны всегда: это главное действие на странице, и
               прятать его в меню ради трёх якорей — плохой обмен. */}
@@ -86,38 +101,70 @@ export function LandingPage(): React.JSX.Element {
         </div>
       </header>
 
-      <MainContent className="mx-auto w-full max-w-5xl flex-1 space-y-12 px-4 py-8 sm:space-y-16 sm:py-12">
-        <section aria-labelledby="hero-title" className="max-w-3xl space-y-4">
-          <h1 id="hero-title" className="text-2xl font-semibold text-balance sm:text-4xl">
-            {t('public.hero.title')}
-          </h1>
-          <p className="text-base text-muted sm:text-lg">{t('public.hero.lead')}</p>
-          {signedIn ? null : (
-            <div className="flex flex-wrap gap-3">
-              <ButtonLink to="/register">{t('public.hero.register')}</ButtonLink>
-              <a href="#pricing" className={buttonClasses('ghost')}>
-                {t('public.hero.pricing')}
-              </a>
-            </div>
-          )}
+      <MainContent className="mx-auto w-full max-w-6xl flex-1 space-y-16 px-4 py-10 sm:space-y-24 sm:py-14">
+        {/* Первый экран — тезис одним кадром: слева что это и куда нажать,
+            справа испытательная таблица с настоящим оповещением в центре. */}
+        <section
+          aria-labelledby="hero-title"
+          className="grid items-center gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]"
+        >
+          <div className="space-y-6">
+            <h1
+              id="hero-title"
+              className="text-4xl leading-[1.05] text-balance sm:text-5xl lg:text-[3.5rem]"
+            >
+              {t('public.hero.title')}
+            </h1>
+            <p className="max-w-xl text-base text-muted sm:text-lg">{t('public.hero.lead')}</p>
+            {signedIn ? (
+              <ButtonLink to="/widgets" className="px-5 py-2.5 text-base">
+                {t('public.openDashboard')}
+              </ButtonLink>
+            ) : (
+              <div className="flex flex-wrap gap-3">
+                <ButtonLink to="/register" className="px-5 py-2.5 text-base">
+                  {t('public.hero.register')}
+                </ButtonLink>
+                <a href="#pricing" className={buttonClasses('secondary', 'px-5 py-2.5 text-base')}>
+                  {t('public.hero.pricing')}
+                </a>
+              </div>
+            )}
+          </div>
+          <TestCard />
         </section>
 
-        <section aria-labelledby="features" className="space-y-4">
-          <h2 id="features" className="text-xl font-semibold">
+        {/* Программа, а не сетка одинаковых карточек: строки с полосой своего
+            цвета читаются как список каналов, и тот же цвет стример потом
+            встретит у типа виджета в дашборде. */}
+        <section aria-labelledby="features" className="space-y-6">
+          <h2 id="features" className={SECTION_TITLE}>
             {t('public.features.title')}
           </h2>
-          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map((feature) => (
-              <li key={feature} className="rounded-lg border border-border p-4">
+          <ul className="grid border-t border-border md:grid-cols-2 md:gap-x-10">
+            {FEATURES.map(([feature, bar]) => (
+              <li
+                key={feature}
+                className="grid grid-cols-[0.375rem_1fr] gap-x-4 border-b border-border py-5"
+              >
+                <span
+                  aria-hidden="true"
+                  className="row-span-2 mt-1 h-5 rounded-[1px]"
+                  style={{
+                    backgroundColor: bar ? `var(--color-bar-${bar})` : 'var(--color-border-strong)',
+                  }}
+                />
                 <h3 className="font-medium">{t(`public.features.${feature}.title`)}</h3>
-                <p className="mt-1 text-sm text-muted">{t(`public.features.${feature}.text`)}</p>
+                <p className="mt-1 max-w-prose text-sm text-muted">
+                  {t(`public.features.${feature}.text`)}
+                </p>
               </li>
             ))}
           </ul>
         </section>
 
-        <section id="pricing" aria-labelledby="pricing-title" className="scroll-mt-6 space-y-4">
-          <h2 id="pricing-title" className="text-xl font-semibold">
+        <section id="pricing" aria-labelledby="pricing-title" className="scroll-mt-6 space-y-6">
+          <h2 id="pricing-title" className={SECTION_TITLE}>
             {t('public.pricing.title')}
           </h2>
           {/* Состав тарифов — из PLAN_FEATURES: те же числа, что проверяет
@@ -126,15 +173,13 @@ export function LandingPage(): React.JSX.Element {
           <div className="grid gap-4 md:grid-cols-3">
             <Card className="space-y-3">
               <h3 className="font-medium">{t('billing.plans.free.name')}</h3>
-              <p className="text-3xl tabular-nums">
-                {formatMoney({ amountMinor: 0, currency: 'RUB' })}
-              </p>
+              <p className={PRICE}>{formatMoney({ amountMinor: 0, currency: 'RUB' })}</p>
               <PlanFeatures plan="free" />
             </Card>
             {PAID_PLANS.map((plan) => (
-              <Card key={plan} className={cn('space-y-3', plan === 'pro' && 'border-accent/60')}>
+              <Card key={plan} className={cn('space-y-3', plan === 'pro' && 'border-accent')}>
                 <h3 className="font-medium">{t(`billing.plans.${plan}.name`)}</h3>
-                <p className="text-3xl tabular-nums">
+                <p className={PRICE}>
                   {t('public.pricing.month', {
                     amount: formatMoney(PLAN_PRICES[plan].month),
                   })}
@@ -160,7 +205,7 @@ export function LandingPage(): React.JSX.Element {
         </section>
 
         <section id="delivery" aria-labelledby="delivery-title" className="scroll-mt-6 space-y-3">
-          <h2 id="delivery-title" className="text-xl font-semibold">
+          <h2 id="delivery-title" className={SECTION_TITLE}>
             {t('public.delivery.title')}
           </h2>
           <ul className="max-w-3xl list-disc space-y-2 pl-5 text-sm">
@@ -171,7 +216,7 @@ export function LandingPage(): React.JSX.Element {
         </section>
 
         <section id="payment" aria-labelledby="payment-title" className="scroll-mt-6 space-y-3">
-          <h2 id="payment-title" className="text-xl font-semibold">
+          <h2 id="payment-title" className={SECTION_TITLE}>
             {t('public.payment.title')}
           </h2>
           <ul className="max-w-3xl list-disc space-y-2 pl-5 text-sm">
@@ -182,7 +227,7 @@ export function LandingPage(): React.JSX.Element {
         </section>
 
         <section id="contacts" aria-labelledby="contacts-title" className="scroll-mt-6 space-y-3">
-          <h2 id="contacts-title" className="text-xl font-semibold">
+          <h2 id="contacts-title" className={SECTION_TITLE}>
             {t('public.contacts.title')}
           </h2>
           {/* Только способ связи. Имя, статус и ИНН продавца стоят в подвале —
@@ -208,6 +253,9 @@ export function LandingPage(): React.JSX.Element {
     </div>
   );
 }
+
+/** Цена — узким гротеском, как цифры на табло: её ищут глазами первой. */
+const PRICE = 'font-[family-name:var(--font-display)] text-4xl font-medium tabular-nums';
 
 /** Состав тарифа списком. Те же строки, что на странице «Тариф» в дашборде. */
 function PlanFeatures({ plan }: { plan: Plan }): React.JSX.Element {

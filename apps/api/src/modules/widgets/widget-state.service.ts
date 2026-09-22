@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { Widget as PrismaWidget } from '@prisma/client';
 import {
   type AlertEvent,
+  type Currency,
+  CURRENCIES,
   donationSeconds,
   type GoalWidgetConfig,
   goalWidgetConfigSchema,
@@ -173,6 +175,33 @@ export class WidgetStateService {
   }
 
   /**
+   * Основная валюта донатов владельца — в ней считают цель, таймер и топ.
+   *
+   * Валюту не выбирает стример: она приходит с событием. Сложить рубли с
+   * долларами нельзя, а курс мы не считаем (см. цель), поэтому виджеты берут
+   * валюту, в которой донатов больше всего, а остальные в сумму не идут.
+   * Пока донатов нет — рубли: аудитория сервиса русскоязычная.
+   *
+   * Считается по всей истории, а не за период: иначе один долларовый донат
+   * в тихую неделю переключал бы цель на доллары прямо посреди сбора.
+   */
+  async primaryCurrency(userId: string): Promise<Currency> {
+    const rows = await this.prisma.alertEvent.groupBy({
+      by: ['currency'],
+      where: { userId, isTest: false, currency: { not: null } },
+      _count: { _all: true },
+      // Вторая сортировка — по коду: при равенстве валюта не должна
+      // переключаться от запроса к запросу.
+      orderBy: [{ _count: { currency: 'desc' } }, { currency: 'asc' }],
+      take: 1,
+    });
+    const currency = rows[0]?.currency;
+    return currency && (CURRENCIES as readonly string[]).includes(currency)
+      ? (currency as Currency)
+      : 'RUB';
+  }
+
+  /**
    * Реакция на записанное событие: пересчитать и разослать состояние.
    *
    * Одна точка на все типы, потому что один донат меняет сразу всё — сумму
@@ -221,13 +250,14 @@ export class WidgetStateService {
     const config = goalWidgetConfigSchema.parse(widget.config);
     const stored = storedGoalSchema.parse((await this.read(widget.id)) ?? {});
 
-    const raised = await this.raisedMinor(widget.userId, config);
+    const currency = await this.primaryCurrency(widget.userId);
+    const raised = await this.raisedMinor(widget.userId, config, currency);
     return {
       kind: 'goal',
       // Отрицательный итог невозможен по смыслу, но смещение задаёт человек.
       raisedMinor: Math.max(0, raised + stored.offsetMinor),
       targetMinor: config.targetMinor,
-      currency: config.currency,
+      currency,
       // Смещение отдаётся отдельно от суммы: иначе поле «стартовая сумма» в
       // дашборде нечем заполнить, оно всегда показывает ноль, и сохранение
       // формы затирает заданное значение.
@@ -244,12 +274,16 @@ export class WidgetStateService {
    * курсом. Донаты в других валютах в цель не идут — форма настроек об этом
    * говорит прямо.
    */
-  private async raisedMinor(userId: string, config: GoalWidgetConfig): Promise<number> {
+  private async raisedMinor(
+    userId: string,
+    config: GoalWidgetConfig,
+    currency: Currency,
+  ): Promise<number> {
     const result = await this.prisma.alertEvent.aggregate({
       where: {
         userId,
         isTest: false,
-        currency: config.currency,
+        currency,
         type: { in: config.countTypes.map(toPrismaEventType) },
         createdAt: { gte: new Date(config.startedAt) },
       },
@@ -278,6 +312,7 @@ export class WidgetStateService {
       // Часы машины с OBS расходятся с серверными на что угодно. Без этой
       // отметки оверлей не может вычислить поправку и врёт ровно на разницу.
       serverNow: new Date().toISOString(),
+      currency: await this.primaryCurrency(widget.userId),
     };
   }
 
@@ -325,7 +360,7 @@ export class WidgetStateService {
    * Донат добавляет время марафона.
    *
    * Условий три, и каждое существенно: событие должно быть нужного типа, в
-   * валюте таймера (курс мы не считаем — см. цель) и не тестовым. Тестовый
+   * основной валюте донатов (курс мы не считаем — см. цель) и не тестовым. Тестовый
    * алерт из дашборда не должен двигать реальный марафон.
    */
   private async addDonationTime(widget: PrismaWidget, event: AlertEvent): Promise<void> {
@@ -334,8 +369,9 @@ export class WidgetStateService {
     const eligible =
       !event.isTest &&
       event.amount !== null &&
-      event.amount.currency === config.currency &&
-      config.countTypes.includes(event.type);
+      config.countTypes.includes(event.type) &&
+      // Валюта — последним условием: запрос к БД только для подходящих событий.
+      event.amount.currency === (await this.primaryCurrency(widget.userId));
     if (!eligible) {
       // Состояние всё равно рассылаем: конфиг мог поменяться, а оверлей мог
       // переподключиться и не знать текущего остатка.
@@ -357,14 +393,15 @@ export class WidgetStateService {
 
   private async topDonorsState(widget: PrismaWidget): Promise<WidgetState> {
     const config = topDonorsWidgetConfigSchema.parse(widget.config);
+    const currency = await this.primaryCurrency(widget.userId);
     return {
       kind: 'top-donors',
-      currency: config.currency,
-      entries: await this.topDonors(widget.userId, config),
+      currency,
+      entries: await this.topDonors(widget.userId, config, currency),
     };
   }
 
-  private async topDonors(userId: string, config: TopDonorsWidgetConfig) {
+  private async topDonors(userId: string, config: TopDonorsWidgetConfig, currency: Currency) {
     const since =
       config.period === 'all' ? undefined : new Date(Date.now() - PERIOD_MS[config.period]);
 
@@ -373,7 +410,7 @@ export class WidgetStateService {
       where: {
         userId,
         isTest: false,
-        currency: config.currency,
+        currency,
         amountMinor: { not: null },
         ...(since ? { createdAt: { gte: since } } : {}),
       },

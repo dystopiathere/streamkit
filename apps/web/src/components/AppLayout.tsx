@@ -7,6 +7,7 @@ import { useAuthStore, useCurrentUser } from '@/lib/auth-store';
 import {
   Button,
   cn,
+  Logo,
   MainContent,
   MenuButton,
   SkipLink,
@@ -52,9 +53,9 @@ export function AppLayout(): React.JSX.Element {
     <div className="flex min-h-screen flex-col">
       <SkipLink />
       <header className="border-b border-border bg-surface">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 lg:py-3">
-          <Link to="/" aria-label={t('nav.home')} className="py-2 font-semibold tracking-tight">
-            StreamKit
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 lg:py-0">
+          <Link to="/" aria-label={t('nav.home')} className="py-2 lg:mr-2">
+            <Logo />
           </Link>
 
           <MenuButton menu={menu} className="ml-auto lg:hidden" />
@@ -68,17 +69,20 @@ export function AppLayout(): React.JSX.Element {
             )}
           >
             <nav aria-label={t('nav.main')} className="lg:flex-1">
-              <ul className="flex flex-col gap-1 lg:flex-row lg:flex-wrap">
+              <ul className="flex flex-col gap-1 lg:flex-row lg:flex-wrap lg:gap-0.5">
                 {NAV_ITEMS.map((item) => (
                   <li key={item.to}>
                     <NavLink
                       to={item.to}
+                      // Текущий раздел — жёлтой чертой у нижнего края шапки, как
+                      // метка выбранного канала, а не заливкой: жёлтая заливка
+                      // читалась бы как главная кнопка.
                       className={({ isActive }) =>
                         cn(
-                          'block rounded-lg px-3 py-2.5 text-base lg:py-1.5 lg:text-sm',
+                          'block rounded-lg px-3 py-2.5 text-base lg:rounded-none lg:px-2.5 lg:py-4 lg:text-sm',
                           isActive
-                            ? 'bg-accent/20 font-medium text-fg'
-                            : 'text-muted hover:bg-surface-hover hover:text-fg',
+                            ? 'bg-surface-hover font-medium text-fg lg:bg-transparent lg:shadow-[inset_0_-2px_0_var(--color-accent)]'
+                            : 'text-muted hover:bg-surface-hover hover:text-fg lg:hover:bg-transparent',
                         )
                       }
                     >
@@ -106,7 +110,7 @@ export function AppLayout(): React.JSX.Element {
 
       {/* Подвал прижат к низу: на короткой странице («Источники» без
           подключений) он иначе висел бы посреди экрана. */}
-      <MainContent className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">
+      <MainContent className="app-main mx-auto w-full max-w-6xl flex-1 px-4 py-6">
         {/* Уведомление о новой редакции документов — над содержимым любой
             страницы дашборда: раньше узнать об изменении можно было только
             зайдя в «Приватность». Ничего не блокирует. */}

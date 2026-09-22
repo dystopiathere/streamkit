@@ -1,7 +1,22 @@
 import type { AlertEvent } from '@streamkit/contracts';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { cn } from '@streamkit/app-kit';
 import { formatMoney, intlLocale } from '@/lib/locale';
+
+/**
+ * Вес доната — размером по фиксированной шкале, а не цветом.
+ *
+ * Крупный донат должен выделяться в ленте с одного взгляда, но цвет в этом мире
+ * — метка, а не смысл: зелёная сумма у каждой строки ничего не выделяет. Шкала
+ * постоянная, в минорных единицах любой валюты: она про заметность строки, а
+ * не про деньги, и пересчёта курса не требует.
+ */
+function weightClass(amountMinor: number): string {
+  if (amountMinor >= 500_000) return 'text-lg';
+  if (amountMinor >= 100_000) return 'text-base';
+  return 'text-sm';
+}
 
 /** Последние события в окне эфира: коротко, без сообщений — их читают в ленте. */
 export function RecentEvents({ events }: { events: AlertEvent[] }): React.JSX.Element {
@@ -41,7 +56,12 @@ export function RecentEvents({ events }: { events: AlertEvent[] }): React.JSX.El
               </p>
               <div className="shrink-0 text-right">
                 {event.amount ? (
-                  <p className="font-medium text-success tabular-nums">
+                  <p
+                    className={cn(
+                      'font-medium tabular-nums',
+                      weightClass(event.amount.amountMinor),
+                    )}
+                  >
                     {formatMoney(event.amount)}
                   </p>
                 ) : event.count !== null ? (

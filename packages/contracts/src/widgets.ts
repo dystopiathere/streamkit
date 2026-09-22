@@ -193,8 +193,15 @@ export type AlertSound = z.infer<typeof alertSoundSchema>;
  * картинку, звук и время на экране. Раньше настройки были одни на все типы, а
  * шаблон «{username} — {amount}» над фолловером оставлял висящее тире.
  *
- * Порогов два, и работает тот, что есть у события: `minAmountMinor` — у
- * донатов (деньги), `minCount` — у битов, рейдов и подарков (количество).
+ * Порогов два, и работает тот, что есть у события: `minAmounts` — у донатов
+ * (деньги), `minCount` — у битов, рейдов и подарков (количество).
+ *
+ * Порог суммы — СВОЙ У КАЖДОЙ ВАЛЮТЫ, и это единственная настройка оповещений,
+ * которая вообще знает о валюте. Донат сравнивается с порогом своей валюты как
+ * пришёл, без пересчёта по курсу: раньше порог был одним числом, и «100»
+ * отсекало одновременно 100 ₽ и 100 $ — то есть либо пропускало мелочь в
+ * рублях, либо прятало крупные донаты в долларах. В самом оповещении сумма и
+ * валюта показываются как пришли.
  */
 const titleTemplateSchema = z.string().min(1).max(200);
 const messageTemplateSchema = z.string().max(300);
@@ -213,8 +220,14 @@ function alertScenarioSchema(
       layout: alertLayoutSchema.default('center'),
       /** Сколько алерт висит на экране. */
       durationMs: z.number().int().min(1000).max(60000).default(6000),
-      /** События дешевле порога не показываются (0 — показывать все). */
-      minAmountMinor: z.number().int().nonnegative().default(0),
+      /**
+       * Минимальная сумма по валютам, в минорных единицах. Нет ключа или 0 —
+       * донаты в этой валюте показываются все. Значение `undefined` схема
+       * принимает: так форма присылает валюту, поле которой не трогали.
+       */
+      minAmounts: z
+        .partialRecord(currencySchema, z.number().int().nonnegative().optional())
+        .default({}),
       /** События с меньшим количеством не показываются (0 — показывать все). */
       minCount: z.number().int().nonnegative().max(1_000_000).default(0),
       imageUrl: httpsUrlSchema.nullable().default(null),
@@ -293,11 +306,17 @@ export type AlertWidgetConfig = z.infer<typeof alertWidgetConfigSchema>;
  * пересчитать по курсу — значит показать зрителям сумму, которой никто не
  * жертвовал, и менять её задним числом вслед за курсом. Донаты в других валютах
  * в цель не идут, и форма настроек говорит это прямо.
+ *
+ * Валюты в конфиге НЕТ: её не выбирает стример, она приходит с донатами.
+ * Сервер берёт основную валюту владельца — ту, в которой пришло больше всего
+ * донатов (`primaryCurrency`), — и отдаёт её в состоянии виджета. Раньше
+ * валюту выбирали в форме, и цель в рублях у стримера, которому платят в
+ * тенге, молча стояла на нуле. Старое поле `currency` в сохранённых конфигах
+ * схема отбрасывает.
  */
 export const goalWidgetConfigSchema = z.object({
   title: z.string().min(1).max(80).default('Цель'),
   targetMinor: z.number().int().positive().max(1_000_000_000).default(1_000_000),
-  currency: currencySchema.default('RUB'),
   /**
    * С какого момента считаются донаты.
    *
@@ -340,13 +359,13 @@ export const timerWidgetConfigSchema = z.object({
     .default(3600),
   /**
    * Сколько секунд добавляет одна МАЖОРНАЯ единица валюты — один рубль.
+   * Валюта — основная валюта донатов владельца (см. цель), а не поле конфига.
    *
    * Ноль означает «донаты время не добавляют»: таймер бывает нужен и просто как
    * отсчёт до начала эфира.
    */
   secondsPerUnit: z.number().int().min(0).max(3600).default(0),
   countTypes: z.array(alertEventTypeSchema).min(1).default(['donation']),
-  currency: currencySchema.default('RUB'),
   /** Потолок: марафон, который нельзя продлить бесконечно одним крупным донатом. */
   maxSeconds: z
     .number()
@@ -395,7 +414,6 @@ export const topDonorsWidgetConfigSchema = z.object({
   title: z.string().max(80).default('Топ донатеров'),
   period: topDonorsPeriodSchema.default('30d'),
   limit: z.number().int().min(1).max(10).default(5),
-  currency: currencySchema.default('RUB'),
   showAmounts: z.boolean().default(true),
   slots: slotsSchema(TOP_DONORS_SLOTS).prefault({}),
   background: widgetBackgroundSchema.prefault({}),
@@ -762,6 +780,12 @@ export const timerStateSchema = z.object({
   /** Остаток на паузе. null, когда таймер идёт. */
   pausedSeconds: z.number().int().nonnegative().nullable(),
   serverNow: isoDateSchema,
+  /**
+   * В какой валюте донаты продлевают марафон. Нужна дашборду для подписи
+   * «секунд за 1 ₽»: в конфиге валюты больше нет. Дефолт — для снимков,
+   * посланных сервером до появления поля.
+   */
+  currency: currencySchema.default('RUB'),
 });
 export type TimerState = z.infer<typeof timerStateSchema>;
 
@@ -897,8 +921,12 @@ export function shouldShowAlert(
   const scenario = config.scenarios[event.type];
   if (!scenario.enabled) return false;
   if (event.isTest) return true;
-  if (scenario.minAmountMinor > 0) {
-    if (!event.amount || event.amount.amountMinor < scenario.minAmountMinor) return false;
+  // Порог — той валюты, в которой пришёл донат. Донат без суммы (валюта, которой
+  // у нас нет, — см. коннектор DonationAlerts) порогом не отсекается: сравнить
+  // его не с чем, а потерять донат на экране хуже, чем показать лишний.
+  if (event.amount) {
+    const threshold = scenario.minAmounts[event.amount.currency] ?? 0;
+    if (event.amount.amountMinor < threshold) return false;
   }
   if (scenario.minCount > 0) {
     if (event.count === null || event.count < scenario.minCount) return false;

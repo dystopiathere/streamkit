@@ -55,15 +55,7 @@ export function WidgetPreview({
   return (
     // Клетчатый фон вместо сплошного: у оверлея прозрачный фон, и на
     // однотонной подложке невозможно оценить читаемость обводки.
-    <div
-      className="flex h-64 items-center justify-center overflow-hidden rounded-lg"
-      style={{
-        backgroundImage:
-          'linear-gradient(45deg, #2a2a35 25%, transparent 25%), linear-gradient(-45deg, #2a2a35 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2a2a35 75%), linear-gradient(-45deg, transparent 75%, #2a2a35 75%)',
-        backgroundSize: '20px 20px',
-        backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
-      }}
-    >
+    <div className="checkerboard flex h-64 items-center justify-center overflow-hidden rounded-lg">
       <Surface type={type} config={config} state={state} alertScenario={alertScenario} />
     </div>
   );
@@ -100,6 +92,19 @@ function usePlanConfig(config: Record<string, unknown>): Record<string, unknown>
   // Пока тариф не загрузился, показываем как есть: мигать оформлением у того,
   // кто заплатил, хуже, чем один кадр показать лишнее тому, кто нет.
   return features ? applyPlanToConfig(config, features) : config;
+}
+
+/**
+ * Сам виджет без подложки предпросмотра — для кадра раскладки, где он лежит под
+ * ручками элементов: двигают то, что видно, а не подписи в пустом кадре.
+ */
+export function WidgetSurface(props: {
+  type: WidgetType;
+  config: Record<string, unknown>;
+  state: WidgetState | null;
+  alertScenario: AlertEventType;
+}): React.JSX.Element | null {
+  return <Surface {...props} />;
 }
 
 function Surface({
@@ -148,7 +153,7 @@ function Surface({
                   // Треть цели: полоса видна, но очевидно, что это пример.
                   raisedMinor: Math.round(goal.targetMinor / 3),
                   targetMinor: goal.targetMinor,
-                  currency: goal.currency,
+                  currency: 'RUB',
                   offsetMinor: 0,
                 }
           }
@@ -169,6 +174,7 @@ function Surface({
                   endsAt: null,
                   pausedSeconds: timer.initialSeconds,
                   serverNow: new Date().toISOString(),
+                  currency: 'RUB',
                 }
           }
         />
@@ -196,7 +202,7 @@ function Surface({
               ? state
               : {
                   kind: 'top-donors',
-                  currency: top.currency,
+                  currency: 'RUB',
                   entries: sample.donors.slice(0, top.limit),
                 }
           }

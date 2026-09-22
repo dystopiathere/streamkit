@@ -82,12 +82,33 @@ export function ChatPanel({
       </header>
 
       {chats.length === 0 ? (
-        <p className="px-4 py-6 text-sm text-muted">
-          {t('stream.chat.none')}{' '}
-          <Link to="/analytics" className="underline hover:text-fg">
-            {t('stream.connectPlatform')}
-          </Link>
-        </p>
+        // «Нет сигнала» — пустое состояние этого мира: серая шкала таблицы,
+        // которую канал показывает, пока в него ничего не идёт.
+        <div className="space-y-4 px-4 py-6">
+          <div
+            aria-hidden="true"
+            className="grid h-3 max-w-xs grid-cols-8 overflow-hidden rounded-[2px]"
+          >
+            {[
+              '#0d0d0c',
+              '#262523',
+              '#403f3b',
+              '#5c5a55',
+              '#7a7872',
+              '#9b9891',
+              '#c2bfb7',
+              '#eeeae2',
+            ].map((color) => (
+              <span key={color} style={{ backgroundColor: color }} />
+            ))}
+          </div>
+          <p className="max-w-prose text-sm text-muted">
+            {t('stream.chat.none')}{' '}
+            <Link to="/analytics" className="underline hover:text-fg">
+              {t('stream.connectPlatform')}
+            </Link>
+          </p>
+        </div>
       ) : (
         <>
           {/* role="log" без объявлений: чат идёт десятками строк в минуту, и

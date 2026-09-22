@@ -76,10 +76,13 @@ export function TimerDisplay({ config, state }: TimerDisplayProps): React.JSX.El
       }}
     >
       {config.title ? (
-        <div style={{ ...text, ...slotCss(config.slots.title, halfSize) }}>{config.title}</div>
+        <div data-slot="title" style={{ ...text, ...slotCss(config.slots.title, halfSize) }}>
+          {config.title}
+        </div>
       ) : null}
 
       <div
+        data-slot="clock"
         style={{
           ...text,
           ...slotCss(config.slots.clock, config.text.fontSize),

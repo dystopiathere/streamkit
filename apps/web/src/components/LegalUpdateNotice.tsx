@@ -73,7 +73,7 @@ export function LegalUpdateNotice(): React.JSX.Element | null {
   return (
     <div
       role="status"
-      className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-card border border-accent/40 bg-accent/10 px-4 py-3 text-sm"
+      className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-card border border-border-strong bg-surface-hover px-4 py-3 text-sm"
     >
       <div className="min-w-0 space-y-1">
         <p>{needsConsent ? t('legalUpdate.reconsent') : t('legalUpdate.notify')}</p>

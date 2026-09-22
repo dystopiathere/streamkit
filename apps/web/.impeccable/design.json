@@ -1,0 +1,639 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-22T05:18:21.254968+00:00",
+  "title": "Design System: StreamKit",
+  "extensions": {
+    "colorMeta": {
+      "bg": {
+        "role": "neutral",
+        "displayName": "Графит фона",
+        "canonical": "oklch(0.17 0.004 90)",
+        "tonalRamp": [
+          "oklch(0.15 0.004 90)",
+          "oklch(0.26 0.004 90)",
+          "oklch(0.37 0.004 90)",
+          "oklch(0.48 0.004 90)",
+          "oklch(0.6 0.004 90)",
+          "oklch(0.72 0.004 90)",
+          "oklch(0.84 0.004 90)",
+          "oklch(0.95 0.004 90)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Графит поверхности",
+        "canonical": "oklch(0.215 0.005 90)",
+        "tonalRamp": [
+          "oklch(0.15 0.005 90)",
+          "oklch(0.26 0.005 90)",
+          "oklch(0.37 0.005 90)",
+          "oklch(0.48 0.005 90)",
+          "oklch(0.6 0.005 90)",
+          "oklch(0.72 0.005 90)",
+          "oklch(0.84 0.005 90)",
+          "oklch(0.95 0.005 90)"
+        ]
+      },
+      "surface-hover": {
+        "role": "neutral",
+        "displayName": "Ступень наведения",
+        "canonical": "oklch(0.255 0.006 90)",
+        "tonalRamp": [
+          "oklch(0.15 0.006 90)",
+          "oklch(0.26 0.006 90)",
+          "oklch(0.37 0.006 90)",
+          "oklch(0.48 0.006 90)",
+          "oklch(0.6 0.006 90)",
+          "oklch(0.72 0.006 90)",
+          "oklch(0.84 0.006 90)",
+          "oklch(0.95 0.006 90)"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Разделитель",
+        "canonical": "oklch(0.31 0.006 90)",
+        "tonalRamp": [
+          "oklch(0.15 0.006 90)",
+          "oklch(0.26 0.006 90)",
+          "oklch(0.37 0.006 90)",
+          "oklch(0.48 0.006 90)",
+          "oklch(0.6 0.006 90)",
+          "oklch(0.72 0.006 90)",
+          "oklch(0.84 0.006 90)",
+          "oklch(0.95 0.006 90)"
+        ]
+      },
+      "border-strong": {
+        "role": "neutral",
+        "displayName": "Сильная рамка",
+        "canonical": "oklch(0.56 0.008 90)",
+        "tonalRamp": [
+          "oklch(0.15 0.008 90)",
+          "oklch(0.26 0.008 90)",
+          "oklch(0.37 0.008 90)",
+          "oklch(0.48 0.008 90)",
+          "oklch(0.6 0.008 90)",
+          "oklch(0.72 0.008 90)",
+          "oklch(0.84 0.008 90)",
+          "oklch(0.95 0.008 90)"
+        ]
+      },
+      "fg": {
+        "role": "neutral",
+        "displayName": "Тёплый белый",
+        "canonical": "oklch(0.95 0.012 90)",
+        "tonalRamp": [
+          "oklch(0.15 0.012 90)",
+          "oklch(0.26 0.012 90)",
+          "oklch(0.37 0.012 90)",
+          "oklch(0.48 0.012 90)",
+          "oklch(0.6 0.012 90)",
+          "oklch(0.72 0.012 90)",
+          "oklch(0.84 0.012 90)",
+          "oklch(0.95 0.012 90)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Приглушённый",
+        "canonical": "oklch(0.74 0.01 90)",
+        "tonalRamp": [
+          "oklch(0.15 0.01 90)",
+          "oklch(0.26 0.01 90)",
+          "oklch(0.37 0.01 90)",
+          "oklch(0.48 0.01 90)",
+          "oklch(0.6 0.01 90)",
+          "oklch(0.72 0.01 90)",
+          "oklch(0.84 0.01 90)",
+          "oklch(0.95 0.01 90)"
+        ]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Жёлтый сигнал",
+        "canonical": "oklch(0.87 0.165 96)",
+        "tonalRamp": [
+          "oklch(0.15 0.165 96)",
+          "oklch(0.26 0.165 96)",
+          "oklch(0.37 0.165 96)",
+          "oklch(0.48 0.165 96)",
+          "oklch(0.6 0.165 96)",
+          "oklch(0.72 0.165 96)",
+          "oklch(0.84 0.165 96)",
+          "oklch(0.95 0.165 96)"
+        ]
+      },
+      "accent-fg": {
+        "role": "primary",
+        "displayName": "Текст на сигнале",
+        "canonical": "oklch(0.2 0.01 90)",
+        "tonalRamp": [
+          "oklch(0.15 0.01 90)",
+          "oklch(0.26 0.01 90)",
+          "oklch(0.37 0.01 90)",
+          "oklch(0.48 0.01 90)",
+          "oklch(0.6 0.01 90)",
+          "oklch(0.72 0.01 90)",
+          "oklch(0.84 0.01 90)",
+          "oklch(0.95 0.01 90)"
+        ]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Красный текста",
+        "canonical": "oklch(0.7 0.17 25)",
+        "tonalRamp": [
+          "oklch(0.15 0.17 25)",
+          "oklch(0.26 0.17 25)",
+          "oklch(0.37 0.17 25)",
+          "oklch(0.48 0.17 25)",
+          "oklch(0.6 0.17 25)",
+          "oklch(0.72 0.17 25)",
+          "oklch(0.84 0.17 25)",
+          "oklch(0.95 0.17 25)"
+        ]
+      },
+      "danger-strong": {
+        "role": "tertiary",
+        "displayName": "Красный кнопки",
+        "canonical": "oklch(0.54 0.2 25)",
+        "tonalRamp": [
+          "oklch(0.15 0.2 25)",
+          "oklch(0.26 0.2 25)",
+          "oklch(0.37 0.2 25)",
+          "oklch(0.48 0.2 25)",
+          "oklch(0.6 0.2 25)",
+          "oklch(0.72 0.2 25)",
+          "oklch(0.84 0.2 25)",
+          "oklch(0.95 0.2 25)"
+        ]
+      },
+      "success": {
+        "role": "tertiary",
+        "displayName": "Зелёный статуса",
+        "canonical": "oklch(0.74 0.15 150)",
+        "tonalRamp": [
+          "oklch(0.15 0.15 150)",
+          "oklch(0.26 0.15 150)",
+          "oklch(0.37 0.15 150)",
+          "oklch(0.48 0.15 150)",
+          "oklch(0.6 0.15 150)",
+          "oklch(0.72 0.15 150)",
+          "oklch(0.84 0.15 150)",
+          "oklch(0.95 0.15 150)"
+        ]
+      },
+      "warning": {
+        "role": "tertiary",
+        "displayName": "Оранжевый внимания",
+        "canonical": "oklch(0.78 0.14 62)",
+        "tonalRamp": [
+          "oklch(0.15 0.14 62)",
+          "oklch(0.26 0.14 62)",
+          "oklch(0.37 0.14 62)",
+          "oklch(0.48 0.14 62)",
+          "oklch(0.6 0.14 62)",
+          "oklch(0.72 0.14 62)",
+          "oklch(0.84 0.14 62)",
+          "oklch(0.95 0.14 62)"
+        ]
+      },
+      "bar-alerts": {
+        "role": "secondary",
+        "displayName": "Пурпурная полоса (метка типа виджета)",
+        "tonalRamp": [
+          "oklch(0.15 0.17 350)",
+          "oklch(0.26 0.17 350)",
+          "oklch(0.37 0.17 350)",
+          "oklch(0.48 0.17 350)",
+          "oklch(0.6 0.17 350)",
+          "oklch(0.72 0.17 350)",
+          "oklch(0.84 0.17 350)",
+          "oklch(0.95 0.17 350)"
+        ]
+      },
+      "bar-goal": {
+        "role": "secondary",
+        "displayName": "Зелёная полоса (метка типа виджета)",
+        "tonalRamp": [
+          "oklch(0.15 0.14 148)",
+          "oklch(0.26 0.14 148)",
+          "oklch(0.37 0.14 148)",
+          "oklch(0.48 0.14 148)",
+          "oklch(0.6 0.14 148)",
+          "oklch(0.72 0.14 148)",
+          "oklch(0.84 0.14 148)",
+          "oklch(0.95 0.14 148)"
+        ]
+      },
+      "bar-top-donors": {
+        "role": "secondary",
+        "displayName": "Синяя полоса (метка типа виджета)",
+        "tonalRamp": [
+          "oklch(0.15 0.15 275)",
+          "oklch(0.26 0.15 275)",
+          "oklch(0.37 0.15 275)",
+          "oklch(0.48 0.15 275)",
+          "oklch(0.6 0.15 275)",
+          "oklch(0.72 0.15 275)",
+          "oklch(0.84 0.15 275)",
+          "oklch(0.95 0.15 275)"
+        ]
+      },
+      "bar-guests": {
+        "role": "secondary",
+        "displayName": "Оранжевая полоса (метка типа виджета)",
+        "tonalRamp": [
+          "oklch(0.15 0.13 60)",
+          "oklch(0.26 0.13 60)",
+          "oklch(0.37 0.13 60)",
+          "oklch(0.48 0.13 60)",
+          "oklch(0.6 0.13 60)",
+          "oklch(0.72 0.13 60)",
+          "oklch(0.84 0.13 60)",
+          "oklch(0.95 0.13 60)"
+        ]
+      },
+      "bar-timer": {
+        "role": "secondary",
+        "displayName": "Голубая полоса (метка типа виджета)",
+        "tonalRamp": [
+          "oklch(0.15 0.1 210)",
+          "oklch(0.26 0.1 210)",
+          "oklch(0.37 0.1 210)",
+          "oklch(0.48 0.1 210)",
+          "oklch(0.6 0.1 210)",
+          "oklch(0.72 0.1 210)",
+          "oklch(0.84 0.1 210)",
+          "oklch(0.95 0.1 210)"
+        ]
+      },
+      "bar-chat": {
+        "role": "secondary",
+        "displayName": "Фиолетовая полоса (метка типа виджета)",
+        "tonalRamp": [
+          "oklch(0.15 0.16 295)",
+          "oklch(0.26 0.16 295)",
+          "oklch(0.37 0.16 295)",
+          "oklch(0.48 0.16 295)",
+          "oklch(0.6 0.16 295)",
+          "oklch(0.72 0.16 295)",
+          "oklch(0.84 0.16 295)",
+          "oklch(0.95 0.16 295)"
+        ]
+      },
+      "step-0": {
+        "role": "neutral",
+        "displayName": "Серая шкала, ступень 0 (рисунок таблицы)",
+        "tonalRamp": [
+          "#0d0d0c",
+          "#262523",
+          "#403f3b",
+          "#5c5a55",
+          "#7a7872",
+          "#9b9891",
+          "#c2bfb7",
+          "#eeeae2"
+        ]
+      },
+      "step-1": {
+        "role": "neutral",
+        "displayName": "Серая шкала, ступень 1 (рисунок таблицы)",
+        "tonalRamp": [
+          "#0d0d0c",
+          "#262523",
+          "#403f3b",
+          "#5c5a55",
+          "#7a7872",
+          "#9b9891",
+          "#c2bfb7",
+          "#eeeae2"
+        ]
+      },
+      "step-2": {
+        "role": "neutral",
+        "displayName": "Серая шкала, ступень 2 (рисунок таблицы)",
+        "tonalRamp": [
+          "#0d0d0c",
+          "#262523",
+          "#403f3b",
+          "#5c5a55",
+          "#7a7872",
+          "#9b9891",
+          "#c2bfb7",
+          "#eeeae2"
+        ]
+      },
+      "step-3": {
+        "role": "neutral",
+        "displayName": "Серая шкала, ступень 3 (рисунок таблицы)",
+        "tonalRamp": [
+          "#0d0d0c",
+          "#262523",
+          "#403f3b",
+          "#5c5a55",
+          "#7a7872",
+          "#9b9891",
+          "#c2bfb7",
+          "#eeeae2"
+        ]
+      },
+      "step-4": {
+        "role": "neutral",
+        "displayName": "Серая шкала, ступень 4 (рисунок таблицы)",
+        "tonalRamp": [
+          "#0d0d0c",
+          "#262523",
+          "#403f3b",
+          "#5c5a55",
+          "#7a7872",
+          "#9b9891",
+          "#c2bfb7",
+          "#eeeae2"
+        ]
+      },
+      "step-5": {
+        "role": "neutral",
+        "displayName": "Серая шкала, ступень 5 (рисунок таблицы)",
+        "tonalRamp": [
+          "#0d0d0c",
+          "#262523",
+          "#403f3b",
+          "#5c5a55",
+          "#7a7872",
+          "#9b9891",
+          "#c2bfb7",
+          "#eeeae2"
+        ]
+      },
+      "step-6": {
+        "role": "neutral",
+        "displayName": "Серая шкала, ступень 6 (рисунок таблицы)",
+        "tonalRamp": [
+          "#0d0d0c",
+          "#262523",
+          "#403f3b",
+          "#5c5a55",
+          "#7a7872",
+          "#9b9891",
+          "#c2bfb7",
+          "#eeeae2"
+        ]
+      },
+      "step-7": {
+        "role": "neutral",
+        "displayName": "Серая шкала, ступень 7 (рисунок таблицы)",
+        "tonalRamp": [
+          "#0d0d0c",
+          "#262523",
+          "#403f3b",
+          "#5c5a55",
+          "#7a7872",
+          "#9b9891",
+          "#c2bfb7",
+          "#eeeae2"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Только h1 главной."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Заголовки разделов главной."
+      },
+      "plate": {
+        "displayName": "Табличка",
+        "purpose": "H1 страницы дашборда на светлой плашке."
+      },
+      "price": {
+        "displayName": "Цена",
+        "purpose": "Цены тарифов."
+      },
+      "metric": {
+        "displayName": "Метрика",
+        "purpose": "Время эфира и число зрителей."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Заголовки карточек и секций."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Основной текст интерфейса."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Подписи, подсказки, время, чипы."
+      }
+    },
+    "shadows": [
+      {
+        "name": "bottom-bar",
+        "value": "0 -8px 24px rgb(0 0 0 / 0.35)",
+        "purpose": "Панель сохранения, прибитая к низу окна на телефоне."
+      },
+      {
+        "name": "lifted-handle",
+        "value": "0 4px 14px rgb(0 0 0 / 0.45)",
+        "purpose": "Выбранный элемент на холсте раскладки."
+      },
+      {
+        "name": "test-card-circle",
+        "value": "0 12px 40px rgb(0 0 0 / 0.45)",
+        "purpose": "Подложка оповещения в центре таблицы на главной."
+      }
+    ],
+    "motion": [
+      {
+        "name": "press",
+        "value": "transform 150ms ease-out; scale(0.97)",
+        "purpose": "Проседание кнопки, пока её держат."
+      },
+      {
+        "name": "ease-out-strong",
+        "value": "cubic-bezier(0.23, 1, 0.32, 1)",
+        "purpose": "Бегунок ползунка (120 мс) и развёртка полос таблицы (700 мс)."
+      },
+      {
+        "name": "test-card-sweep",
+        "value": "clip-path: inset(0 100% 0 0) -> inset(0) 700ms",
+        "purpose": "Полосы таблицы один раз «выходят в эфир» при загрузке главной."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "animation/transition-duration 0.01ms",
+        "purpose": "prefers-reduced-motion гасит всё движение глобально (theme.css)."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "content-max",
+        "value": "72rem"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Главная кнопка",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Единственная жёлтая заливка интерфейса: главное действие экрана. Выключенная — тусклая нейтраль.",
+      "html": "<button class=\"ds-btn-primary\">Создать аккаунт</button> <button class=\"ds-btn-primary\" disabled>Сохранить</button>",
+      "css": ".ds-btn-primary{font-family:Inter,system-ui,sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid transparent;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:500;background:var(--color-accent,oklch(0.87 0.165 96));color:var(--color-accent-fg,oklch(0.2 0.01 90));cursor:pointer;transition:opacity 150ms ease-out,transform 150ms ease-out,background-color 150ms ease-out}.ds-btn-primary:hover{opacity:.9}.ds-btn-primary:active{transform:scale(.97)}.ds-btn-primary:focus-visible{outline:2px solid var(--color-accent,oklch(0.87 0.165 96));outline-offset:2px}.ds-btn-primary:disabled{background:transparent;border-color:var(--color-border,oklch(0.31 0.006 90));color:var(--color-muted,oklch(0.74 0.01 90));opacity:.6;cursor:not-allowed;transform:none}"
+    },
+    {
+      "name": "Вторичная кнопка",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Второе действие рядом с главным и действия в строках списков.",
+      "html": "<button class=\"ds-btn-secondary\">Настроить</button>",
+      "css": ".ds-btn-secondary{font-family:Inter,system-ui,sans-serif;display:inline-flex;align-items:center;gap:8px;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:500;background:var(--color-surface,oklch(0.215 0.005 90));color:var(--color-fg,oklch(0.95 0.012 90));border:1px solid var(--color-border-strong,oklch(0.56 0.008 90));cursor:pointer;transition:background-color 150ms ease-out,transform 150ms ease-out}.ds-btn-secondary:hover{background:var(--color-surface-hover,oklch(0.255 0.006 90))}.ds-btn-secondary:active{transform:scale(.97)}.ds-btn-secondary:focus-visible{outline:2px solid var(--color-accent,oklch(0.87 0.165 96));outline-offset:2px}"
+    },
+    {
+      "name": "Призрачная кнопка",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Тихие действия: «Удалить» в строке, «Отменить», «Выйти».",
+      "html": "<button class=\"ds-btn-ghost\">Отменить</button>",
+      "css": ".ds-btn-ghost{font-family:Inter,system-ui,sans-serif;border:0;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:500;background:transparent;color:var(--color-muted,oklch(0.74 0.01 90));cursor:pointer;transition:background-color 150ms ease-out,transform 150ms ease-out}.ds-btn-ghost:hover{color:var(--color-fg,oklch(0.95 0.012 90));background:var(--color-surface,oklch(0.215 0.005 90))}.ds-btn-ghost:active{transform:scale(.97)}.ds-btn-ghost:focus-visible{outline:2px solid var(--color-accent,oklch(0.87 0.165 96));outline-offset:2px}"
+    },
+    {
+      "name": "Поле ввода",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Текстовое поле: фон страницы, сильная рамка, подпись над полем.",
+      "html": "<label class=\"ds-label\" for=\"ds-i\">Название виджета</label><input id=\"ds-i\" class=\"ds-input\" placeholder=\"Цель на микрофон\">",
+      "css": ".ds-label{font-family:Inter,system-ui,sans-serif;display:block;margin-bottom:6px;font-size:14px;font-weight:500;color:var(--color-muted,oklch(0.74 0.01 90))}.ds-input{font-family:Inter,system-ui,sans-serif;width:100%;border-radius:8px;border:1px solid var(--color-border-strong,oklch(0.56 0.008 90));background:var(--color-bg,oklch(0.17 0.004 90));color:var(--color-fg,oklch(0.95 0.012 90));padding:8px 12px;font-size:14px}.ds-input::placeholder{color:var(--color-muted,oklch(0.74 0.01 90))}.ds-input:focus-visible{outline:2px solid var(--color-accent,oklch(0.87 0.165 96));outline-offset:2px}.ds-input[aria-invalid=true]{border-color:var(--color-danger,oklch(0.7 0.17 25))}"
+    },
+    {
+      "name": "Ползунок с точным числом",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "RangeField: жёлтая заполненная дорожка, бегунок в жёлтом кольце, поле точного числа.",
+      "html": "<div class=\"ds-range\"><div class=\"ds-range-head\"><label for=\"ds-r\">Размер</label><span><input class=\"ds-range-num\" value=\"32\" aria-label=\"Размер, px\"> px</span></div><input id=\"ds-r\" type=\"range\" class=\"ds-range-input\" min=\"8\" max=\"200\" value=\"32\" style=\"--fill:12.5%\"></div>",
+      "css": ".ds-range{font-family:Inter,system-ui,sans-serif;color:var(--color-muted,oklch(0.74 0.01 90));font-size:14px}.ds-range-head{display:flex;justify-content:space-between;align-items:center}.ds-range-num{width:64px;text-align:right;border:1px solid var(--color-border-strong,oklch(0.56 0.008 90));border-radius:6px;background:var(--color-bg,oklch(0.17 0.004 90));color:var(--color-fg,oklch(0.95 0.012 90));padding:2px 8px;font-variant-numeric:tabular-nums}.ds-range-input{appearance:none;width:100%;height:20px;background:transparent;margin-top:6px}.ds-range-input::-webkit-slider-runnable-track{height:4px;border-radius:999px;background:linear-gradient(to right,var(--color-accent,oklch(0.87 0.165 96)) 0 var(--fill),var(--color-border,oklch(0.31 0.006 90)) var(--fill) 100%)}.ds-range-input::-webkit-slider-thumb{appearance:none;width:16px;height:16px;margin-top:-6px;border-radius:999px;background:var(--color-fg,oklch(0.95 0.012 90));border:3px solid var(--color-accent,oklch(0.87 0.165 96));transition:transform 120ms cubic-bezier(.23,1,.32,1)}.ds-range-input:hover::-webkit-slider-thumb{transform:scale(1.15)}.ds-range-input:focus-visible{outline:2px solid var(--color-accent,oklch(0.87 0.165 96));outline-offset:2px}"
+    },
+    {
+      "name": "Навигация шапки",
+      "kind": "nav",
+      "refersTo": "nav-link-active",
+      "description": "Текущий раздел — жёлтая черта у нижнего края шапки, без заливки.",
+      "html": "<nav class=\"ds-nav\"><a href=\"#\">Эфир</a><a href=\"#\" aria-current=\"page\">Виджеты</a><a href=\"#\">События</a></nav>",
+      "css": ".ds-nav{font-family:Inter,system-ui,sans-serif;display:flex;gap:2px;background:var(--color-surface,oklch(0.215 0.005 90));border-bottom:1px solid var(--color-border,oklch(0.31 0.006 90))}.ds-nav a{padding:16px 10px;font-size:14px;color:var(--color-muted,oklch(0.74 0.01 90));text-decoration:none}.ds-nav a:hover{color:var(--color-fg,oklch(0.95 0.012 90))}.ds-nav a[aria-current=page]{color:var(--color-fg,oklch(0.95 0.012 90));font-weight:500;box-shadow:inset 0 -2px 0 var(--color-accent,oklch(0.87 0.165 96))}.ds-nav a:focus-visible{outline:2px solid var(--color-accent,oklch(0.87 0.165 96));outline-offset:2px}"
+    },
+    {
+      "name": "Карточка с меткой типа",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Карточка виджета: плоская поверхность, метка типа полосой и словом.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-title\">Цель на микрофон</div><span class=\"ds-type\"><span class=\"ds-type-bar\"></span>Цель сбора</span></div>",
+      "css": ".ds-card{font-family:Inter,system-ui,sans-serif;border:1px solid var(--color-border,oklch(0.31 0.006 90));border-radius:12px;background:var(--color-surface,oklch(0.215 0.005 90));padding:20px;color:var(--color-fg,oklch(0.95 0.012 90))}.ds-card-title{font-size:16px;font-weight:500;margin-bottom:4px}.ds-type{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--color-muted,oklch(0.74 0.01 90))}.ds-type-bar{width:6px;height:12px;border-radius:1px;background:var(--color-bar-goal,#40a85a)}"
+    },
+    {
+      "name": "Статус и пометка «Про»",
+      "kind": "chip",
+      "refersTo": "status-pill",
+      "description": "Статус — обведённый круглый чип со словом; «Про» — нейтральная обведённая пометка.",
+      "html": "<span class=\"ds-pill ds-pill-success\">В эфире</span> <span class=\"ds-pill\">Не в эфире</span> <span class=\"ds-pro\">Про</span>",
+      "css": ".ds-pill{font-family:Inter,system-ui,sans-serif;display:inline-flex;align-items:center;border:1px solid var(--color-border-strong,oklch(0.56 0.008 90));border-radius:9999px;padding:2px 8px;font-size:12px;font-weight:500;color:var(--color-muted,oklch(0.74 0.01 90));white-space:nowrap}.ds-pill-success{border-color:color-mix(in oklch,var(--color-success,oklch(0.74 0.15 150)) 60%,transparent);color:var(--color-success,oklch(0.74 0.15 150))}.ds-pro{font-family:Inter,system-ui,sans-serif;border:1px solid var(--color-border-strong,oklch(0.56 0.008 90));border-radius:2px;padding:1px 4px;font-size:10px;font-weight:600;letter-spacing:.025em;text-transform:uppercase;color:var(--color-muted,oklch(0.74 0.01 90))}"
+    },
+    {
+      "name": "Табличка заголовка страницы",
+      "kind": "custom",
+      "refersTo": "page-plate",
+      "description": "H1 дашборда — надпись опознавания канала: светлая плашка, тёмные прописные узким гротеском.",
+      "html": "<h1 class=\"ds-plate\">Виджеты</h1>",
+      "css": ".ds-plate{display:inline-block;margin:0;font-family:Oswald,'Arial Narrow','Roboto Condensed',sans-serif;font-size:24px;font-weight:600;text-transform:uppercase;letter-spacing:.01em;line-height:1.15;padding:.08em .4em .12em;border-radius:2px;background:var(--color-fg,oklch(0.95 0.012 90));color:var(--color-bg,oklch(0.17 0.004 90))}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Настроечная таблица",
+    "overview": "Эфир калибруют до выхода, и интерфейс StreamKit говорит языком телевизионной испытательной таблицы: графитовые ступени серой шкалы, едва тёплый белый текст, заголовки узким гротеском прописными, как надписи опознавания канала. Цвет в этом мире — не настроение и не заливка, а метка: полосы таблицы обозначают типы виджетов, жёлтый сигнал — главное действие, фокус и отметку «вы здесь». Всё остальное ахроматично. Это сознательный отказ от тёмного SaaS-дашборда с неоновым акцентом и градиентами.\n\nТёмная палитра — не стиль, а условие работы: дашборд открыт рядом с OBS во время стрима, часто на втором мониторе в тёмной комнате. Дашборд работает в режиме «Управлять» — плотные карточки, табличные числа, прилипающая панель сохранения; главная — в режиме «Убедить»: крупный заголовок-табличка и настоящая испытательная таблица с живым оповещением в центре, нарисованным тем же рендерером, что и оверлей OBS.\n\nКонтраст каждой пары токенов посчитан по WCAG 2.2 и записан в `packages/app-kit/src/theme.css`: текст не ниже 4.5:1, границы элементов управления не ниже 3:1. Состояние никогда не передаётся одним цветом: рядом всегда слово, знак, форма или размер.",
+    "keyCharacteristics": [
+      "Ступени серой шкалы вместо «тёмной темы с оттенком»: хрома нейтралей ≤ 0.012, тон 90 (бумага таблицы).",
+      "Цвет только в метках: полоса типа виджета 6×12 px рядом с названием типа.",
+      "Жёлтый сигнал — главное действие, фокус и отметка текущего положения; никогда не заливка плашки и не бейдж.",
+      "Узкий гротеск Oswald прописными — только в коротких заголовках; всё остальное Inter.",
+      "Плоско: глубина — ступенью серого и рамкой, тени только у того, что парит над кадром.",
+      "Рисунок таблицы (полосы, серая шкала, крест и круг центра) — материал мира, а не декор: из него собраны знак, главная, пустые состояния и холст раскладки."
+    ],
+    "rules": [
+      {
+        "name": "Правило метки",
+        "body": "Цвет полосы стоит рядом с названием типа и никогда не несёт смысл один. Полосы — только для шести типов виджетов; у пункта, который не тип виджета, метка нейтральная (`border-strong`).",
+        "section": "colors"
+      },
+      {
+        "name": "Правило одного сигнала",
+        "body": "Жёлтый — главное действие, фокус и черта «вы здесь». Он бывает заливкой только у главной кнопки. Выбор, уведомления и пометки тарифа — нейтральные: `surface-hover`, рамка, приглушённый текст.",
+        "section": "colors"
+      },
+      {
+        "name": "Правило ахроматичного тренда",
+        "body": "Направление числа (рост/падение зрителей) — стрелкой и знаком «+»/«−», рост светлее (`fg`), падение приглушённее (`muted`). Зелёный рост читался бы как статус «успех».",
+        "section": "colors"
+      },
+      {
+        "name": "Правило таблички",
+        "body": "Прописной узкий гротеск — только для коротких заголовков (h1, заголовки разделов главной, цены, знак). Базовое правило темы задаёт его одному `h1`: прописные на длинном тексте читаются по буквам.",
+        "section": "typography"
+      },
+      {
+        "name": "Правило разрядов",
+        "body": "Любое число, которое сравнивают или которое меняется на глазах, — `tabular-nums`, в таблицах выровнено вправо.",
+        "section": "typography"
+      },
+      {
+        "name": "Правило веса доната",
+        "body": "Заметность события в ленте — размером по постоянной шкале в минорных единицах (≥ 5 000 ₽ → 1.125rem, ≥ 1 000 ₽ → 1rem, иначе 0.875rem), а не цветом.",
+        "section": "typography"
+      },
+      {
+        "name": "Правило кадра",
+        "body": "Холст раскладки и предпросмотр — кадр 16:9 на клетке прозрачности (`checkerboard`, клетка 20 px). Холст рисует безопасные зоны пунктиром `border-strong` (действие 90 %, титры 80 %), крест и круг центра линиями `border`, а под ручками — настоящий виджет без ввода. Ручки привязаны к измеренным позициям элементов (`data-slot`), позиции хранятся процентами кадра, не пикселями.",
+        "section": "layout"
+      },
+      {
+        "name": "Правило плоского по умолчанию",
+        "body": "В покое поверхность плоская; тень — только у слоя поверх кадра или поверх страницы.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** берите цвета только из токенов темы; новый токен цвета — с расчётом контраста в комментарии `theme.css`.",
+      "**Do** ставьте полосу `bar-*` только рядом с названием типа виджета; у всего остального метка нейтральная `border-strong`.",
+      "**Do** оставляйте жёлтой заливке одну роль — главную кнопку; выбор, текущее положение и прогресс отмечайте жёлтой чертой, кольцом или линией.",
+      "**Do** выключенную главную кнопку показывайте тусклой нейтралью (рамка `border`, текст `muted`, прозрачность 0.6).",
+      "**Do** передавайте состояние словом, знаком, формой или размером вместе с цветом: «в эфире», «+120 ↑», зачёркнутый выключенный сценарий, размер суммы доната.",
+      "**Do** делайте заголовок страницы дашборда табличкой (`fg` на `bg`, Oswald прописными).",
+      "**Do** задавайте каждое значение в диапазоне ползунком `RangeField` с полем для точного числа.",
+      "**Do** рисуйте пустое состояние «нет сигнала» серой шкалой, а не иллюстрацией.",
+      "**Do** уважайте `prefers-reduced-motion`: правило темы гасит анимации и переходы, а всё анимированное (развёртка таблицы) видно и без движения."
+    ],
+    "donts": [
+      "**Don't** используйте жёлтый как заливку плашки, бейджа, выбранного пункта или уведомления.",
+      "**Don't** красьте рост зелёным, а падение красным: тренд ахроматичен.",
+      "**Don't** используйте `border` как рамку поля ввода — только `border-strong`; `danger` не фон, `danger-strong` не текст.",
+      "**Don't** ставьте переход цвета на вкладки и навигацию.",
+      "**Don't** набирайте прописным узким гротеском длинный текст, подписи и кнопки.",
+      "**Don't** добавляйте тени карточкам и градиенты поверхностям: глубина — ступенью серого.",
+      "**Don't** подставляйте переменную темы через `style`/`var()`, не объявив её в `@theme static`: Tailwind 4 молча выбросит её из сборки."
+    ]
+  }
+}

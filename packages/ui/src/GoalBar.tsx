@@ -23,7 +23,7 @@ export interface GoalBarProps {
 export function GoalBar({ config, state }: GoalBarProps): React.JSX.Element {
   const raisedMinor = state?.raisedMinor ?? 0;
   const targetMinor = state?.targetMinor ?? config.targetMinor;
-  const currency = state?.currency ?? config.currency;
+  const currency = state?.currency ?? 'RUB';
   const progress = goalProgress({ raisedMinor, targetMinor });
 
   const text = textStyleToCss(config.text);
@@ -43,6 +43,7 @@ export function GoalBar({ config, state }: GoalBarProps): React.JSX.Element {
       }}
     >
       <div
+        data-slot="title"
         style={{
           ...text,
           ...slotCss(slots.title, config.text.fontSize),
@@ -53,6 +54,7 @@ export function GoalBar({ config, state }: GoalBarProps): React.JSX.Element {
       </div>
 
       <div
+        data-slot="bar"
         // Роль и значения — для доступности превью в дашборде; в OBS их никто не
         // читает, но и стоят они ничего.
         role="progressbar"
@@ -110,6 +112,7 @@ export function GoalBar({ config, state }: GoalBarProps): React.JSX.Element {
 
       {config.showAmounts ? (
         <div
+          data-slot="amount"
           style={{
             ...text,
             ...slotCss(slots.amount, labelSize),

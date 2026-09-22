@@ -138,7 +138,8 @@ test('у каждого события свой сценарий: текст ф�
 
   // Свой заголовок у фолловера, рейд выключен. Сохраняются все сценарии сразу.
   await page.getByRole('tab', { name: 'Фолловер' }).click();
-  // exact: «Заголовок» называет и поле шаблона, и элемент кадра в раскладке.
+  // Шаблоны — в разделе «Текст»: форма разбита на разделы, а не идёт простынёй.
+  await page.getByRole('tab', { name: 'Текст', exact: true }).click();
   await page.getByLabel('Заголовок', { exact: true }).fill('Спасибо за фоллов, {username}!');
   await page.getByRole('tab', { name: 'Рейд' }).click();
   await page.getByLabel('Показывать это оповещение').uncheck();
@@ -146,7 +147,7 @@ test('у каждого события свой сценарий: текст ф�
     (response) =>
       response.request().method() === 'PATCH' && response.url().includes('/api/widgets/'),
   );
-  await page.getByRole('button', { name: 'Сохранить' }).first().click();
+  await page.getByRole('button', { name: 'Сохранить настройки' }).click();
   expect((await saved).ok()).toBe(true);
 
   await page.getByRole('button', { name: 'Создать ссылку' }).click();

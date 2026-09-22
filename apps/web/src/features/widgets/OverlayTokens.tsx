@@ -51,7 +51,7 @@ export function OverlayTokens({ widgetId }: { widgetId: string }): React.JSX.Ele
       </div>
 
       {freshUrl ? (
-        <div className="space-y-2 rounded-lg border border-accent/40 bg-accent/10 p-3">
+        <div className="space-y-2 rounded-lg border border-border-strong bg-surface-hover p-3">
           <p id="overlay-url-hint" className="text-xs text-muted">
             {t('widgets.tokens.oneTimeWarning')}
           </p>

@@ -7,6 +7,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { AppConfig } from '../../config/app-config.service';
 import { nextQuotaReset, QuotaService, YOUTUBE_CHAT_QUOTA } from '../analytics/quota.service';
 import { PlatformTokenService } from '../integrations/platform-token.service';
+import { activeBroadcastsUrl } from '../integrations/youtube.provider';
 import { ChatRateLimiter, type ChatSource } from './chat-source';
 import {
   createYouTubeChatClient,
@@ -174,7 +175,7 @@ export class YouTubeChatSource implements ChatSource {
     }
   }
 
-  /** Идёт ли эфир и какой у него чат. Только свой эфир — `mine=true` токеном владельца. */
+  /** Идёт ли эфир и какой у него чат. Только свой эфир — `broadcastStatus` токеном владельца. */
   private async discover(session: Session): Promise<void> {
     const owner = await this.prisma.channel.findFirst({
       where: { platform: 'YOUTUBE', externalId: session.channel },
@@ -198,7 +199,7 @@ export class YouTubeChatSource implements ChatSource {
       items?: Array<{ snippet?: { liveChatId?: string } }>;
     }>({
       platform: 'youtube',
-      url: `${this.config.youtubeEndpoints.api}/liveBroadcasts?part=snippet&broadcastStatus=active&broadcastType=all&mine=true`,
+      url: activeBroadcastsUrl(this.config.youtubeEndpoints.api, 'snippet'),
       accessToken: token,
     });
 

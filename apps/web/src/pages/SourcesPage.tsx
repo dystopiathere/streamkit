@@ -245,7 +245,7 @@ function WebhookCard({ webhook }: { webhook: WebhookSourceView | null }): React.
           ) : null}
 
           {secret ? (
-            <div className="space-y-2 rounded-lg border border-accent/40 bg-accent/10 p-3">
+            <div className="space-y-2 rounded-lg border border-border-strong bg-surface-hover p-3">
               <Label htmlFor="webhook-secret">{t('sources.secretLabel')}</Label>
               <p id="webhook-secret-hint" className="text-xs text-muted">
                 {t('sources.secretShownOnce')}

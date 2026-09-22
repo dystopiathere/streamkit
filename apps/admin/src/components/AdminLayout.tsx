@@ -95,7 +95,7 @@ export function AdminLayout(): React.JSX.Element {
                     cn(
                       'flex items-center gap-3 rounded-lg px-3 py-2 text-sm',
                       isActive
-                        ? 'bg-accent/20 font-medium text-fg'
+                        ? 'bg-surface-hover font-medium text-fg'
                         : 'text-muted hover:bg-surface-hover hover:text-fg',
                     )
                   }

@@ -24,7 +24,11 @@ export function cn(...inputs: ClassValue[]): string {
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  primary: 'bg-accent text-accent-fg hover:opacity-90',
+  // Выключенная главная — тусклая серая с разделительной рамкой: жёлтый на
+  // половине прозрачности превращался в мутно-оливковый, а серая с сильной
+  // рамкой не отличалась от включённой второстепенной.
+  primary:
+    'bg-accent text-accent-fg hover:opacity-90 disabled:border disabled:border-border disabled:bg-transparent disabled:text-muted disabled:opacity-60',
   secondary: 'bg-surface text-fg border border-border-strong hover:bg-surface-hover',
   ghost: 'text-muted hover:text-fg hover:bg-surface',
   danger: 'bg-danger-strong text-white hover:opacity-90',
@@ -34,7 +38,9 @@ const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
 export function buttonClasses(variant: ButtonVariant = 'primary', className?: string): string {
   return cn(
     'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium',
-    'transition-opacity disabled:opacity-50',
+    // Нажатие отвечает сразу: кнопка чуть проседает, пока её держат.
+    'transition-[opacity,transform,background-color] duration-150 ease-out active:scale-[0.97]',
+    'disabled:opacity-50 disabled:active:scale-100',
     BUTTON_VARIANTS[variant],
     className,
   );
@@ -172,6 +178,31 @@ export function FieldError({
     <p id={id ? `${id}-error` : undefined} className="mt-1 text-xs text-danger">
       {message}
     </p>
+  );
+}
+
+/**
+ * Знак StreamKit: полосы испытательной таблицы и имя узким гротеском.
+ *
+ * Полосы — в порядке настоящей таблицы (белый, жёлтый, голубой, зелёный,
+ * пурпурный, красный, синий): это знак калибровки, который узнаёт каждый, кто
+ * видел телевизор до утреннего эфира. Цвета здесь литеральные, а не токены: это
+ * рисунок знака, а не смысловые метки интерфейса.
+ */
+export function Logo({ className }: { className?: string }): React.JSX.Element {
+  return (
+    <span className={cn('inline-flex items-center gap-2', className)}>
+      <svg aria-hidden="true" viewBox="0 0 21 14" className="h-3.5 w-auto shrink-0">
+        {['#eeeae2', '#f5d336', '#2ea3b4', '#40a85a', '#d0509c', '#e0473d', '#6b84ea'].map(
+          (color, index) => (
+            <rect key={color} x={index * 3} y="0" width="3" height="14" fill={color} />
+          ),
+        )}
+      </svg>
+      <span className="font-[family-name:var(--font-display)] text-lg leading-none font-semibold tracking-wide uppercase">
+        StreamKit
+      </span>
+    </span>
   );
 }
 

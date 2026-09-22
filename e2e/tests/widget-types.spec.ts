@@ -162,16 +162,30 @@ test('переставленный заголовок цели оказывае�
   await page.getByRole('button', { name: 'Новый виджет' }).click();
   await page.getByRole('link', { name: 'Настроить «Цель с раскладкой»' }).click();
 
+  await page.getByRole('tab', { name: /Раскладка/ }).click();
   // Клавиатурой, а не мышью: это и есть требование доступности — раскладка
   // обязана работать без указателя (и в тесте не зависит от размера кадра).
   const element = page.getByRole('button', { name: /Заголовок:/ });
   await element.click();
+  // Под кадром — настройки ВЫБРАННОГО элемента: щелчок выбрал заголовок.
+  await expect(element).toHaveAttribute('aria-pressed', 'true');
+  // Первое нажатие ставит позицию от того места, где элемент нарисован, — оно
+  // зависит от шрифта, поэтому шаги проверяются относительно него.
+  await page.keyboard.press('ArrowRight');
+  const x = page.getByLabel('По горизонтали, %');
+  const y = page.getByLabel('По вертикали, %');
+  const startX = Number(await x.inputValue());
+  const startY = Number(await y.inputValue());
   for (let step = 0; step < 3; step += 1) await page.keyboard.press('Shift+ArrowLeft');
   for (let step = 0; step < 2; step += 1) await page.keyboard.press('Shift+ArrowDown');
-  // first: поля X и Y есть у каждого элемента кадра, а подписи у них одни и те
-  // же. Первый блок — заголовок: порядок задан GOAL_SLOTS в контрактах.
-  await expect(page.getByLabel('X, % кадра').first()).toHaveValue('20');
-  await expect(page.getByLabel('Y, % кадра').first()).toHaveValue('40');
+  await expect(x).toHaveValue(String(Math.max(0, startX - 30)));
+  await expect(y).toHaveValue(String(Math.min(100, startY + 20)));
+  // Точное место — числом рядом с ползунком: так же, как это сделал бы стример.
+  await x.fill('20');
+  await x.press('Enter');
+  await y.fill('40');
+  await y.press('Enter');
+  await expect(element).toHaveAttribute('aria-label', /20 % по горизонтали, 40 % по вертикали/);
 
   const saved = page.waitForResponse(
     (response) =>
@@ -179,9 +193,8 @@ test('переставленный заголовок цели оказывае�
       response.request().method() === 'PATCH' &&
       response.ok(),
   );
-  // В форме и в блоке управления состоянием кнопки называются одинаково:
-  // сохраняем именно форму настроек.
-  await page.locator('form').getByRole('button', { name: 'Сохранить' }).click();
+  // «Сохранить» есть и у стартовой суммы цели: сохраняем именно настройки.
+  await page.getByRole('button', { name: 'Сохранить настройки' }).click();
   await saved;
 
   // Ссылка выпускается здесь же: мы уже в редакторе, и возвращаться в список

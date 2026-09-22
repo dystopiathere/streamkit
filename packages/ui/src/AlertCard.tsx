@@ -108,6 +108,7 @@ export function AlertCard({ event, config, animate = true }: AlertCardProps): Re
     >
       {config.imageUrl ? (
         <img
+          data-slot="image"
           src={config.imageUrl}
           alt=""
           referrerPolicy="no-referrer"
@@ -121,6 +122,7 @@ export function AlertCard({ event, config, animate = true }: AlertCardProps): Re
       ) : null}
 
       <div
+        data-slot="title"
         style={{
           ...textStyle,
           ...slotCss(config.slots.title, config.text.fontSize),
@@ -134,6 +136,7 @@ export function AlertCard({ event, config, animate = true }: AlertCardProps): Re
 
       {message.trim().length > 0 ? (
         <div
+          data-slot="message"
           style={{
             ...textStyle,
             ...slotCss(config.slots.message, Math.round(config.text.fontSize * 0.6)),

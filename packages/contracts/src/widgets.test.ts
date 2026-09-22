@@ -79,11 +79,31 @@ describe('shouldShowAlert', () => {
   });
 
   it('порог суммы — у доната, на пороге показывает, ниже — нет', () => {
-    const config = withScenario('donation', { minAmountMinor: 5_000 });
+    const config = withScenario('donation', { minAmounts: { RUB: 5_000 } });
     const donation = (amountMinor: number) => event({ amount: { amountMinor, currency: 'RUB' } });
     expect(shouldShowAlert(donation(4_999), config)).toBe(false);
     expect(shouldShowAlert(donation(5_000), config)).toBe(true);
-    expect(shouldShowAlert(event({ amount: null }), config)).toBe(false);
+  });
+
+  it('у каждой валюты свой порог, без пересчёта по курсу', () => {
+    // Одно число на все валюты отсекало и 100 ₽, и 100 $ — либо мелочь в рублях
+    // проходила, либо крупный донат в долларах пропадал.
+    const config = withScenario('donation', { minAmounts: { RUB: 50_000, USD: 500 } });
+    const donation = (amountMinor: number, currency: 'RUB' | 'USD' | 'EUR') =>
+      event({ amount: { amountMinor, currency } });
+    expect(shouldShowAlert(donation(10_000, 'RUB'), config)).toBe(false);
+    expect(shouldShowAlert(donation(50_000, 'RUB'), config)).toBe(true);
+    expect(shouldShowAlert(donation(499, 'USD'), config)).toBe(false);
+    expect(shouldShowAlert(donation(500, 'USD'), config)).toBe(true);
+    // Порога у валюты нет — показываются все её донаты.
+    expect(shouldShowAlert(donation(1, 'EUR'), config)).toBe(true);
+  });
+
+  it('донат без суммы порогом не отсекается', () => {
+    // Сумма неизвестна (незнакомая валюта): сравнить не с чем, и терять донат
+    // на экране хуже, чем показать лишний.
+    const config = withScenario('donation', { minAmounts: { RUB: 5_000 } });
+    expect(shouldShowAlert(event({ amount: null }), config)).toBe(true);
   });
 
   it('порог количества — у битов и рейдов', () => {
@@ -96,7 +116,7 @@ describe('shouldShowAlert', () => {
 
   it('тест обходит пороги, но не выключенный сценарий', () => {
     const config = alertWidgetConfigSchema.parse({
-      scenarios: { donation: { minAmountMinor: 100_000 }, raid: { enabled: false } },
+      scenarios: { donation: { minAmounts: { RUB: 100_000 } }, raid: { enabled: false } },
     });
     expect(shouldShowAlert(event({ isTest: true }), config)).toBe(true);
     // Выключенный сценарий не покажет и тест: стример проверяет то, что увидят зрители.
@@ -138,7 +158,8 @@ describe('alertWidgetConfigSchema', () => {
 
   it('отклоняет некорректный цвет и отрицательный порог', () => {
     expect(withScenarioResult({ text: { color: 'red' } })).toBe(false);
-    expect(withScenarioResult({ minAmountMinor: -1 })).toBe(false);
+    expect(withScenarioResult({ minAmounts: { RUB: -1 } })).toBe(false);
+    expect(withScenarioResult({ minAmounts: { BTC: 100 } })).toBe(false);
     expect(withScenarioResult({ minCount: -1 })).toBe(false);
   });
 
@@ -241,7 +262,13 @@ describe('остаток таймера', () => {
   it('считается от момента окончания, а не от счётчика', () => {
     expect(
       timerRemainingSeconds(
-        { kind: 'timer', endsAt: '2026-09-12T12:01:30.000Z', pausedSeconds: null, serverNow: '' },
+        {
+          kind: 'timer',
+          endsAt: '2026-09-12T12:01:30.000Z',
+          pausedSeconds: null,
+          serverNow: '',
+          currency: 'RUB',
+        },
         now,
       ),
     ).toBe(90);
@@ -252,7 +279,13 @@ describe('остаток таймера', () => {
     // можно только сравнив с чужим экраном.
     expect(
       timerRemainingSeconds(
-        { kind: 'timer', endsAt: '2026-09-12T12:01:30.000Z', pausedSeconds: null, serverNow: '' },
+        {
+          kind: 'timer',
+          endsAt: '2026-09-12T12:01:30.000Z',
+          pausedSeconds: null,
+          serverNow: '',
+          currency: 'RUB',
+        },
         now,
         30_000,
       ),
@@ -262,7 +295,7 @@ describe('остаток таймера', () => {
   it('на паузе отдаёт сохранённый остаток', () => {
     expect(
       timerRemainingSeconds(
-        { kind: 'timer', endsAt: null, pausedSeconds: 42, serverNow: '' },
+        { kind: 'timer', endsAt: null, pausedSeconds: 42, serverNow: '', currency: 'RUB' },
         now + 10_000_000,
       ),
     ).toBe(42);
@@ -271,7 +304,13 @@ describe('остаток таймера', () => {
   it('не уходит в минус после окончания', () => {
     expect(
       timerRemainingSeconds(
-        { kind: 'timer', endsAt: '2026-09-12T11:00:00.000Z', pausedSeconds: null, serverNow: '' },
+        {
+          kind: 'timer',
+          endsAt: '2026-09-12T11:00:00.000Z',
+          pausedSeconds: null,
+          serverNow: '',
+          currency: 'RUB',
+        },
         now,
       ),
     ).toBe(0);

@@ -2,6 +2,7 @@ import { formatMinorForInput, parseMajorToMinor } from '@streamkit/contracts';
 import { useState } from 'react';
 import { Controller, type FieldValues, type UseFormReturn } from 'react-hook-form';
 import {
+  cn,
   describeField,
   FieldError,
   FieldHint,
@@ -73,6 +74,206 @@ export function NumberField({
       <FieldError id={name} message={errorAt(form, name)} />
     </div>
   );
+}
+
+/**
+ * Значение в ограниченном диапазоне — ползунком и числом рядом.
+ *
+ * Ползунок, потому что такие настройки подбирают на глаз, глядя в предпросмотр:
+ * прозрачность, размер, скругление. Число рядом — для точного значения и для
+ * клавиатуры; у самого ползунка стрелки тоже работают (это нативный range).
+ *
+ * Шкала экрана и хранения разведены (`scale`): прозрачность хранится 0–1, а
+ * человек думает в процентах; длительность — в миллисекундах, а думает в
+ * секундах. Конвертация живёт на границе ввода, как у поля суммы.
+ *
+ * Число вводится черновиком и применяется на выходе из поля или по Enter.
+ * Иначе минимум схемы мешал бы набирать: при минимуме 8 первая же цифра «1» из
+ * задуманных «16» тут же превращалась бы в 8.
+ *
+ * `nullable` — «не задано» (позиция элемента, свой размер): ползунок стоит на
+ * `fallback`, рядом подпись `nullLabel` и кнопка «Сбросить», которая
+ * возвращает `null`.
+ */
+export function RangeField({
+  form,
+  name,
+  label,
+  min,
+  max,
+  step = 1,
+  scale = 1,
+  unit,
+  hint,
+  nullable = false,
+  fallback,
+  nullLabel,
+  resetLabel,
+  zeroLabel,
+}: BaseProps & {
+  /** Границы и шаг — в единицах экрана (проценты, секунды). */
+  min: number;
+  max: number;
+  step?: number;
+  /** Экран = хранение × scale. */
+  scale?: number;
+  unit?: string;
+  hint?: string;
+  nullable?: boolean;
+  fallback?: number;
+  nullLabel?: string;
+  resetLabel?: string;
+  /** Подпись вместо нуля, когда ноль значит «выключено»: «не гаснет». */
+  zeroLabel?: string;
+}): React.JSX.Element {
+  return (
+    <Controller
+      control={form.control}
+      name={name}
+      render={({ field }) => (
+        <RangeInput
+          name={name}
+          label={label}
+          min={min}
+          max={max}
+          step={step}
+          unit={unit}
+          hint={hint}
+          error={errorAt(form, name)}
+          nullLabel={nullable ? nullLabel : undefined}
+          resetLabel={nullable ? resetLabel : undefined}
+          zeroLabel={zeroLabel}
+          value={
+            typeof field.value === 'number' && Number.isFinite(field.value)
+              ? round(field.value * scale, step)
+              : null
+          }
+          fallback={fallback ?? min}
+          onBlur={field.onBlur}
+          onChange={(display) =>
+            field.onChange(display === null ? null : Number((display / scale).toFixed(6)))
+          }
+        />
+      )}
+    />
+  );
+}
+
+function RangeInput({
+  name,
+  label,
+  min,
+  max,
+  step,
+  unit,
+  hint,
+  error,
+  nullLabel,
+  resetLabel,
+  zeroLabel,
+  value,
+  fallback,
+  onBlur,
+  onChange,
+}: {
+  name: string;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  unit?: string;
+  hint?: string;
+  error?: string;
+  nullLabel?: string;
+  resetLabel?: string;
+  zeroLabel?: string;
+  value: number | null;
+  fallback: number;
+  onBlur: () => void;
+  onChange: (next: number | null) => void;
+}): React.JSX.Element {
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = value ?? fallback;
+  const unset = value === null && nullLabel !== undefined;
+
+  const commit = (): void => {
+    if (draft === null) return;
+    const parsed = Number(draft.replace(',', '.'));
+    setDraft(null);
+    if (draft.trim() === '' || !Number.isFinite(parsed)) return;
+    onChange(round(Math.min(max, Math.max(min, parsed)), step));
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3">
+        <Label htmlFor={name}>{label}</Label>
+        <div className="flex items-center gap-1.5 text-sm">
+          {unset ? <span className="text-xs text-muted">{nullLabel}</span> : null}
+          {!unset && zeroLabel && value === 0 && draft === null ? (
+            <span className="text-xs text-muted">{zeroLabel}</span>
+          ) : null}
+          <input
+            type="text"
+            inputMode="decimal"
+            aria-label={`${label}${unit ? `, ${unit}` : ''}`}
+            className={cn(
+              'w-16 rounded-md border border-border-strong bg-bg px-2 py-0.5 text-right text-sm tabular-nums text-fg',
+              unset && 'text-muted',
+            )}
+            value={draft ?? String(shown)}
+            onChange={(event) => setDraft(event.target.value)}
+            onBlur={() => {
+              commit();
+              onBlur();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                // Enter в форме отправляет её целиком — здесь он значит «применить число».
+                event.preventDefault();
+                commit();
+              }
+              if (event.key === 'Escape') setDraft(null);
+            }}
+          />
+          {unit ? <span className="w-5 text-xs text-muted">{unit}</span> : null}
+        </div>
+      </div>
+      <div className="mt-1.5 flex items-center gap-2">
+        <input
+          id={name}
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={shown}
+          className={cn('range-field h-5 w-full', unset && 'opacity-60')}
+          style={{ '--fill': `${((shown - min) / (max - min)) * 100}%` } as React.CSSProperties}
+          {...describeField(name, { hint: Boolean(hint), error })}
+          aria-valuetext={unset ? nullLabel : `${shown}${unit ? ` ${unit}` : ''}`}
+          onChange={(event) => onChange(round(Number(event.target.value), step))}
+          onBlur={onBlur}
+        />
+        {resetLabel && !unset ? (
+          <button
+            type="button"
+            className="shrink-0 rounded px-1.5 py-0.5 text-xs text-muted hover:bg-surface-hover hover:text-fg"
+            onClick={() => onChange(null)}
+          >
+            {resetLabel}
+          </button>
+        ) : null}
+      </div>
+      {hint ? <FieldHint id={name}>{hint}</FieldHint> : null}
+      <FieldError id={name} message={error} />
+    </div>
+  );
+}
+
+/** Привязка к шагу без хвостов плавающей точки: 0.1 + 0.2 не должно стать 0.30000000000000004. */
+function round(value: number, step: number): number {
+  const decimals = (String(step).split('.')[1] ?? '').length;
+  return Number((Math.round(value / step) * step).toFixed(decimals));
 }
 
 /**
@@ -238,9 +439,23 @@ export function TextStyleFields({
 }): React.JSX.Element {
   const at = (field: string) => `${prefix}text.${field}`;
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <NumberField form={form} name={at('fontSize')} label={labels.fontSize} />
-      <NumberField form={form} name={at('strokeWidth')} label={labels.strokeWidth} />
+    <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+      <RangeField
+        form={form}
+        name={at('fontSize')}
+        label={labels.fontSize}
+        min={8}
+        max={200}
+        unit="px"
+      />
+      <RangeField
+        form={form}
+        name={at('strokeWidth')}
+        label={labels.strokeWidth}
+        min={0}
+        max={12}
+        unit="px"
+      />
       <ColorField form={form} name={at('color')} label={labels.color} />
       {withHighlight ? (
         <ColorField form={form} name={at('highlightColor')} label={labels.highlightColor} />
@@ -276,7 +491,16 @@ export function MoneyField({
   label,
   hint,
   currency,
-}: BaseProps & { hint?: string; currency?: string }): React.JSX.Element {
+  emptyValue,
+}: BaseProps & {
+  hint?: string;
+  currency?: string;
+  /**
+   * Что значит пустое поле. Не задано — пусто это ошибка (сумма цели обязана
+   * быть). Для порога — 0, «показывать все»: стереть порог должно быть можно.
+   */
+  emptyValue?: number;
+}): React.JSX.Element {
   return (
     <Controller
       control={form.control}
@@ -287,6 +511,7 @@ export function MoneyField({
           label={label}
           hint={hint}
           currency={currency}
+          emptyValue={emptyValue}
           error={errorAt(form, name)}
           value={field.value}
           onBlur={field.onBlur}
@@ -302,6 +527,7 @@ function MoneyInput({
   label,
   hint,
   currency,
+  emptyValue,
   error,
   value,
   onBlur,
@@ -311,6 +537,7 @@ function MoneyInput({
   label: string;
   hint?: string;
   currency?: string;
+  emptyValue?: number;
   error?: string;
   value: unknown;
   onBlur: () => void;
@@ -342,6 +569,7 @@ function MoneyInput({
         id={name}
         type="text"
         inputMode="decimal"
+        placeholder={emptyValue !== undefined ? '0' : undefined}
         {...describeField(name, { hint: Boolean(hint), error })}
         value={text}
         onChange={(event) => {
@@ -350,7 +578,11 @@ function MoneyInput({
           // Пустое поле не превращаем в ноль: пока стример стирает старое
           // значение, чтобы ввести новое, форма не должна подставлять своё.
           // NaN отвергнет схема — это честнее молчаливого нуля.
-          onChange(parseMajorToMinor(next) ?? Number.NaN);
+          onChange(
+            next.trim() === '' && emptyValue !== undefined
+              ? emptyValue
+              : (parseMajorToMinor(next) ?? Number.NaN),
+          );
         }}
         onBlur={onBlur}
       />

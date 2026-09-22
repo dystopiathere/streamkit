@@ -245,7 +245,7 @@ function Checkout({ expired }: { expired: boolean }): React.JSX.Element {
         {PAID_PLANS.map((option) => (
           <label
             key={option}
-            className="flex items-start gap-3 rounded-lg border border-border-strong p-4 has-[:checked]:border-accent has-[:checked]:bg-accent/10 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent"
+            className="flex items-start gap-3 rounded-lg border border-border-strong p-4 has-[:checked]:border-fg has-[:checked]:bg-surface-hover has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent"
           >
             <input
               type="radio"
@@ -274,7 +274,7 @@ function Checkout({ expired }: { expired: boolean }): React.JSX.Element {
         {BILLING_PERIODS.map((option) => (
           <label
             key={option}
-            className="flex items-start gap-3 rounded-lg border border-border-strong p-4 has-[:checked]:border-accent has-[:checked]:bg-accent/10 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent"
+            className="flex items-start gap-3 rounded-lg border border-border-strong p-4 has-[:checked]:border-fg has-[:checked]:bg-surface-hover has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent"
           >
             <input
               type="radio"

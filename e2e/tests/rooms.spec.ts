@@ -102,13 +102,13 @@ test('гость входит по ссылке, оверлей показыва
   // первая ручная проверка. Теперь пустое поле подсвечено прямо в редакторе.
   const roomMissing = page.getByRole('alert').filter({ hasText: 'Комната не выбрана' });
   await expect(roomMissing).toBeVisible();
-  await page.getByLabel('Комната').selectOption({ label: 'Вечерний эфир' });
+  await page.getByRole('combobox', { name: 'Комната' }).selectOption({ label: 'Вечерний эфир' });
   await expect(roomMissing).toHaveCount(0);
   const saved = page.waitForResponse(
     (response) =>
       response.url().includes('/api/widgets/') && response.request().method() === 'PATCH',
   );
-  await page.getByRole('button', { name: 'Сохранить' }).first().click();
+  await page.getByRole('button', { name: 'Сохранить настройки' }).click();
   expect((await saved).status()).toBe(200);
 
   await page.getByRole('button', { name: 'Создать ссылку' }).click();
@@ -298,7 +298,7 @@ test('виджет, созданный со страницы комнаты, с�
 
   await page.getByRole('button', { name: 'Создать виджет для этой комнаты' }).click();
   await expect(page).toHaveURL(/\/widgets\/[0-9a-f-]{36}$/);
-  await expect(page.getByLabel('Комната')).toHaveValue(/[0-9a-f-]{36}/);
+  await expect(page.getByRole('combobox', { name: 'Комната' })).toHaveValue(/[0-9a-f-]{36}/);
   await expect(page.getByRole('alert').filter({ hasText: 'Комната не выбрана' })).toHaveCount(0);
 
   await page.getByRole('link', { name: 'Комнаты' }).click();

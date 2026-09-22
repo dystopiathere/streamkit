@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { useForm, type FieldValues } from 'react-hook-form';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { defaultWidgetConfig } from '@streamkit/contracts';
-import { AdvancedStylingCard } from './AdvancedStyling';
+import { LayoutSection } from './AdvancedStyling';
 import i18n from '@/lib/i18n';
 
 /**
@@ -27,7 +27,7 @@ function Editor(): React.JSX.Element {
   const form = useForm<FieldValues>({
     defaultValues: defaultWidgetConfig('goal').config as FieldValues,
   });
-  return <AdvancedStylingCard form={form} type="goal" />;
+  return <LayoutSection form={form} type="goal" />;
 }
 
 function renderEditor(): void {
@@ -39,9 +39,9 @@ function renderEditor(): void {
   );
 }
 
-/** Значение поля первого элемента кадра: подписи у слотов одинаковые. */
-function firstValue(label: string): string {
-  return (screen.getAllByLabelText(label)[0] as HTMLInputElement).value;
+/** Точное значение ползунка выбранного элемента — в поле числа рядом с ним. */
+function value(label: string): string {
+  return (screen.getByLabelText(`${label}, %`) as HTMLInputElement).value;
 }
 
 /** Кадр в jsdom размеров не имеет: задаём их, как это сделал бы браузер. */
@@ -52,63 +52,89 @@ function sizeFrame(width = 800, height = 450): void {
     ({ left: 0, top: 0, width, height, right: width, bottom: height, x: 0, y: 0 }) as DOMRect;
 }
 
+function element(name: string): HTMLElement {
+  const button = screen.getByRole('button', { name: new RegExp(`^${name}:`) });
+  // jsdom не реализует захват указателя, но код его вызывает.
+  button.setPointerCapture = () => undefined;
+  button.releasePointerCapture = () => undefined;
+  return button;
+}
+
 describe('раскладка элементов в кадре', () => {
-  it('незаданная позиция остаётся пустой, а не нулём процентов', () => {
+  it('щелчок выбирает элемент и ничего не сдвигает', () => {
+    // Раньше выбор ничем не отмечался: элемент подсвечивался только в движении,
+    // и после щелчка было непонятно, выбран он или щелчок пропал.
     renderEditor();
-    // Поля X и Y есть у каждого элемента; первый блок — заголовок.
-    expect(firstValue('X, % кадра')).toBe('');
-    expect(firstValue('Y, % кадра')).toBe('');
-    // И сам элемент стоит там, где его рисует поток, а не в углу кадра.
-    expect(screen.getByRole('button', { name: /Заголовок:/ }).getAttribute('aria-label')).toContain(
-      '50 %',
-    );
+    sizeFrame();
+    const bar = element('Полоса');
+    expect(bar.getAttribute('aria-pressed')).toBe('false');
+
+    fireEvent.pointerDown(bar, { pointerId: 1, button: 0, clientX: 400, clientY: 225 });
+    fireEvent.pointerUp(bar, { pointerId: 1 });
+
+    expect(bar.getAttribute('aria-pressed')).toBe('true');
+    expect(element('Заголовок').getAttribute('aria-pressed')).toBe('false');
+    // Дрожь руки при щелчке не ставит позицию элементу, стоящему в потоке.
+    expect(bar.getAttribute('aria-label')).toContain('позиция не задана');
   });
 
   it('перетаскивание указателем доводит элемент до конца жеста', () => {
     renderEditor();
     sizeFrame();
-    const element = screen.getByRole('button', { name: /Заголовок:/ });
-    // jsdom не реализует захват указателя, но код его вызывает.
-    element.setPointerCapture = () => undefined;
-    element.releasePointerCapture = () => undefined;
+    const title = element('Заголовок');
 
-    fireEvent.pointerDown(element, { pointerId: 1, clientX: 400, clientY: 225 });
+    fireEvent.pointerDown(title, { pointerId: 1, button: 0, clientX: 400, clientY: 225 });
     // Движение приходит УЖЕ ПОСЛЕ того, как обработчик вернул управление, —
     // именно здесь React обнуляет `currentTarget` у синтетического события.
-    fireEvent.pointerMove(element, { pointerId: 1, clientX: 200, clientY: 90 });
+    fireEvent.pointerMove(title, { pointerId: 1, clientX: 200, clientY: 90 });
 
-    expect(firstValue('X, % кадра')).toBe('25');
-    expect(firstValue('Y, % кадра')).toBe('20');
+    expect(value('По горизонтали')).toBe('25');
+    expect(value('По вертикали')).toBe('20');
 
-    fireEvent.pointerUp(element, { pointerId: 1 });
+    fireEvent.pointerUp(title, { pointerId: 1 });
     // После отпускания элемент за мышью не едет.
-    fireEvent.pointerMove(element, { pointerId: 1, clientX: 720, clientY: 400 });
-    expect(firstValue('X, % кадра')).toBe('25');
+    fireEvent.pointerMove(title, { pointerId: 1, clientX: 720, clientY: 400 });
+    expect(value('По горизонтали')).toBe('25');
   });
 
   it('стрелки двигают элемент, а Shift — крупным шагом', () => {
     renderEditor();
-    sizeFrame();
-    const element = screen.getByRole('button', { name: /Заголовок:/ });
+    const title = element('Заголовок');
 
-    fireEvent.keyDown(element, { key: 'ArrowRight' });
+    fireEvent.keyDown(title, { key: 'ArrowRight' });
     // Первое нажатие считается от места в потоке, а не от нуля.
-    expect(firstValue('X, % кадра')).toBe('51');
+    expect(value('По горизонтали')).toBe('51');
 
-    fireEvent.keyDown(element, { key: 'ArrowRight', shiftKey: true });
-    expect(firstValue('X, % кадра')).toBe('61');
+    fireEvent.keyDown(title, { key: 'ArrowRight', shiftKey: true });
+    expect(value('По горизонтали')).toBe('61');
 
-    fireEvent.keyDown(element, { key: 'ArrowUp', shiftKey: true });
-    expect(firstValue('Y, % кадра')).toBe('10');
+    fireEvent.keyDown(title, { key: 'ArrowUp', shiftKey: true });
+    expect(value('По вертикали')).toBe('10');
   });
 
   it('за края кадра элемент не уходит', () => {
     renderEditor();
-    sizeFrame();
-    const element = screen.getByRole('button', { name: /Заголовок:/ });
+    const title = element('Заголовок');
     for (let press = 0; press < 12; press += 1) {
-      fireEvent.keyDown(element, { key: 'ArrowLeft', shiftKey: true });
+      fireEvent.keyDown(title, { key: 'ArrowLeft', shiftKey: true });
     }
-    expect(firstValue('X, % кадра')).toBe('0');
+    expect(value('По горизонтали')).toBe('0');
+  });
+
+  it('«Сбросить раскладку» возвращает все элементы в поток', () => {
+    renderEditor();
+    const reset = screen.getByRole('button', { name: 'Сбросить раскладку' });
+    // Сбрасывать нечего — кнопка не притворяется рабочей.
+    expect((reset as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.keyDown(element('Заголовок'), { key: 'ArrowRight' });
+    fireEvent.keyDown(element('Полоса'), { key: 'ArrowDown' });
+    expect((reset as HTMLButtonElement).disabled).toBe(false);
+
+    fireEvent.click(reset);
+
+    expect(element('Заголовок').getAttribute('aria-label')).toContain('позиция не задана');
+    expect(element('Полоса').getAttribute('aria-label')).toContain('позиция не задана');
+    expect((reset as HTMLButtonElement).disabled).toBe(true);
   });
 });

@@ -34,6 +34,7 @@ export function TopDonorsList({ config, state }: TopDonorsListProps): React.JSX.
     >
       {config.title ? (
         <div
+          data-slot="title"
           style={{ ...text, ...slotCss(config.slots.title, config.text.fontSize), fontWeight: 700 }}
         >
           {config.title}
@@ -43,6 +44,7 @@ export function TopDonorsList({ config, state }: TopDonorsListProps): React.JSX.
       {/* Список — один элемент кадра, а не строки по отдельности: перетаскивать
           каждую строку отдельно бессмысленно, их число меняется само. */}
       <div
+        data-slot="list"
         style={{
           ...slotCss(config.slots.list, rowSize),
           display: 'flex',
@@ -79,7 +81,7 @@ export function TopDonorsList({ config, state }: TopDonorsListProps): React.JSX.
               <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
                 {formatMoney({
                   amountMinor: entry.amountMinor,
-                  currency: state?.currency ?? config.currency,
+                  currency: state?.currency ?? 'RUB',
                 })}
               </span>
             ) : null}

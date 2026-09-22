@@ -146,15 +146,44 @@ describe('Состояние виджетов (feature)', () => {
   it('не смешивает валюты в цели', async () => {
     // Сложить рубли с долларами нельзя, а пересчёт по курсу менял бы собранное
     // задним числом вслед за курсом.
-    const widgetId = await createWidget('goal', { currency: 'RUB' });
+    const widgetId = await createWidget('goal');
     await seedDonation(30_000, { currency: 'RUB' });
+    await seedDonation(20_000, { currency: 'RUB' });
     await seedDonation(99_000, { currency: 'USD' });
 
     const response = await request(server())
       .get(`/api/widgets/${widgetId}/state`)
       .set(auth())
       .expect(200);
-    expect(response.body.raisedMinor).toBe(30_000);
+    expect(response.body.raisedMinor).toBe(50_000);
+    expect(response.body.currency).toBe('RUB');
+  });
+
+  it('валюту цели и топа задают донаты, а не настройка', async () => {
+    // Стример не выбирает валюту: ей платят в тенге — цель в тенге. Раньше
+    // валюту выбирали в форме, и такая цель молча стояла на нуле.
+    const goalId = await createWidget('goal', { currency: 'RUB' });
+    const topId = await createWidget('top-donors', {});
+    await seedDonation(500_000, { currency: 'KZT', username: 'Айгерим' });
+    await seedDonation(300_000, { currency: 'KZT', username: 'Данияр' });
+    await seedDonation(10_000, { currency: 'RUB', username: 'Гость' });
+
+    const goal = await request(server()).get(`/api/widgets/${goalId}/state`).set(auth());
+    expect(goal.body.currency).toBe('KZT');
+    expect(goal.body.raisedMinor).toBe(800_000);
+
+    const top = await request(server()).get(`/api/widgets/${topId}/state`).set(auth());
+    expect(top.body.currency).toBe('KZT');
+    expect(top.body.entries.map((entry: { username: string }) => entry.username)).toEqual([
+      'Айгерим',
+      'Данияр',
+    ]);
+  });
+
+  it('без донатов валюта — рубли', async () => {
+    const widgetId = await createWidget('timer');
+    const response = await request(server()).get(`/api/widgets/${widgetId}/state`).set(auth());
+    expect(response.body.currency).toBe('RUB');
   });
 
   it('не засчитывает донаты, пришедшие до начала цели', async () => {
@@ -336,7 +365,6 @@ describe('Состояние виджетов (feature)', () => {
     const widgetId = await createWidget('timer', {
       initialSeconds: 600,
       secondsPerUnit: 2,
-      currency: 'RUB',
     });
 
     await request(server()).post('/api/events/test').set(auth()).expect(201);

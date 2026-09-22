@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { HttpClient } from '../../common/http/http-client.service';
 import { PlatformAuthError, PlatformError } from '../../common/http/platform-errors';
 import type { AppConfig } from '../../config/app-config.service';
-import { normalizeIdentity, normalizeStats, YouTubeProvider } from './youtube.provider';
+import {
+  activeBroadcastsUrl,
+  normalizeIdentity,
+  normalizeStats,
+  YouTubeProvider,
+} from './youtube.provider';
 
 /** Записано с настоящего ответа `channels.list?part=snippet,statistics&mine=true`. */
 const CHANNEL = {
@@ -155,6 +160,19 @@ describe('разрешения Google', () => {
     const url = new URL(provider.buildAuthorizeUrl('state'));
 
     expect(url.searchParams.get('scope')).toBe('https://www.googleapis.com/auth/youtube.readonly');
+  });
+});
+
+describe('поиск идущего эфира', () => {
+  it('передаёт Google ровно один фильтр', () => {
+    // С `broadcastStatus` и `mine=true` вместе Google отвечает 400
+    // `incompatibleParameters` — на проде так не находился ни один эфир: ни
+    // метрики, ни чат.
+    const url = new URL(activeBroadcastsUrl('https://api.test/youtube/v3', 'snippet'));
+    const filters = ['broadcastStatus', 'mine', 'id'].filter((name) => url.searchParams.has(name));
+
+    expect(filters).toEqual(['broadcastStatus']);
+    expect(url.searchParams.get('broadcastStatus')).toBe('active');
   });
 });
 

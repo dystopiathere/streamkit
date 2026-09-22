@@ -38,7 +38,7 @@ export function PlanPaywall({ gate }: { gate: Gate }): React.JSX.Element | null 
   return (
     <div
       role="status"
-      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-accent/40 bg-accent/10 p-4"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border-strong bg-surface-hover p-4"
     >
       <div className="space-y-1">
         <p className="font-medium">

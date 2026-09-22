@@ -23,6 +23,7 @@ export {
   FieldHint,
   Input,
   Label,
+  Logo,
   NewTabHint,
   selectClasses,
   VisuallyHidden,

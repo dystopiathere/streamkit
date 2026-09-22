@@ -11,6 +11,7 @@ import {
   useSendTestAlert,
   useWidgets,
 } from '@/features/widgets/queries';
+import { TypeMark } from '@/features/widgets/TypeMark';
 import { ApiError } from '@/lib/api';
 
 export function WidgetsPage(): React.JSX.Element {
@@ -150,8 +151,9 @@ export function WidgetsPage(): React.JSX.Element {
             <Card className="flex flex-wrap items-center justify-between gap-4">
               <div className="min-w-0">
                 <h2 className="truncate font-medium">{widget.name}</h2>
-                <p className="text-xs text-muted">
-                  {t(`widgets.type.${widget.type}`)} ·{' '}
+                <p className="mt-1 flex items-center gap-2 text-xs text-muted">
+                  <TypeMark type={widget.type} />
+                  <span aria-hidden="true">·</span>
                   {widget.isEnabled ? t('widgets.enabled') : t('widgets.disabled')}
                 </p>
               </div>

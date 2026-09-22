@@ -29,6 +29,19 @@ const SCOPES = ['https://www.googleapis.com/auth/youtube.readonly'];
  */
 const STATS_QUOTA_COST = 3;
 
+/**
+ * Адрес поиска идущего эфира владельца токена — для метрик и для чата.
+ *
+ * `broadcastStatus` — фильтр, а у `liveBroadcasts.list` фильтр ровно один:
+ * вместе с `mine=true` Google отвечает 400 `incompatibleParameters`. Своими
+ * трансляции делает сам `broadcastStatus` — он работает только от имени
+ * владельца токена. Ошибка месяцами пряталась за 403 `liveStreamingNotEnabled`:
+ * пока у канала не были включены трансляции, до проверки параметров не доходило.
+ */
+export function activeBroadcastsUrl(api: string, part: string): string {
+  return `${api}/liveBroadcasts?part=${part}&broadcastStatus=active&broadcastType=all`;
+}
+
 interface YouTubeChannel {
   id: string;
   snippet?: {
@@ -199,7 +212,7 @@ export class YouTubeProvider implements PlatformProvider {
       optionalPart('liveBroadcasts', this.logger, () =>
         this.http.json<YouTubeList<YouTubeBroadcast>>({
           platform: this.platform,
-          url: `${this.config.youtubeEndpoints.api}/liveBroadcasts?part=id,snippet&broadcastStatus=active&broadcastType=all&mine=true`,
+          url: activeBroadcastsUrl(this.config.youtubeEndpoints.api, 'id,snippet'),
           accessToken,
         }),
       ),

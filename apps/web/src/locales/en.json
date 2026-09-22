@@ -78,16 +78,16 @@
       "chat": "Chat",
       "guests": "Guests",
       "media": "Image and sound",
-      "advanced": "Advanced styling",
       "layout": "Frame layout",
       "background": "Background",
-      "barImages": "Bar images"
+      "barImages": "Bar images",
+      "allScenarios": "For all scenarios"
     },
     "field": {
       "layout": "Layout",
-      "durationMs": "Display time, ms",
-      "gapMs": "Pause between alerts, ms",
-      "minAmount": "Minimum amount",
+      "durationMs": "Display time",
+      "gapMs": "Pause between alerts",
+      "minAmount": "Minimum donation amount",
       "titleTemplate": "Title",
       "messageTemplate": "Message",
       "fontSize": "Font size",
@@ -101,7 +101,6 @@
       "soundUrl": "Sound link (https)",
       "volume": "Volume",
       "type": "Widget type",
-      "currency": "Currency",
       "countTypes": "What counts toward it",
       "showAmounts": "Show amounts",
       "goalTitle": "Goal title",
@@ -112,13 +111,13 @@
       "timerTitle": "Label above the timer",
       "initialSeconds": "Starting time, s",
       "maxSeconds": "Maximum, s",
-      "secondsPerUnit": "Seconds per unit ({{currency}})",
+      "secondsPerUnit": "Seconds per 1 {{currency}}",
       "showHours": "Show hours",
       "topDonorsTitle": "List title",
       "period": "Period",
       "limit": "Number of rows",
       "maxMessages": "Messages on screen",
-      "messageLifetime": "Message fades after, s",
+      "messageLifetime": "Message fades after",
       "hiddenUsers": "Hidden usernames",
       "hideCommands": "Hide bot commands",
       "showBadges": "Show badges",
@@ -129,8 +128,8 @@
       "maxTiles": "Guests in frame",
       "showNames": "Show names",
       "showWithoutVideo": "Show guests without a camera",
-      "tileGap": "Gap between tiles, px",
-      "cornerRadius": "Corner radius, px",
+      "tileGap": "Gap between tiles",
+      "cornerRadius": "Corner radius",
       "room": "Room",
       "scenarioEnabled": "Show this alert",
       "minGifts": "Minimum gifted subs",
@@ -142,11 +141,11 @@
       "backgroundColor": "Background color",
       "backgroundImage": "Background image",
       "backgroundFit": "Image fit",
-      "backgroundOpacity": "Background opacity (0–1)",
+      "backgroundOpacity": "Background opacity",
       "barImage": "Fill image",
       "trackImage": "Track image",
-      "x": "X, % of frame",
-      "y": "Y, % of frame",
+      "x": "Horizontal",
+      "y": "Vertical",
       "size": "Size"
     },
     "templateHint": "Available variables: {{vars}}",
@@ -177,11 +176,10 @@
       "all": "All time"
     },
     "hint": {
-      "goalCurrency": "The goal is counted in a single currency. Donations in other currencies do not count toward it — we won't add them up at an exchange rate, or the raised amount would change after the fact.",
-      "secondsPerUnit": "How many seconds one unit of currency adds ({{currency}}). Zero means donations add no time.",
+      "secondsPerUnit": "How many seconds one {{currency}} of a donation adds. Zero — donations do not add time.",
       "offsetMinor": "Added to the raised amount. Use it when part of the sum was raised before you set up the widget.",
       "countTypes": "You can pick several. Only events with an amount count — a subscription without an amount adds nothing.",
-      "minAmount": "Compared with the donation amount as is, without currency conversion: a threshold of 100 filters out both 100 ₽ and 100 $.",
+      "minAmount": "Each currency has its own threshold: a donation is compared with it as received, without currency conversion. Empty or 0 — all donations in that currency are shown.",
       "messageLifetime": "0 means messages stay on screen until newer ones push them out.",
       "hiddenUsers": "Comma-separated: a Twitch login or a YouTube name. Common bots are hidden by default.",
       "showWithoutVideo": "Otherwise a guest with the camera off disappears from the frame while still talking.",
@@ -192,9 +190,11 @@
       "gapMs": "One queue for all scenarios: alerts follow each other with this pause.",
       "minCount": "0 — show all.",
       "imageUrl": "An https link to an image or GIF. Empty — no image.",
-      "advanced": "Element layout, font, background and images. Included in the Pro plan.",
-      "layout": "Drag an element with the mouse, or select it with the keyboard and move it with the arrow keys (hold Shift for 10% steps). “Back to flow” clears the position.",
-      "barImage": "The image is cropped to the progress, not stretched."
+      "layout": "Click an element to select it and drag it. With the keyboard: Tab selects, arrows move by 1%, with Shift by 10%. Dashed lines are safe areas: keep anything important inside the inner frame.",
+      "barImage": "The image is cropped to the progress, not stretched.",
+      "currencyFromDonations": "Currency: {{currency}} — most of your donations arrive in it. There is nothing to pick, and donations in other currencies are not counted here.",
+      "backgroundOpacity": "0% — the background is invisible, 100% — solid.",
+      "neverFades": "never fades"
     },
     "state": {
       "raised": "Raised",
@@ -232,7 +232,14 @@
       "banner": "Top banner",
       "side": "Side",
       "element": "{{element}}: {{x}}% across, {{y}}% down",
-      "reset": "Back to flow"
+      "reset": "Back to flow",
+      "resetAll": "Reset layout",
+      "elementInFlow": "{{element}}: no position set",
+      "placed": "has its own position",
+      "inFlow": "sits where the style puts it",
+      "auto": "auto",
+      "clear": "Reset",
+      "asText": "same as text"
     },
     "animation": {
       "fade": "Fade",
@@ -268,6 +275,36 @@
       "amount": "Amounts",
       "clock": "Clock",
       "list": "List"
+    },
+    "tab": {
+      "label": "Settings sections",
+      "show": "Display",
+      "text": "Text",
+      "media": "Image and sound",
+      "layout": "Layout",
+      "style": "Font and background",
+      "font": "Font",
+      "goal": "Goal",
+      "timer": "Timer",
+      "topDonors": "List",
+      "channels": "Channels",
+      "lines": "Lines",
+      "room": "Room",
+      "look": "Text and colors",
+      "pro": "Pro",
+      "hasError": "has an error"
+    },
+    "editor": {
+      "saved": "Settings saved",
+      "invalid": "Not saved: fix the field marked in the section",
+      "dirty": "You have unsaved changes",
+      "clean": "All changes saved",
+      "discard": "Discard",
+      "aside": "Preview, saving and links",
+      "save": "Save settings"
+    },
+    "unit": {
+      "seconds": "s"
     }
   },
   "sources": {
@@ -681,24 +718,27 @@
     },
     "openDashboard": "Open dashboard",
     "hero": {
-      "title": "Alerts, widgets and guests on stream — in one link for OBS",
+      "title": "Alerts, widgets and guests on stream — in one link for OBS",
       "lead": "StreamKit collects donations from external services, shows alerts, goals and chat on screen, tracks channel analytics and brings guests on stream by link, no sign-up needed.",
       "register": "Create account",
-      "pricing": "Plans and pricing"
+      "pricing": "Plans and pricing",
+      "sampleUser": "Viewer",
+      "sampleMessage": "Thanks for the stream!",
+      "sampleCaption": "A sample alert. The centre of the card is the same renderer that shows it in OBS."
     },
     "features": {
       "title": "What it does",
       "alerts": {
-        "title": "Donation alerts",
-        "text": "Events from DonationAlerts, DonatePay and your own webhook — on your stream."
+        "title": "Donation and event alerts",
+        "text": "Donations from DonationAlerts and your own webhook, plus Twitch follows, subscriptions, bits and raids — each event with its own style."
       },
       "widgets": {
         "title": "Goal, timer, top donors",
         "text": "A donation goal, a subathon timer and a top donors list, with live preview."
       },
       "chat": {
-        "title": "Twitch chat on screen",
-        "text": "Chat messages over your stream, no Twitch sign-in needed."
+        "title": "Twitch and YouTube multichat",
+        "text": "Chats of your connected channels in one feed — on screen and in the stream window, with the platform icon on every line."
       },
       "analytics": {
         "title": "Channel analytics",
@@ -835,6 +875,7 @@
       "notConnected": "not open in OBS",
       "noLinks": "no link",
       "disabled": "off"
-    }
+    },
+    "deltaHint": "since the last reading"
   }
 }

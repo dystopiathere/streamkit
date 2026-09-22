@@ -1,7 +1,9 @@
 import { type StreamChannel, streamStartedAt, totalViewers } from '@streamkit/contracts';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { cn, StatusPill } from '@streamkit/app-kit';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import { intlLocale } from '@/lib/locale';
 import { StreamClock } from './StreamClock';
 
@@ -24,6 +26,7 @@ export function StreamStatus({
   const viewers = totalViewers(channels);
   const isLive = channels.some((channel) => channel.isLive);
   const number = new Intl.NumberFormat(intlLocale());
+  const delta = useChange(viewers);
 
   if (channels.length === 0) {
     return (
@@ -56,8 +59,34 @@ export function StreamStatus({
 
         <div className="px-4 py-3">
           <dt className="text-xs text-muted">{t('stream.viewersTotal')}</dt>
-          <dd className={cn('mt-1 font-semibold tabular-nums', compact ? 'text-2xl' : 'text-3xl')}>
-            {viewers === null ? t('analytics.noValue') : number.format(viewers)}
+          <dd className="mt-1 flex items-baseline gap-2">
+            <span className={cn('font-semibold tabular-nums', compact ? 'text-2xl' : 'text-3xl')}>
+              {viewers === null ? t('analytics.noValue') : number.format(viewers)}
+            </span>
+            {/* Число без направления не отвечает на вопрос, который задают
+                между делом: эфир набирает или теряет? Изменение — с прошлого
+                замера этого окна; истории замеров у окна нет, и честнее так и
+                сказать, чем рисовать тренд за час. */}
+            {delta ? (
+              <span
+                // Ахроматично: направление — знаком и стрелкой, цвет в этом мире
+                // только у меток. Зелёный рост читался бы как статус «успех».
+                className={cn(
+                  'inline-flex items-center gap-0.5 text-sm font-medium tabular-nums',
+                  delta > 0 ? 'text-fg' : 'text-muted',
+                )}
+                title={t('stream.deltaHint')}
+              >
+                {delta > 0 ? (
+                  <ArrowUp aria-hidden="true" className="h-3.5 w-3.5" />
+                ) : (
+                  <ArrowDown aria-hidden="true" className="h-3.5 w-3.5" />
+                )}
+                {delta > 0 ? '+' : '−'}
+                {number.format(Math.abs(delta))}
+                <span className="sr-only"> {t('stream.deltaHint')}</span>
+              </span>
+            ) : null}
           </dd>
         </div>
 
@@ -102,4 +131,22 @@ export function StreamStatus({
       </dl>
     </section>
   );
+}
+
+/**
+ * На сколько значение изменилось с прошлого замера.
+ *
+ * Прошлое значение живёт в состоянии и подстраивается в рендере, а не в эффекте:
+ * так React советует подстраивать состояние под изменившийся пропс. Ноль и
+ * отсутствие данных — не изменение, и подписи рядом с числом нет.
+ */
+function useChange(value: number | null): number | null {
+  const [current, setCurrent] = useState(value);
+  const [previous, setPrevious] = useState<number | null>(null);
+  if (value !== current) {
+    setPrevious(current);
+    setCurrent(value);
+  }
+  if (value === null || previous === null || value === previous) return null;
+  return value - previous;
 }

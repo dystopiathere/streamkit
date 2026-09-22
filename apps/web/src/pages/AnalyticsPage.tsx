@@ -147,7 +147,7 @@ function RangePicker({
           onClick={() => onChange(range)}
           className={cn(
             'rounded px-3 py-1 text-sm transition-colors',
-            range === value ? 'bg-accent/20 text-fg' : 'text-muted hover:text-fg',
+            range === value ? 'bg-surface-hover font-medium text-fg' : 'text-muted hover:text-fg',
           )}
         >
           {t(`analytics.range.${range}`)}
