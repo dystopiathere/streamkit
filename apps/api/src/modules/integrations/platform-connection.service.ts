@@ -202,8 +202,13 @@ export class PlatformConnectionService {
     });
   }
 
-  /** Отключение: канал и учётные данные уходят вместе со снимками метрик. */
+  /**
+   * Отключение: доступ отзывается у площадки, канал и учётные данные уходят
+   * вместе со снимками метрик. Отзыв — первым: после удаления токенов отзывать
+   * было бы нечем.
+   */
   async disconnect(userId: string, platform: Platform, context: AuditContext = {}): Promise<void> {
+    await this.tokens.revoke(userId, platform);
     await this.prisma.channel.deleteMany({
       where: { userId, platform: toPrismaPlatform(platform) },
     });

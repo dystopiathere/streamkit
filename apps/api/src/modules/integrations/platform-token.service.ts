@@ -151,6 +151,40 @@ export class PlatformTokenService {
     });
   }
 
+  /**
+   * Отозвать доступ у площадки, пока токены ещё у нас.
+   *
+   * По возможности, а не обязательно: площадка может не ответить, а токен —
+   * быть уже отозван самим человеком. Отвязку это не останавливает — иначе
+   * недоступный Google запирал бы человека в интеграции, от которой он
+   * отказывается. Сбой пишется в журнал (без токена), разрешение тогда можно
+   * снять в настройках аккаунта площадки.
+   *
+   * Донат-сервисам отзывать нечем: у DonationAlerts такого метода в API нет.
+   */
+  async revoke(userId: string, platform: CredentialProvider): Promise<void> {
+    const provider =
+      platform === 'donationalerts' || platform === 'donatepay'
+        ? undefined
+        : this.registry.find(platform);
+    if (!provider) return;
+    const credential = await this.prisma.integrationCredential.findUnique({
+      where: { userId_provider: { userId, provider: platform } },
+    });
+    if (!credential) return;
+    try {
+      await provider.revokeTokens({
+        accessToken: this.crypto.decrypt(credential.accessTokenEncrypted),
+        refreshToken: credential.refreshTokenEncrypted
+          ? this.crypto.decrypt(credential.refreshTokenEncrypted)
+          : null,
+      });
+      await this.audit.record('integration.token.revoked', userId, { metadata: { platform } });
+    } catch (error) {
+      this.logger.warn({ err: error, userId, platform }, 'Площадка не отозвала доступ');
+    }
+  }
+
   async remove(userId: string, platform: CredentialProvider): Promise<void> {
     await this.prisma.integrationCredential.deleteMany({
       where: { userId, provider: platform },

@@ -18,7 +18,12 @@ const MAX_TEXT_POINTS = 500;
  * Суперчаты, спонсорство и подарки идут тем же потоком, но это не строки чата,
  * а события — их место в сценариях оповещений, и туда они пока не подключены.
  */
-export function youtubeToChatMessage(item: YouTubeChatItem, channel: string): ChatMessage | null {
+export function youtubeToChatMessage(
+  item: YouTubeChatItem,
+  channel: string,
+  /** Вызывается, когда текстовое сообщение не прошло схему: пути полей, без значений. */
+  onRejected?: (paths: string[]) => void,
+): ChatMessage | null {
   if (item.snippet?.type !== 'TEXT_MESSAGE_EVENT') return null;
 
   const raw = item.snippet.textMessageDetails?.messageText ?? item.snippet.displayMessage ?? '';
@@ -45,7 +50,11 @@ export function youtubeToChatMessage(item: YouTubeChatItem, channel: string): Ch
     parts: [{ kind: 'text', value: text }],
     sentAt: new Date(Number.isNaN(publishedAt) ? Date.now() : publishedAt).toISOString(),
   });
-  return parsed.success ? parsed.data : null;
+  if (!parsed.success) {
+    onRejected?.(parsed.error.issues.map((issue) => issue.path.join('.')));
+    return null;
+  }
+  return parsed.data;
 }
 
 let messageTypes: { request: protobuf.Type; response: protobuf.Type } | null = null;

@@ -707,7 +707,11 @@
         "canceled": "Failed"
       },
       "refunded": "Refunded {{amount}}"
-    }
+    },
+    "removeMethod": "Remove",
+    "removeMethodNamed": "Remove payment method {{title}}",
+    "removeMethodConfirm": "Remove the payment method? Auto-renewal will be turned off, and access stays until {{date}}. Turning auto-renewal back on will require a new payment.",
+    "removeMethodDone": "Payment method removed, auto-renewal turned off"
   },
   "public": {
     "nav": {

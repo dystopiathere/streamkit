@@ -32,6 +32,7 @@ export type AuditAction =
   | 'billing.payment.refunded'
   | 'billing.renewal.failed'
   | 'billing.autorenew.changed'
+  | 'billing.payment_method.removed'
   /** Стример выбрал другой тариф или период: применится при продлении. */
   | 'billing.plan.changed'
   | 'webhook.signature.invalid'
@@ -45,6 +46,7 @@ export type AuditAction =
   | 'integration.connected'
   | 'integration.disconnected'
   | 'integration.token.expired'
+  | 'integration.token.revoked'
   | 'integration.state.invalid'
   /** Стример включил или выключил площадку: активной может быть одна. */
   | 'integration.channel.toggled'

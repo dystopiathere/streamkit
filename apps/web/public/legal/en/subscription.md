@@ -1,6 +1,6 @@
 # Paid Plans Offer
 
-Version No. 3 of 20.09.2026
+Version No. 4 of 22.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/subscription?lang=ru); if the
@@ -106,6 +106,13 @@ section, or by withdrawing consent in the Privacy section. After it is turned
 off, nothing is charged, and access remains until the end of the paid period. A
 change of period (month or year) applies to the next renewal and requires a new
 email about the charge.
+
+5.6. The saved payment method can be removed in the Plan section. The Operator
+deletes it on its side, auto-renewal is turned off, and consent to automatic
+charges is considered withdrawn; access remains until the end of the paid
+period. The payment service does not allow cancelling a saved payment method on
+its side — once it is deleted by the Operator, it can no longer be charged.
+Auto-renewal can be turned back on only with a new payment.
 
 ## 6. Refunds
 

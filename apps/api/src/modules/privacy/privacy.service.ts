@@ -5,6 +5,7 @@ import { AuditService, type AuditContext } from '../../common/audit/audit.servic
 import { PasswordService } from '../../common/crypto/password.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { RoomEviction } from '../rooms/room-eviction.service';
+import { PlatformTokenService } from '../integrations/platform-token.service';
 import { WidgetsService } from '../widgets/widgets.service';
 import {
   LEGAL_DOCUMENTS,
@@ -43,6 +44,7 @@ export class PrivacyService {
     private readonly passwords: PasswordService,
     private readonly widgets: WidgetsService,
     private readonly rooms: RoomEviction,
+    private readonly platformTokens: PlatformTokenService,
   ) {}
 
   /**
@@ -321,6 +323,13 @@ export class PrivacyService {
     const roomIds = (
       await this.prisma.room.findMany({ where: { userId }, select: { id: true } })
     ).map((room) => room.id);
+
+    // Доступ к площадкам отзывается у них самих, пока токены ещё у нас: после
+    // транзакции отзывать было бы нечем, а разрешение приложения осталось бы в
+    // аккаунте Google или Twitch человека, который удалил аккаунт у нас.
+    for (const platform of ['youtube', 'twitch'] as const) {
+      await this.platformTokens.revoke(userId, platform);
+    }
 
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({

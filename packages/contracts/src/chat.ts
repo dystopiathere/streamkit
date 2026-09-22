@@ -94,8 +94,15 @@ export const chatPartSchema = z.discriminatedUnion('kind', [
 export type ChatPart = z.infer<typeof chatPartSchema>;
 
 const chatMessageBase = {
-  /** Идентификатор сообщения у площадки: тег `id` IRC, `id` сообщения YouTube. */
-  id: z.string().min(1).max(128),
+  /**
+   * Идентификатор сообщения у площадки: тег `id` IRC, `id` сообщения YouTube.
+   *
+   * Потолок с запасом, а не «по примеру»: у YouTube id нового формата —
+   * `LCC.` и длинная base64-строка, и при прежних 128 символах схема молча
+   * отбрасывала КАЖДОЕ сообщение чата YouTube. Поддельный сервер в тестах слал
+   * короткие id и этого не видел.
+   */
+  id: z.string().min(1).max(512),
   /** Отображаемое имя: может отличаться регистром и алфавитом. */
   username: z.string().min(1).max(100),
   /** Цвет ника из тега. null — площадка его не прислала, цвет выберет виджет. */

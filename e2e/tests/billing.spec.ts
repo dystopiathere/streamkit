@@ -90,4 +90,16 @@ test('стример оформляет тариф «Про», получает 
   await page.getByRole('link', { name: 'Комнаты' }).click();
   await expect(page.getByRole('link', { name: 'Открыть' })).toBeVisible();
   await expect(page.getByText('Приватные комнаты — в тарифе «Про»')).toHaveCount(0);
+
+  // Карту можно отвязать: у ЮKassa отменить сохранение нельзя, отвязка — это
+  // удаление способа оплаты у нас (оферта, 5.6). Доступ остаётся до конца периода.
+  await page.getByRole('link', { name: 'Тариф', exact: true }).click();
+  page.once('dialog', (dialog) => void dialog.accept());
+  await page.getByRole('button', { name: /^Отвязать способ оплаты/ }).click();
+  await expect(page.getByText('Способ оплаты отвязан, автопродление выключено')).toBeVisible();
+  await expect(page.getByText('Способ оплаты: Карта *4444')).toHaveCount(0);
+  // Включить продление по отвязанной карте негде: кнопки больше нет.
+  await expect(page.getByRole('button', { name: 'Включить автопродление' })).toHaveCount(0);
+  await page.getByRole('link', { name: 'Комнаты' }).click();
+  await expect(page.getByRole('link', { name: 'Открыть' })).toBeVisible();
 });

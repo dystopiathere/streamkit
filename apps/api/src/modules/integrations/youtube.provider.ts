@@ -179,6 +179,20 @@ export class YouTubeProvider implements PlatformProvider {
     );
   }
 
+  /**
+   * Google снимает разрешение целиком по любому из токенов; refresh — надёжнее:
+   * access к моменту отвязки мог уже истечь, и отзыв по нему ответил бы 400.
+   */
+  async revokeTokens(tokens: { accessToken: string; refreshToken: string | null }): Promise<void> {
+    await this.http.json<void>({
+      platform: this.platform,
+      url: this.config.youtubeEndpoints.revoke,
+      method: 'POST',
+      form: { token: tokens.refreshToken ?? tokens.accessToken },
+      ignoreBody: true,
+    });
+  }
+
   async fetchIdentity(accessToken: string): Promise<ChannelIdentity> {
     const response = await this.http.json<YouTubeList<YouTubeChannel>>({
       platform: this.platform,

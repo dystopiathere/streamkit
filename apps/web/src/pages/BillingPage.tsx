@@ -17,6 +17,7 @@ import {
   usePayments,
   useReturnedPayment,
   useSubscription,
+  useRemovePaymentMethod,
   useUpdateSubscription,
 } from '@/features/billing/queries';
 import { planFeatureList } from '@/features/billing/plan-features';
@@ -93,6 +94,7 @@ export function BillingPage(): React.JSX.Element {
 function CurrentPlan({ subscription }: { subscription: SubscriptionView }): React.JSX.Element {
   const { t } = useTranslation();
   const update = useUpdateSubscription();
+  const removeMethod = useRemovePaymentMethod();
   const [renewConsent, setRenewConsent] = useState(false);
 
   const end = subscription.currentPeriodEnd ? formatDate(subscription.currentPeriodEnd) : '';
@@ -120,9 +122,31 @@ function CurrentPlan({ subscription }: { subscription: SubscriptionView }): Reac
               : t('billing.status.endsOn', { date: end })}
         </p>
         {subscription.paymentMethodTitle ? (
-          <p className="text-xs text-muted">
-            {t('billing.paymentMethod', { title: subscription.paymentMethodTitle })}
-          </p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <p className="text-xs text-muted">
+              {t('billing.paymentMethod', { title: subscription.paymentMethodTitle })}
+            </p>
+            {/* Отвязка — у самого способа оплаты, а не среди настроек продления:
+                это другое действие. Выключить автопродление можно и не
+                отвязывая карту, а отвязанную вернуть только новой оплатой. */}
+            <Button
+              variant="ghost"
+              className="px-2 py-1 text-xs"
+              isLoading={removeMethod.isPending}
+              aria-label={t('billing.removeMethodNamed', {
+                title: subscription.paymentMethodTitle,
+              })}
+              onClick={() => {
+                if (!window.confirm(t('billing.removeMethodConfirm', { date: end }))) return;
+                removeMethod.mutate(undefined, {
+                  onSuccess: () => toast.success(t('billing.removeMethodDone')),
+                  onError: handleError,
+                });
+              }}
+            >
+              {t('billing.removeMethod')}
+            </Button>
+          </div>
         ) : null}
       </div>
 

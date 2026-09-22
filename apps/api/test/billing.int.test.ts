@@ -1077,6 +1077,66 @@ describe('Подписка на платформу (feature)', () => {
       .expect(200);
   });
 
+  it('отвязка способа оплаты стирает его, выключает автопродление и ничего не списывает', async () => {
+    // У ЮKassa отозвать сохранённый способ нельзя — отвязка это удаление его
+    // идентификатора у нас. После неё списать не по чему, а доступ до конца
+    // оплаченного периода остаётся (оферта, 5.6).
+    const owner = await streamer();
+    await subscribed(owner.token);
+
+    const response = await request(server())
+      .delete('/api/billing/payment-method')
+      .set(auth(owner.token))
+      .expect(200);
+    expect(response.body).toMatchObject({
+      plan: 'pro',
+      status: 'active',
+      autoRenew: false,
+      paymentMethodTitle: null,
+    });
+
+    const row = await harness.prisma.subscription.findUniqueOrThrow({
+      where: { userId: owner.userId },
+    });
+    expect(row).toMatchObject({ autoRenew: false, paymentMethodEncrypted: null });
+    const consent = await harness.prisma.consent.findFirstOrThrow({
+      where: { userId: owner.userId, document: 'SUBSCRIPTION_OFFER' },
+    });
+    expect(consent.revokedAt).not.toBeNull();
+
+    await harness.prisma.subscription.update({
+      where: { userId: owner.userId },
+      data: { currentPeriodEnd: new Date(Date.now() + 60 * 60 * 1000) },
+    });
+    await billing.renewDue();
+    expect(gateway.charged).toHaveLength(0);
+
+    // Включить автопродление без способа оплаты нельзя — только новой оплатой.
+    await request(server())
+      .patch('/api/billing/subscription')
+      .set(auth(owner.token))
+      .send({ autoRenew: true, acceptOffer: true })
+      .expect(409);
+    // Повтор ничего не ломает: отвязывать уже нечего.
+    await request(server())
+      .delete('/api/billing/payment-method')
+      .set(auth(owner.token))
+      .expect(200);
+    expect(
+      await harness.prisma.auditLog.count({
+        where: { userId: owner.userId, action: 'billing.payment_method.removed' },
+      }),
+    ).toBe(1);
+  });
+
+  it('отвязка без подписки — 404', async () => {
+    const owner = await streamer();
+    await request(server())
+      .delete('/api/billing/payment-method')
+      .set(auth(owner.token))
+      .expect(404);
+  });
+
   it('отзыв оферты в разделе «Приватность» выключает автопродление', async () => {
     const owner = await streamer();
     await subscribed(owner.token);

@@ -55,6 +55,17 @@ describe('фон виджета', () => {
     expect(image?.getAttribute('referrerpolicy')).toBe('no-referrer');
   });
 
+  it('цвет фона лежит ПОД текстом, а не поверх него', () => {
+    // Слой позиционирован абсолютно, текст — в потоке. Без z-index такой слой
+    // рисуется поверх непозиционированных соседей: сплошной цвет закрывал текст.
+    render(<GoalBar config={goalConfig({ background: { color: '#112233' } })} state={null} />);
+    const layer = screen.getByTestId('widget-background');
+    expect(layer.style.zIndex).toBe('-1');
+    // А кадр держит свой контекст наложения: иначе слой провалился бы под
+    // подложку предпросмотра или сцену OBS и стал невидим.
+    expect((layer.parentElement as HTMLElement).style.isolation).toBe('isolate');
+  });
+
   it('кавычка в адресе плитки экранируется, а не закрывает строку CSS', () => {
     const url = 'https://example.com/a".png';
     render(

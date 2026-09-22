@@ -55,6 +55,12 @@ export interface PlatformProvider {
   refreshTokens(refreshToken: string): Promise<OAuthTokens>;
   fetchIdentity(accessToken: string): Promise<ChannelIdentity>;
   fetchStats(accessToken: string, identity: ChannelIdentity): Promise<ChannelStats>;
+  /**
+   * Отозвать выданный доступ у площадки — при отвязке и удалении аккаунта.
+   * Удалить свою копию токенов мало: разрешение приложения оставалось бы в
+   * аккаунте площадки, пока человек не найдёт его и не снимет сам.
+   */
+  revokeTokens(tokens: { accessToken: string; refreshToken: string | null }): Promise<void>;
 }
 
 /** Ответ токен-эндпоинта. Форма одинакова у Twitch и Google — это OAuth 2.0. */

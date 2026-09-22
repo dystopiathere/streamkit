@@ -560,6 +560,43 @@ export class BillingService {
   }
 
   /**
+   * Отвязать сохранённый способ оплаты (оферта, 5.6).
+   *
+   * У ЮKassa отозвать сохранённый способ нельзя: по её документации удаление
+   * идентификатора у магазина и есть отвязка. Поэтому стираем шифротекст и
+   * подпись, выключаем автопродление и отзываем согласие на списания — списать
+   * больше не по чему. Доступ до конца оплаченного периода остаётся, а включить
+   * автопродление снова можно только новой оплатой: сохранённого способа нет.
+   *
+   * Повторный вызов ничего не меняет и в аудит не пишется: отвязывать нечего.
+   */
+  async removePaymentMethod(userId: string, context: AuditContext = {}): Promise<SubscriptionView> {
+    const row = await this.prisma.subscription.findUnique({ where: { userId } });
+    if (!row) throw new NotFoundException('Подписки нет');
+    if (!row.paymentMethodEncrypted) return this.subscription(userId);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.subscription.update({
+        where: { id: row.id },
+        data: {
+          paymentMethodEncrypted: null,
+          paymentMethodTitle: null,
+          autoRenew: false,
+          renewalFailures: 0,
+          nextRenewalAttemptAt: null,
+        },
+      });
+      await tx.consent.updateMany({
+        where: { userId, document: 'SUBSCRIPTION_OFFER', revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    });
+
+    await this.audit.record('billing.payment_method.removed', userId, { ...context });
+    return this.subscription(userId);
+  }
+
+  /**
    * Бесплатные дни от платформы — например, в компенсацию сбоя.
    *
    * Платежа не создаётся: денег не было. Отметка письма о списании

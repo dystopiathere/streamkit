@@ -47,6 +47,12 @@ export function slotCss(slot: WidgetSlot | undefined, fontSize: number): CSSProp
  * притушила бы и текст, а полупрозрачная подложка под читаемым текстом — обычное
  * требование. `pointer-events: none` здесь не нужен: оверлей не принимает ввод
  * целиком, а в предпросмотре фон лежит под содержимым.
+ *
+ * `z-index: -1` обязателен. Слой позиционирован абсолютно, а содержимое кадра
+ * стоит в обычном потоке, и по правилам CSS позиционированный элемент рисуется
+ * ПОВЕРХ непозиционированных соседей, даже если идёт в разметке первым: сплошной
+ * цвет фона закрывал весь текст виджета. Ниже родителя слой не проваливается —
+ * кадр изолирует свой контекст наложения (`isolation` в `WidgetFrame`).
  */
 export function WidgetBackgroundLayer({
   background,
@@ -58,6 +64,7 @@ export function WidgetBackgroundLayer({
   const style: CSSProperties = {
     position: 'absolute',
     inset: 0,
+    zIndex: -1,
     opacity: background.opacity,
     borderRadius: background.cornerRadius || undefined,
     background: background.color ?? undefined,
@@ -132,6 +139,9 @@ export function WidgetFrame({
       data-testid={testId}
       style={{
         position: 'relative',
+        // Свой контекст наложения: фон с z-index -1 уходит под содержимое кадра,
+        // но не под то, что лежит под самим кадром (сцена OBS, предпросмотр).
+        isolation: 'isolate',
         width: '100%',
         height: '100%',
         boxSizing: 'border-box',

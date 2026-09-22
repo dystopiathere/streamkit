@@ -153,6 +153,17 @@ export class TwitchProvider implements PlatformProvider {
     );
   }
 
+  /** Twitch отзывает access-токен; вместе с ним гаснет и разрешение приложения. */
+  async revokeTokens(tokens: { accessToken: string; refreshToken: string | null }): Promise<void> {
+    await this.http.json<void>({
+      platform: this.platform,
+      url: `${this.config.twitchEndpoints.auth}/revoke`,
+      method: 'POST',
+      form: { client_id: this.credentials().clientId, token: tokens.accessToken },
+      ignoreBody: true,
+    });
+  }
+
   async fetchIdentity(accessToken: string): Promise<ChannelIdentity> {
     const response = await this.get<TwitchList<TwitchUser>>(`${this.helix}/users`, accessToken);
     const user = response.data[0];

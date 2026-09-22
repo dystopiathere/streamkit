@@ -108,6 +108,7 @@ export class AppConfig {
   get youtubeEndpoints(): {
     auth: string;
     token: string;
+    revoke: string;
     api: string;
     chatGrpc: string;
     chatGrpcInsecure: boolean;
@@ -122,6 +123,8 @@ export class AppConfig {
         this.config.get<string>('YOUTUBE_AUTH_URL') ??
         'https://accounts.google.com/o/oauth2/v2/auth',
       token: this.config.get<string>('YOUTUBE_TOKEN_URL') ?? 'https://oauth2.googleapis.com/token',
+      revoke:
+        this.config.get<string>('YOUTUBE_REVOKE_URL') ?? 'https://oauth2.googleapis.com/revoke',
       api: trim(
         this.config.get<string>('YOUTUBE_API_URL') ?? 'https://www.googleapis.com/youtube/v3',
       ),

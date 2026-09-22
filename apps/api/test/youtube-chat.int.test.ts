@@ -112,9 +112,18 @@ class FakeYouTube {
   }
 }
 
+/**
+ * Id сообщения — как у настоящего YouTube: `LCC.` и длинная base64-строка,
+ * длиннее 128 символов. Короткие id в этом фейке пропустили ошибку, из-за
+ * которой схема молча отбрасывала каждое сообщение живого чата.
+ */
+function youtubeMessageId(tag: string): string {
+  return `LCC.${Buffer.from(`${tag}:${'Cg8KDQoLc3RyZWFta2l0LXRlc3Q'.repeat(5)}`).toString('base64')}`;
+}
+
 function textItem(id: string, text: string, publishedAt = new Date()): YouTubeChatItem {
   return {
-    id,
+    id: youtubeMessageId(id),
     snippet: {
       type: 'TEXT_MESSAGE_EVENT',
       publishedAt: publishedAt.toISOString(),
@@ -237,6 +246,7 @@ describe('Чат YouTube (feature)', () => {
       ],
     });
     await until(() => published.length === 1);
+    expect(published[0]!.id.length).toBeGreaterThan(128);
     expect(published[0]).toMatchObject({
       platform: 'youtube',
       channel: CHANNEL,

@@ -63,6 +63,8 @@ interface Session {
   /** Отказ по токену уже повторяли — второй означает, что доступ отозван. */
   authRetried: boolean;
   busy: boolean;
+  /** Об отброшенных схемой сообщениях сказано в журнал — раз на поток, не на каждое. */
+  rejectionLogged: boolean;
 }
 
 /**
@@ -119,6 +121,7 @@ export class YouTubeChatSource implements ChatSource {
       attempts: 0,
       authRetried: false,
       busy: false,
+      rejectionLogged: false,
     };
     this.sessions.set(channel, session);
     this.joined.add(channel);
@@ -212,6 +215,10 @@ export class YouTubeChatSource implements ChatSource {
     session.liveChatId = liveChatId;
     session.pageToken = null;
     session.since = Date.now() - HISTORY_GRACE_MS;
+    // Каждый шаг пути чата — в журнал. Раньше источник молчал на всех штатных
+    // ветках, и «чат не пришёл» на проде нельзя было разобрать: не нашли эфир,
+    // не открыли поток или открыли, но сообщения отбросились.
+    this.logger.log({ userId: session.userId }, 'Эфир YouTube найден, открываем чат');
   }
 
   private async openStream(session: Session): Promise<void> {
@@ -236,6 +243,8 @@ export class YouTubeChatSource implements ChatSource {
     session.call = call;
     session.openedAt = Date.now();
     session.state = 'ok';
+    session.rejectionLogged = false;
+    this.logger.log({ userId: session.userId }, 'Поток чата YouTube открыт');
 
     call.on('data', (response: YouTubeChatResponse) => this.onResponse(session, call, response));
     call.on('error', (error: grpc.ServiceError) => this.onError(session, call, error));
@@ -257,7 +266,13 @@ export class YouTubeChatSource implements ChatSource {
         this.endBroadcast(session);
         return;
       }
-      const message = youtubeToChatMessage(item, session.channel);
+      // В журнал — только пути полей, не значения: ники и текст зрителей —
+      // данные, которые стример поручил нам только показать.
+      const message = youtubeToChatMessage(item, session.channel, (paths) => {
+        if (session.rejectionLogged) return;
+        session.rejectionLogged = true;
+        this.logger.warn({ fields: paths }, 'Сообщение чата YouTube не прошло схему');
+      });
       if (!message || Date.parse(message.sentAt) < session.since) continue;
       if (this.limiter.allow(session.channel)) this.sink?.(message);
     }

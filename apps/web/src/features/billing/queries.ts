@@ -73,6 +73,21 @@ export function useCheckout() {
   });
 }
 
+/**
+ * Отвязать сохранённый способ оплаты. Автопродление выключается вместе с ним, и
+ * согласие на списания в журнале отзывается — раздел «Приватность» это покажет.
+ */
+export function useRemovePaymentMethod() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete<SubscriptionView>('/billing/payment-method'),
+    onSuccess: (subscription) => {
+      client.setQueryData(billingKeys.subscription, subscription);
+      void client.invalidateQueries({ queryKey: ['privacy', 'consents'] });
+    },
+  });
+}
+
 export function useUpdateSubscription() {
   const client = useQueryClient();
   return useMutation({

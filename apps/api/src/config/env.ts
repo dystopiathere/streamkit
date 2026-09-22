@@ -141,6 +141,7 @@ export const envSchema = z.object({
    */
   YOUTUBE_AUTH_URL: optionalValue(),
   YOUTUBE_TOKEN_URL: optionalValue(),
+  YOUTUBE_REVOKE_URL: optionalValue(),
   YOUTUBE_API_URL: optionalValue(),
   YOUTUBE_CHAT_GRPC_URL: optionalValue(),
   /**

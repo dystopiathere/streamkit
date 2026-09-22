@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -70,6 +71,15 @@ export class BillingController {
     @Req() request: Request,
   ): Promise<SubscriptionView> {
     return this.billing.update(user.id, body, this.audit.contextFromRequest(request));
+  }
+
+  /** Отвязать сохранённый способ оплаты: автопродление выключается вместе с ним. */
+  @Delete('payment-method')
+  async removePaymentMethod(
+    @CurrentUser() user: AuthenticatedUser,
+    @Req() request: Request,
+  ): Promise<SubscriptionView> {
+    return this.billing.removePaymentMethod(user.id, this.audit.contextFromRequest(request));
   }
 
   @Post('checkout')

@@ -36,6 +36,11 @@ export interface PlatformRequest {
    * описание — без заголовков и данных запроса.
    */
   describeError?: (body: string) => Record<string, string> | undefined;
+  /**
+   * Тело успешного ответа не читать: отзыв токена у Google и Twitch отвечает
+   * пустым 200, и разбор JSON принял бы успех за сбой сети.
+   */
+  ignoreBody?: boolean;
 }
 
 /**
@@ -116,6 +121,7 @@ export class HttpClient {
     });
 
     if (response.ok) {
+      if (request.ignoreBody) return undefined as T;
       return (await response.json()) as T;
     }
 
