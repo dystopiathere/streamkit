@@ -202,6 +202,7 @@ export class AdminUsersController {
     return this.users.extendSubscription(
       id,
       body.days,
+      body.plan,
       staffContext(this.audit, request, staff, { reason: body.reason }),
     );
   }

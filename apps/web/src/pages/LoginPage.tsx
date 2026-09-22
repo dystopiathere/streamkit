@@ -21,6 +21,7 @@ import { PublicFooter } from '@/features/public/PublicFooter';
 import { ApiError, api } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { localizedResolver } from '@/lib/form-errors';
+import { usePageMeta } from '@/lib/seo';
 
 export function LoginPage(): React.JSX.Element {
   const { t } = useTranslation();
@@ -37,6 +38,8 @@ export function LoginPage(): React.JSX.Element {
 
   const errors = form.formState.errors;
   usePageTitle(t('auth.loginTitle'));
+  // Вход в выдаче не нужен: из поиска приходят на главную и к регистрации.
+  usePageMeta({ noindex: true });
 
   const onSubmit = form.handleSubmit(async (values) => {
     try {

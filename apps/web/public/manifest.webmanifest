@@ -1,0 +1,21 @@
+{
+  "name": "StreamKit",
+  "short_name": "StreamKit",
+  "description": "Панель стримера: виджеты для OBS, донаты, чат и аналитика",
+  "lang": "ru",
+  "start_url": "/stream",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#100f0d",
+  "theme_color": "#100f0d",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

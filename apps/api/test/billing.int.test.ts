@@ -971,7 +971,7 @@ describe('Подписка на платформу (feature)', () => {
   it('бесплатные дни сдвигают конец периода и требуют нового письма о списании', async () => {
     const { userId, end } = await dueSoon();
 
-    const view = await billing.extend(userId, 10);
+    const view = await billing.extend(userId, 10, 'pro');
 
     expect(new Date(view.currentPeriodEnd!).getTime()).toBe(end.getTime() + 10 * DAY_MS);
     const row = await harness.prisma.subscription.findUniqueOrThrow({ where: { userId } });
@@ -992,7 +992,7 @@ describe('Подписка на платформу (feature)', () => {
     const paid = await harness.prisma.subscription.findUniqueOrThrow({
       where: { userId: owner.userId },
     });
-    await billing.extend(owner.userId, 10, {}, now);
+    await billing.extend(owner.userId, 10, 'pro', {}, now);
 
     const view = await billing.revokeGift(owner.userId, 10, {}, now);
 
@@ -1008,7 +1008,7 @@ describe('Подписка на платформу (feature)', () => {
   it('снять больше подаренного нельзя, а без подарка — нечего', async () => {
     const owner = await streamer();
     const now = new Date();
-    await billing.extend(owner.userId, 5, {}, now);
+    await billing.extend(owner.userId, 5, 'pro', {}, now);
 
     // Запрос на тридцать дней снимает пять: остальное не подарено.
     const view = await billing.revokeGift(owner.userId, 30, {}, now);
@@ -1026,10 +1026,71 @@ describe('Подписка на платформу (feature)', () => {
     const owner = await streamer();
     const now = new Date();
 
-    const view = await billing.extend(owner.userId, 7, {}, now);
+    const view = await billing.extend(owner.userId, 7, 'pro', {}, now);
 
     expect(view).toMatchObject({ status: 'active', autoRenew: false, roomsAccess: true });
     expect(new Date(view.currentPeriodEnd!).getTime()).toBe(now.getTime() + 7 * DAY_MS);
+  });
+
+  it('бесплатные дни дарят выбранный тариф: «Мультистрим» комнат не открывает', async () => {
+    const owner = await streamer();
+    const now = new Date();
+
+    const view = await billing.extend(owner.userId, 7, 'multistream', {}, now);
+
+    expect(view).toMatchObject({
+      status: 'active',
+      plan: 'multistream',
+      roomsAccess: false,
+      features: { platforms: null, widgets: null, rooms: false },
+      renewalAmount: PLAN_PRICES.multistream.month,
+    });
+  });
+
+  it('кончившейся подписке подарок меняет тариф, но не цену продления', async () => {
+    // Оплачивал «Мультистрим», подписка кончилась, дарят «Про». Продление,
+    // если его включат, обязано списать ту цену, что называла подписка, — за
+    // «Мультистрим», а не за подаренный тариф.
+    const owner = await streamer();
+    await subscribed(owner.token, 'multistream');
+    await harness.prisma.subscription.update({
+      where: { userId: owner.userId },
+      data: { currentPeriodEnd: new Date(Date.now() - 30 * DAY_MS), autoRenew: false },
+    });
+
+    const view = await billing.extend(owner.userId, 7, 'pro');
+
+    expect(view).toMatchObject({
+      status: 'active',
+      plan: 'pro',
+      nextPlan: 'multistream',
+      roomsAccess: true,
+      renewalAmount: PLAN_PRICES.multistream.month,
+    });
+  });
+
+  it('действующей подписке другой тариф не подарить — дни продлевают её тариф', async () => {
+    const owner = await streamer();
+    await subscribed(owner.token, 'multistream');
+    const before = await harness.prisma.subscription.findUniqueOrThrow({
+      where: { userId: owner.userId },
+    });
+
+    await expect(billing.extend(owner.userId, 7, 'pro')).rejects.toThrow('другой тариф');
+
+    const after = await harness.prisma.subscription.findUniqueOrThrow({
+      where: { userId: owner.userId },
+    });
+    expect(after).toMatchObject({
+      plan: 'MULTISTREAM',
+      currentPeriodEnd: before.currentPeriodEnd,
+      giftedDays: 0,
+    });
+    // Тот же тариф — обычное продление подарком.
+    const view = await billing.extend(owner.userId, 7, 'multistream');
+    expect(new Date(view.currentPeriodEnd!).getTime()).toBe(
+      before.currentPeriodEnd!.getTime() + 7 * DAY_MS,
+    );
   });
 
   it('письмо о списании уходит за три дня до окна продления, один раз и с суммой подписки', async () => {

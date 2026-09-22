@@ -14,6 +14,8 @@ import {
   type AdminSession,
   type AdminUserDetail,
   formatMoney,
+  PAID_PLANS,
+  type PaidPlan,
   roleAllows,
   USER_ROLES,
   type UserRole,
@@ -88,6 +90,10 @@ function UserCard({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
   const name = user.displayName;
   const dialog = useConfirm<Dialog>();
   const [days, setDays] = useState(7);
+  const [giftPlan, setGiftPlan] = useState<PaidPlan>('pro');
+  // Действующей подписке дни продлевают её тариф — выбирать нечего, сервер
+  // другой отклонит. Выбор — только когда тарифа сейчас нет.
+  const activePlan = detail.subscription.plan === 'free' ? null : detail.subscription.plan;
   const [pendingRole, setPendingRole] = useState<UserRole | null>(null);
 
   const base = `/admin/users/${user.id}`;
@@ -114,7 +120,8 @@ function UserCard({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
     t('user.autoRenewDisabled'),
   );
   const extend = useAdminAction(
-    (input: { days: number; reason: string }) => api.post(`${base}/subscription/extend`, input),
+    (input: { days: number; plan: PaidPlan; reason: string }) =>
+      api.post(`${base}/subscription/extend`, input),
     t('user.extended'),
   );
   const revokeGift = useAdminAction(
@@ -580,10 +587,14 @@ function UserCard({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
         isPending={extend.isPending}
         onClose={close}
         onConfirm={({ reason }) =>
-          extend.mutate({ days, reason: reason ?? '' }, { onSuccess: close })
+          extend.mutate(
+            { days, plan: activePlan ?? giftPlan, reason: reason ?? '' },
+            { onSuccess: close },
+          )
         }
       >
         <p>{t('user.extendText')}</p>
+        <GiftPlanField active={activePlan} value={giftPlan} onChange={setGiftPlan} />
         <DaysField value={days} onChange={setDays} />
       </Confirm>
       <Confirm
@@ -682,6 +693,45 @@ function RoleSelect({
         ))}
       </select>
     </>
+  );
+}
+
+/**
+ * Тариф бесплатных дней. У действующей подписки — только её тариф, текстом:
+ * список с одним возможным вариантом выглядел бы как выбор, которого нет.
+ */
+function GiftPlanField({
+  active,
+  value,
+  onChange,
+}: {
+  active: PaidPlan | null;
+  value: PaidPlan;
+  onChange: (plan: PaidPlan) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const id = useId();
+  if (active) {
+    return (
+      <p className="mt-3 text-fg">{t('user.extendActivePlan', { plan: t(`plan.${active}`) })}</p>
+    );
+  }
+  return (
+    <div className="mt-3 text-fg">
+      <Label htmlFor={id}>{t('user.extendPlan')}</Label>
+      <select
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value as PaidPlan)}
+        className={`${selectClasses} mt-1 max-w-48`}
+      >
+        {PAID_PLANS.map((plan) => (
+          <option key={plan} value={plan}>
+            {t(`plan.${plan}`)}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 

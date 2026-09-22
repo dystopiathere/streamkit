@@ -18,6 +18,7 @@ import { PublicFooter } from '@/features/public/PublicFooter';
 import { TestCard } from '@/features/public/TestCard';
 import { missingValue, useSeller } from '@/features/public/seller';
 import { useAuthStore } from '@/lib/auth-store';
+import { usePageMeta } from '@/lib/seo';
 import { formatMoney } from '@/lib/locale';
 
 /**
@@ -50,11 +51,16 @@ const MENU_ID = 'landing-menu';
  * проверки, поэтому у разделов якоря: на них удобно сослаться в заявке.
  */
 export function LandingPage(): React.JSX.Element {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const signedIn = useAuthStore((state) => Boolean(state.accessToken));
   const seller = useSeller();
   const menu = useCollapsibleMenu(MENU_ID);
-  usePageTitle(undefined);
+  usePageTitle(t('seo.home.title'));
+  usePageMeta({
+    description: t('seo.home.description'),
+    path: '/',
+    language: i18n.language === 'en' ? 'en' : 'ru',
+  });
 
   return (
     <div className="flex min-h-screen flex-col">

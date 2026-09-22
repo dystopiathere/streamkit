@@ -456,7 +456,6 @@
     "activateNamed": "Make {{name}} the active platform",
     "inactive": "This platform is not active: your plan runs one at a time. Metrics, chat and events are paused — press “Make active” to switch to it.",
     "connectPlanLimit": "Your plan allows one platform. Get Multistream or disconnect the platform you already have.",
-    "youtubeRounding": "YouTube rounds the subscriber count in the API itself: below a thousand it is rounded to the nearest ten, so five subscribers arrive as zero. The exact number is in YouTube Studio.",
     "reset": {
       "title": "Reset donation history",
       "text": "Deletes every event: donations, followers, subscriptions, raids. Period totals, the top donors list and goal progress reset with them. Widget settings and goal starting amounts stay.",
@@ -774,7 +773,7 @@
     "delivery": {
       "title": "How you get the service",
       "digital": "The service is digital and is provided online through your account on this website. There is no physical delivery — nothing needs to be sent or received.",
-      "instant": "Access to the Pro plan opens automatically right after the payment is confirmed, usually within a minute. No email or call is needed.",
+      "instant": "Access to the paid plan opens automatically right after the payment is confirmed, usually within a minute. No email or call is needed.",
       "term": "The service is provided for the whole paid period: a calendar month or year from the date of payment.",
       "requirements": "You need a browser and streaming software with a browser source, such as OBS Studio. Nothing from us needs to be installed."
     },
@@ -885,5 +884,17 @@
       "disabled": "off"
     },
     "deltaHint": "since the last reading"
+  },
+  "seo": {
+    "home": {
+      "title": "Donation alerts, widgets and multichat for OBS",
+      "description": "Donation and Twitch event alerts, donation goal, marathon timer, Twitch and YouTube multichat and live guests — one link for OBS. Free plan available."
+    },
+    "register": {
+      "description": "Create a StreamKit account: donation alerts, OBS widgets, multichat and channel analytics. Free plan with no time limit."
+    },
+    "legal": {
+      "description": "{{title}} of the StreamKit service — current version."
+    }
   }
 }

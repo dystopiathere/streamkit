@@ -648,26 +648,51 @@ export class BillingService {
    * Платежа не создаётся: денег не было. Отметка письма о списании
    * сбрасывается — конец периода сдвинулся, и прежнее письмо называло другую
    * дату. Новое уйдёт по обычному расписанию, и без него списания не будет.
+   *
+   * Тариф подарка выбирает сотрудник, но у действующей подписки (в том числе в
+   * льготные дни) дни продлевают ЕЁ тариф: два тарифа сразу у подписки быть не
+   * может, а поднять оплаченный «Мультистрим» до «Про» на весь остаток значило
+   * бы подарить больше, чем просили, — и снять такой подарок было бы нечем.
    */
   async extend(
     userId: string,
     days: number,
+    plan: PaidPlan,
     context: AuditContext = {},
     now = new Date(),
   ): Promise<SubscriptionView> {
     await this.prisma.$transaction(async (tx) => {
       // Строка подписки блокируется: параллельное применение платежа тоже
       // сдвигает конец периода, и одно из двух продлений потерялось бы.
-      const [locked] = await tx.$queryRaw<Array<{ id: string; currentPeriodEnd: Date | null }>>`
-        SELECT "id", "currentPeriodEnd" FROM "Subscription" WHERE "userId" = ${userId}::uuid FOR UPDATE`;
+      const [locked] = await tx.$queryRaw<
+        Array<{ id: string; currentPeriodEnd: Date | null }>
+      >`SELECT "id", "currentPeriodEnd" FROM "Subscription" WHERE "userId" = ${userId}::uuid FOR UPDATE`;
+      const row = locked
+        ? await tx.subscription.findUniqueOrThrow({ where: { id: locked.id } })
+        : null;
+      const current = effectivePlan(row, now);
+      if (current !== 'free' && current !== plan) {
+        throw new ConflictException(
+          'У пользователя действует другой тариф — бесплатные дни продлевают его',
+        );
+      }
+
       const from =
         locked?.currentPeriodEnd && locked.currentPeriodEnd > now ? locked.currentPeriodEnd : now;
       const end = new Date(from.getTime() + days * DAY_MS);
 
-      if (locked) {
+      if (row) {
+        // Кончившаяся подписка получает тариф подарка. Выбор на следующий
+        // период при этом остаётся прежним: сумма продления посчитана под него,
+        // и списать цену «Мультистрима» за «Про» (или наоборот) было бы нельзя.
+        const renewalPlan = row.nextPlan ?? row.plan;
+        const giftedPlan = toPrismaPlan(plan);
         await tx.subscription.update({
-          where: { id: locked.id },
+          where: { id: row.id },
           data: {
+            ...(current === 'free'
+              ? { plan: giftedPlan, nextPlan: renewalPlan === giftedPlan ? null : renewalPlan }
+              : {}),
             currentPeriodEnd: end,
             // Подаренное копится: два подарка по десять дней снимаются как
             // двадцать, а не как последние десять.
@@ -684,16 +709,15 @@ export class BillingService {
         await tx.subscription.create({
           data: {
             userId,
-            // Подарок — это «Про»: дарят доступ к тому, что иначе не получить,
-            // а не к тарифу подешевле. Месяц без автопродления: списывать нечем
-            // и не на что, согласия на списания пользователь не давал.
-            plan: 'PRO',
+            // Месяц без автопродления: списывать нечем и не на что, согласия
+            // на списания пользователь не давал.
+            plan: toPrismaPlan(plan),
             period: 'MONTH',
             currentPeriodEnd: end,
             autoRenew: false,
             giftedDays: days,
-            renewalAmountMinor: PLAN_PRICES.pro.month.amountMinor,
-            renewalCurrency: PLAN_PRICES.pro.month.currency,
+            renewalAmountMinor: PLAN_PRICES[plan].month.amountMinor,
+            renewalCurrency: PLAN_PRICES[plan].month.currency,
           },
         });
       }
@@ -701,7 +725,7 @@ export class BillingService {
 
     await this.audit.record('admin.subscription.extended', userId, {
       ...context,
-      metadata: { ...context.metadata, days },
+      metadata: { ...context.metadata, days, plan },
     });
     return this.subscription(userId, now);
   }

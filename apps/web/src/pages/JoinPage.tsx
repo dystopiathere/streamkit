@@ -19,6 +19,7 @@ import { RoomStage } from '@/features/rooms/RoomStage';
 import { ROOM_OPTIONS } from '@/features/rooms/room-options';
 import { useGuestJoin } from '@/features/rooms/queries';
 import { ApiError } from '@/lib/api';
+import { usePageMeta } from '@/lib/seo';
 
 type Ended = 'removed' | 'closed' | 'left';
 
@@ -42,6 +43,8 @@ export function JoinPage(): React.JSX.Element {
   // запись в журнал.
   const [name, setName] = useState('');
   usePageTitle(session ? session.roomName : t('join.title'));
+  // Страница гостя — по личной ссылке-приглашению, поиску там делать нечего.
+  usePageMeta({ noindex: true });
 
   // Стабильный обработчик: `LiveKitRoom` держит его в зависимостях эффектов.
   const handleDisconnected = useCallback((reason?: DisconnectReason) => {

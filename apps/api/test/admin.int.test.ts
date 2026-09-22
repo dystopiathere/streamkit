@@ -700,22 +700,28 @@ describe('Админка (feature)', () => {
       expect(year.body.bucket).toBe('week');
     });
 
-    it('бесплатные дни из админки открывают комнаты и пишут причину', async () => {
+    it('бесплатные дни из админки дарят выбранный тариф и пишут причину', async () => {
       const admin = await staff();
       const target = await streamer();
 
       const response = await request(server())
         .post(`/api/admin/users/${target.userId}/subscription/extend`)
         .set(auth(admin.adminToken))
-        .send({ days: 14, reason: 'компенсация сбоя' })
+        .send({ days: 14, plan: 'multistream', reason: 'компенсация сбоя' })
         .expect(201);
 
-      expect(response.body).toMatchObject({ status: 'active', autoRenew: false });
+      // Тариф подарка выбирает сотрудник. Что он открывает, проверяет тест
+      // подписки: здесь оплата не настроена, и открыто всё.
+      expect(response.body).toMatchObject({
+        status: 'active',
+        plan: 'multistream',
+        autoRenew: false,
+      });
       const log = await harness.prisma.auditLog.findFirstOrThrow({
         where: { action: 'admin.subscription.extended' },
       });
       expect(log).toMatchObject({ userId: target.userId, actorId: admin.userId });
-      expect(log.metadata).toEqual({ reason: 'компенсация сбоя', days: 14 });
+      expect(log.metadata).toEqual({ reason: 'компенсация сбоя', days: 14, plan: 'multistream' });
     });
 
     it('снятие подарочных дней возвращает срок и пишет автора', async () => {

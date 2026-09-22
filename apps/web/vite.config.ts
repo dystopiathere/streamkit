@@ -2,9 +2,16 @@ import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+import { seoPlugin } from './vite/seo-plugin.ts';
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  // Адрес сайта — тот же, что берёт `src/lib/seo.ts`: canonical в снимке главной
+  // и в живой странице обязаны совпадать.
+  plugins: [
+    react(),
+    tailwindcss(),
+    seoPlugin(process.env.VITE_SITE_URL ?? 'https://stream-kit.ru'),
+  ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

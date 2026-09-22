@@ -83,6 +83,8 @@ export const MESSAGES_EN: Readonly<Record<string, string>> = {
   'Оплата не настроена': 'Payments are not configured',
   'Оплата не настроена на этом сервере': 'Payments are not configured on this server',
   'Подписка уже действует': 'Your subscription is already active',
+  'У пользователя действует другой тариф — бесплатные дни продлевают его':
+    'The user already has a different active plan — free days extend that plan',
   'Списание по сохранённой карте ещё обрабатывается — попробуйте через несколько минут':
     'A charge to your saved card is still being processed — try again in a few minutes',
   'Оплата сейчас недоступна: платёжный сервис отклонил запрос. Мы уже разбираемся — попробуйте позже.':

@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import { CHANNEL_SYNC_STATES, PLATFORMS } from './analytics.js';
 import { emailSchema, publicUserSchema } from './auth.js';
-import { paymentViewSchema, PAYMENT_STATUSES, subscriptionViewSchema } from './billing.js';
+import {
+  paidPlanSchema,
+  paymentViewSchema,
+  PAYMENT_STATUSES,
+  subscriptionViewSchema,
+} from './billing.js';
 import {
   currencySchema,
   cursorPaginationSchema,
@@ -223,9 +228,16 @@ export type RevokeSessionsInput = z.infer<typeof revokeSessionsSchema>;
 export const adminUpdateSubscriptionSchema = z.object({ autoRenew: z.literal(false) });
 export type AdminUpdateSubscriptionInput = z.infer<typeof adminUpdateSubscriptionSchema>;
 
-/** Бесплатные дни — например, в компенсацию сбоя. */
+/**
+ * Бесплатные дни — например, в компенсацию сбоя.
+ *
+ * `plan` — какой тариф дарится. Действующей подписке дни продлевают её тариф, и
+ * другой сервер отклонит: два тарифа одновременно у подписки быть не может.
+ * По умолчанию «Про» — так дни выдавались до появления выбора.
+ */
 export const extendSubscriptionSchema = z.object({
   days: z.coerce.number().int().min(1).max(366),
+  plan: paidPlanSchema.default('pro'),
   reason: z.string().trim().min(1, 'Укажите причину').max(500),
 });
 export type ExtendSubscriptionInput = z.infer<typeof extendSubscriptionSchema>;

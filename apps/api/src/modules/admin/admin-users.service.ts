@@ -6,6 +6,7 @@ import {
   type AdminUserRow,
   GRACE_DAYS,
   type Page,
+  type PaidPlan,
   type SubscriptionView,
 } from '@streamkit/contracts';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
@@ -193,6 +194,7 @@ export class AdminUsersService {
   async extendSubscription(
     userId: string,
     days: number,
+    plan: PaidPlan,
     context: AuditContext,
   ): Promise<SubscriptionView> {
     const user = await this.prisma.user.findUnique({
@@ -201,7 +203,7 @@ export class AdminUsersService {
     });
     if (!user) throw new NotFoundException('Пользователь не найден');
     if (user.status !== 'ACTIVE') throw new ConflictException('Аккаунт не активен');
-    return this.billing.extend(userId, days, context);
+    return this.billing.extend(userId, days, plan, context);
   }
 
   /**

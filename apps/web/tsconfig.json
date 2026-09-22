@@ -2,10 +2,13 @@
   "extends": "@streamkit/config/tsconfig/react.json",
   "compilerOptions": {
     "baseUrl": ".",
+    // Импорты `.ts` с расширением — для файлов, которые грузит конфиг Vite: его
+    // будущий нативный загрузчик требует путь целиком (`vite/seo-plugin.ts`).
+    "allowImportingTsExtensions": true,
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vite/**/*.ts", "vite.config.ts"],
   "exclude": ["dist", "node_modules"]
 }

@@ -9,6 +9,7 @@ import { SiteStats } from './features/public/SiteStats';
 import { api } from './lib/api';
 import { useAuthStore } from './lib/auth-store';
 import { queryClient } from './lib/query-client';
+import { usePageMeta } from './lib/seo';
 import { EventsPage } from './pages/EventsPage';
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
@@ -75,6 +76,9 @@ function Lazy({ children }: { children: React.ReactNode }): React.JSX.Element {
  */
 function RequireAuth(): React.JSX.Element {
   const { accessToken, isRestoring } = useAuthStore();
+  // Кабинет — вне выдачи. robots.txt закрывает его от обхода, а тег — на
+  // случай, если адрес кабинета попадёт в поиск по внешней ссылке.
+  usePageMeta({ noindex: true });
 
   if (isRestoring) {
     return <Loading />;

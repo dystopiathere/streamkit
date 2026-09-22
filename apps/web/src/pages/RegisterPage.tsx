@@ -22,6 +22,7 @@ import { trackSiteEvent } from '@/features/public/site-stats';
 import { ApiError, api } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { localizedResolver } from '@/lib/form-errors';
+import { usePageMeta } from '@/lib/seo';
 
 /**
  * Документы, которые принимаются регистрацией.
@@ -40,7 +41,7 @@ const DOCUMENTS = [
 ] as const;
 
 export function RegisterPage(): React.JSX.Element {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const setSession = useAuthStore((state) => state.setSession);
 
@@ -56,6 +57,11 @@ export function RegisterPage(): React.JSX.Element {
 
   const errors = form.formState.errors;
   usePageTitle(t('auth.registerTitle'));
+  usePageMeta({
+    description: t('seo.register.description'),
+    path: '/register',
+    language: i18n.language === 'en' ? 'en' : 'ru',
+  });
 
   const onSubmit = form.handleSubmit(async (values) => {
     try {

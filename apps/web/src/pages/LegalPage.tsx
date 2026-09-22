@@ -8,6 +8,7 @@ import { MainContent, NewTabHint, SkipLink, usePageTitle } from '@streamkit/app-
 import { PublicFooter } from '@/features/public/PublicFooter';
 import { escapeMarkdown, fillDocumentDetails, useSeller } from '@/features/public/seller';
 import { setLanguage } from '@/lib/locale';
+import { usePageMeta } from '@/lib/seo';
 
 /** Соответствие адреса страницы файлу документа в public/legal. */
 const DOCUMENT_FILES: Record<string, string> = {
@@ -57,7 +58,16 @@ export function LegalPage(): React.JSX.Element {
     },
   });
 
-  usePageTitle(document.data?.match(/^# (.+)$/m)?.[1] ?? (file ? undefined : t('legal.notFound')));
+  const title = document.data?.match(/^# (.+)$/m)?.[1];
+  usePageTitle(title ?? (file ? undefined : t('legal.notFound')));
+  // Несуществующий документ — вне выдачи: адрес открывается, но страница
+  // говорит «не найден», и индексировать её незачем.
+  usePageMeta({
+    description: title ? t('seo.legal.description', { title }) : undefined,
+    path: file ? `/legal/${slug}` : undefined,
+    language,
+    noindex: !file,
+  });
 
   return (
     <div className="flex min-h-screen flex-col">
