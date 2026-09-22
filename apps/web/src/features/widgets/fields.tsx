@@ -589,7 +589,12 @@ function MoneyInput({
   // прохода по дереву, в отличие от setState внутри useEffect.
   //
   // Своё же значение переписывать нельзя: набранное «12.» вернулось бы к «12».
-  if (value !== seen) {
+  //
+  // Сравнение через `Object.is`, а не `!==`: стёртое поле без значения по
+  // умолчанию даёт NaN, а `NaN !== NaN` истинно всегда — состояние правилось
+  // на каждом рендере, и страница падала «слишком много перерисовок» (React
+  // #301) ровно в момент, когда сумму стирают, чтобы ввести новую.
+  if (!Object.is(value, seen)) {
     setSeen(value);
     if (typeof value === 'number' && Number.isFinite(value) && parseMajorToMinor(text) !== value) {
       setText(minorToText(value));

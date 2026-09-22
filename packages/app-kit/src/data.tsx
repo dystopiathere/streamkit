@@ -39,7 +39,9 @@ export function DataTable<T>({
   if (rows.length === 0 && empty) return <>{empty}</>;
 
   return (
-    <div className={cn('overflow-x-auto', className)}>
+    // Только вбок: `overflow-x` в одиночку делает вторую ось `auto`, и
+    // горизонтальная полоса вызывала бы вертикальную — прокручивать нечего.
+    <div className={cn('overflow-x-auto overflow-y-hidden', className)}>
       <table className="w-full border-collapse text-sm">
         <caption className={captionHidden ? 'sr-only' : 'mb-2 text-left text-sm text-muted'}>
           {caption}

@@ -285,7 +285,7 @@ function WebhookCard({ webhook }: { webhook: WebhookSourceView | null }): React.
               открывая исходники сервера. */}
           <pre
             tabIndex={0}
-            className="overflow-x-auto rounded-lg border border-border bg-bg p-3 text-xs text-muted"
+            className="overflow-x-auto overflow-y-hidden rounded-lg border border-border bg-bg p-3 text-xs text-muted"
           >
             {`POST /api/webhooks/<sourceId>
 x-streamkit-timestamp: <unix seconds>

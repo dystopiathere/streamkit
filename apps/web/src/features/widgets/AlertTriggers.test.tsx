@@ -88,11 +88,47 @@ describe('триггеры доната', () => {
     expect(screen.getByTestId('trigger-titles').textContent).toBe('от тысячи');
     expect(screen.getByTestId('base-title').textContent).toBe('основной');
 
-    // Обратно — правка идёт в сценарий.
-    fireEvent.click(screen.getByRole('button', { name: 'К основному виду' }));
+    // «К списку триггеров» возвращает туда, откуда зашли, а не оставляет на
+    // «Показе»: те же поля молча правили бы другой объект.
+    fireEvent.click(screen.getByRole('button', { name: 'К списку триггеров' }));
+    expect(screen.getByRole('list', { name: 'Триггеры по приоритету' })).toBeTruthy();
+
+    // Основной вид правится своей кнопкой, и она называет действие, а не
+    // положение дел; чей вид открыт — отдельной отметкой.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Настроить вид' }).at(-1)!);
+    fireEvent.click(screen.getByRole('tab', { name: 'Текст' }));
     fireEvent.change(screen.getByLabelText('Заголовок'), { target: { value: 'обычный' } });
     expect(screen.getByTestId('base-title').textContent).toBe('обычный');
     expect(screen.getByTestId('trigger-titles').textContent).toBe('от тысячи');
+  });
+
+  it('отмечает, чей вид правится, и не даёт нажать это как кнопку', () => {
+    renderEditor([trigger('first', 'gte', 100_000)]);
+    const items = within(screen.getByRole('list', { name: 'Триггеры по приоритету' })).getAllByRole(
+      'listitem',
+    );
+    // По умолчанию правится основной вид — он последний в списке.
+    expect(items.at(-1)!.textContent).toMatch(/правится сейчас/);
+    expect(screen.queryByRole('button', { name: 'правится сейчас' })).toBeNull();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Настроить вид' })[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'К списку триггеров' }));
+    const after = within(screen.getByRole('list', { name: 'Триггеры по приоритету' })).getAllByRole(
+      'listitem',
+    );
+    expect(after[0]!.textContent).toMatch(/правится сейчас/);
+    expect(after.at(-1)!.textContent).not.toMatch(/правится сейчас/);
+  });
+
+  it('стёртая сумма не роняет страницу: NaN сам себе не равен', () => {
+    // Раньше поле сверяло значение через `!==`, а `NaN !== NaN` истинно всегда:
+    // состояние правилось на каждом рендере, и страница падала React #301.
+    renderEditor([trigger('first', 'gte', 100_000)]);
+    const amount = screen.getByLabelText('Сумма, ₽');
+    fireEvent.change(amount, { target: { value: '' } });
+    expect((amount as HTMLInputElement).value).toBe('');
+    fireEvent.change(amount, { target: { value: '2000' } });
+    expect((amount as HTMLInputElement).value).toBe('2000');
   });
 
   it('стрелки меняют приоритет', () => {
