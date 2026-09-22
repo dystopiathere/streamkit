@@ -305,28 +305,65 @@ export function TextField({
   );
 }
 
+/**
+ * Цвет: палитра и тот же код текстом — палитра браузера не даёт вписать точный.
+ *
+ * Оба поля управляемые, от одного значения. Раньше оба регистрировались в
+ * форме под одним именем как неуправляемые: выбор в палитре менял значение
+ * формы, а текстовое поле его не видело и показывало старый код — выглядело
+ * так, будто палитра не работает.
+ */
 export function ColorField({ form, name, label }: BaseProps): React.JSX.Element {
   return (
-    <div>
-      <Label htmlFor={name}>{label}</Label>
-      <div className="flex gap-2">
-        <input
-          id={name}
-          type="color"
-          className="h-9 w-12 shrink-0 rounded border border-border-strong bg-bg"
-          {...form.register(name)}
-        />
-        {/* То же значение текстом: палитра браузера не даёт вписать точный код. */}
-        <Input
-          aria-label={`${label}, HEX`}
-          spellCheck={false}
-          {...describeField(`${name}-hex`, { error: errorAt(form, name) })}
-          {...form.register(name)}
-        />
-      </div>
-      <FieldError id={`${name}-hex`} message={errorAt(form, name)} />
-    </div>
+    <Controller
+      control={form.control}
+      name={name}
+      render={({ field }) => {
+        const value = typeof field.value === 'string' ? field.value : '';
+        return (
+          <div>
+            <Label htmlFor={name}>{label}</Label>
+            <div className="flex gap-2">
+              <input
+                id={name}
+                type="color"
+                className="h-9 w-12 shrink-0 rounded border border-border-strong bg-bg"
+                value={pickerValue(value)}
+                onChange={(event) => field.onChange(withAlphaOf(value, event.target.value))}
+                onBlur={field.onBlur}
+              />
+              <Input
+                aria-label={`${label}, HEX`}
+                spellCheck={false}
+                value={value}
+                {...describeField(`${name}-hex`, { error: errorAt(form, name) })}
+                onChange={(event) => field.onChange(event.target.value)}
+                onBlur={field.onBlur}
+              />
+            </div>
+            <FieldError id={`${name}-hex`} message={errorAt(form, name)} />
+          </div>
+        );
+      }}
+    />
   );
+}
+
+/**
+ * Значение для палитры: она понимает только `#rrggbb`. Код с прозрачностью
+ * (`#RRGGBBAA`) или недописанный палитра молча показала бы чёрным.
+ */
+function pickerValue(value: string): string {
+  return /^#[0-9a-fA-F]{6}/.test(value) ? value.slice(0, 7).toLowerCase() : '#000000';
+}
+
+/**
+ * Цвет из палитры с прозрачностью прежнего значения: палитра прозрачности не
+ * знает, и выбор оттенка стирал бы её у полупрозрачной обводки.
+ */
+function withAlphaOf(previous: string, picked: string): string {
+  const alpha = /^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})$/.exec(previous)?.[1] ?? '';
+  return `${picked.toUpperCase()}${alpha.toUpperCase()}`;
 }
 
 /**
@@ -360,9 +397,9 @@ export function NullableColorField({ form, name, label }: BaseProps): React.JSX.
                 id={name}
                 type="color"
                 className="h-9 w-12 shrink-0 rounded border border-border-strong bg-bg"
-                value={value}
+                value={pickerValue(value)}
                 disabled={!set}
-                onChange={(event) => field.onChange(event.target.value)}
+                onChange={(event) => field.onChange(withAlphaOf(value, event.target.value))}
               />
               <Input
                 aria-label={`${label}, HEX`}
