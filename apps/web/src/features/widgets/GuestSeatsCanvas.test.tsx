@@ -24,7 +24,7 @@ function Editor(): React.JSX.Element {
     <>
       <output data-testid="seat-x">{String(x)}</output>
       <output data-testid="seat-width">{String(width)}</output>
-      <GuestSeatsCanvas form={form} />
+      <GuestSeatsCanvas form={form} canvas={null} />
     </>
   );
 }

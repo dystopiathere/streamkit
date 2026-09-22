@@ -70,6 +70,32 @@ describe('Виджеты и приём событий (feature)', () => {
     expect(response.body.config.scenarios.follow.titleTemplate).not.toContain('{amount}');
   });
 
+  it('новый виджет получает окно 800 × 600, а «не задано» переживает правку', async () => {
+    // Окно — размер браузер-сорса, в котором рисуется виджет. У виджетов,
+    // настроенных раньше, миграция пишет null — «растягивать на весь сорс», —
+    // и правка других полей не должна подменять его окном по умолчанию.
+    const widgetId = await createWidget();
+    const created = await request(server()).get(`/api/widgets/${widgetId}`).set(auth()).expect(200);
+    expect(created.body.config.canvas).toEqual({ width: 800, height: 600 });
+
+    await harness.prisma.$executeRaw`
+      UPDATE "Widget" SET "config" = jsonb_set("config", '{canvas}', 'null'::jsonb)
+      WHERE "id" = ${widgetId}::uuid`;
+    await request(server())
+      .patch(`/api/widgets/${widgetId}`)
+      .set(auth())
+      .send({ config: { gapMs: 700 } })
+      .expect(200);
+    const legacy = await request(server()).get(`/api/widgets/${widgetId}`).set(auth()).expect(200);
+    expect(legacy.body.config.canvas).toBeNull();
+
+    await request(server())
+      .patch(`/api/widgets/${widgetId}`)
+      .set(auth())
+      .send({ config: { canvas: { width: 50, height: 600 } } })
+      .expect(400);
+  });
+
   it('мержит частичное обновление конфига, не теряя остальные поля', async () => {
     const widgetId = await createWidget();
 

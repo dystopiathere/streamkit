@@ -13,14 +13,14 @@ const goalConfig = (overrides: Record<string, unknown> = {}): GoalWidgetConfig =
 
 describe('позиции элементов', () => {
   it('без позиции стилей позиционирования нет — элемент остаётся в потоке', () => {
-    const style = slotCss({ x: null, y: null, color: null, fontSize: null }, 32);
+    const style = slotCss({ x: null, y: null, color: null, fontSize: null, width: null }, 32);
     expect(style.position).toBeUndefined();
     expect(style.fontSize).toBe(32);
     expect(style.color).toBeUndefined();
   });
 
   it('заданная позиция — проценты и перенос на половину размера', () => {
-    const style = slotCss({ x: 25, y: 80, color: '#FF0000', fontSize: 48 }, 32);
+    const style = slotCss({ x: 25, y: 80, color: '#FF0000', fontSize: 48, width: null }, 32);
     expect(style.position).toBe('absolute');
     expect(style.left).toBe('25%');
     expect(style.top).toBe('80%');
@@ -30,10 +30,10 @@ describe('позиции элементов', () => {
   });
 
   it('половина позиции позицией не считается: элемент не должен уехать в угол', () => {
-    expect(isPositioned({ x: 10, y: null, color: null, fontSize: null })).toBe(false);
-    expect(isPositioned({ x: null, y: 10, color: null, fontSize: null })).toBe(false);
+    expect(isPositioned({ x: 10, y: null, color: null, fontSize: null, width: null })).toBe(false);
+    expect(isPositioned({ x: null, y: 10, color: null, fontSize: null, width: null })).toBe(false);
     expect(isPositioned(undefined)).toBe(false);
-    expect(isPositioned({ x: 0, y: 0, color: null, fontSize: null })).toBe(true);
+    expect(isPositioned({ x: 0, y: 0, color: null, fontSize: null, width: null })).toBe(true);
   });
 });
 

@@ -43,7 +43,7 @@ describe('раскладка без тарифа «Про»', () => {
         <Editor />
       </QueryClientProvider>,
     );
-    const frame = document.querySelector('.aspect-video')!;
+    const frame = document.querySelector('[data-testid="layout-frame"]')!;
     frame.getBoundingClientRect = () =>
       ({
         left: 0,

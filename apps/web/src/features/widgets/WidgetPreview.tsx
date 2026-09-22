@@ -8,11 +8,13 @@ import type {
   GuestsWidgetConfig,
   TimerWidgetConfig,
   TopDonorsWidgetConfig,
+  WidgetCanvas,
   WidgetState,
   WidgetType,
 } from '@streamkit/contracts';
 import {
   applyPlanToConfig,
+  widgetCanvasSchema,
   defaultAlertWidgetConfig,
   defaultWidgetConfig,
   type Language,
@@ -25,6 +27,7 @@ import {
   ParticipantLayout,
   TimerDisplay,
   TopDonorsList,
+  WidgetStage,
 } from '@streamkit/ui';
 import { type CSSProperties, type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -55,10 +58,57 @@ export function WidgetPreview({
   /** Какой сценарий оповещений показать — тот, что открыт в форме. */
   alertScenario?: AlertEventType;
 }): React.JSX.Element {
+  const canvas = canvasOf(config);
+  const surface = (
+    <Surface type={type} config={config} state={state} alertScenario={alertScenario} />
+  );
+  // Окно задано — предпросмотр показывает ровно браузер-сорс этого размера,
+  // уменьшенный под колонку: и пропорции, и обрезку того, что вылезло за окно.
+  // Не задано (виджеты до появления окна) — прежний кадр с автомасштабом.
+  if (!canvas) return <FitToFrame>{surface}</FitToFrame>;
   return (
-    <FitToFrame>
-      <Surface type={type} config={config} state={state} alertScenario={alertScenario} />
-    </FitToFrame>
+    <CanvasFrame canvas={canvas} className="checkerboard rounded-lg">
+      <WidgetStage canvas={canvas}>{surface}</WidgetStage>
+    </CanvasFrame>
+  );
+}
+
+/** Окно виджета из значений формы; null — не задано или недописано. */
+export function canvasOf(config: Record<string, unknown>): WidgetCanvas | null {
+  const parsed = widgetCanvasSchema.safeParse(config.canvas);
+  return parsed.success ? parsed.data : null;
+}
+
+/**
+ * Рамка с пропорциями окна виджета во всю ширину колонки. Высокое окно
+ * (например, чат 400×800) не должно вытягивать колонку на несколько экранов,
+ * поэтому высота ограничена, а ширина под неё сужается.
+ */
+export function CanvasFrame({
+  canvas,
+  className,
+  children,
+  frameRef,
+  testId,
+}: {
+  canvas: WidgetCanvas;
+  className?: string;
+  children: ReactNode;
+  frameRef?: React.Ref<HTMLDivElement>;
+  testId?: string;
+}): React.JSX.Element {
+  return (
+    <div
+      ref={frameRef}
+      data-testid={testId ?? 'widget-preview'}
+      className={cn('relative mx-auto overflow-hidden', className)}
+      style={{
+        aspectRatio: `${canvas.width} / ${canvas.height}`,
+        width: `min(100%, calc(60vh * ${canvas.width / canvas.height}))`,
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -360,10 +410,9 @@ function Surface({
       // Плитки-заглушки: гости появятся только в эфире, а настраивать раскладку
       // нужно заранее. Рендерер тот же, что в оверлее, — видео подменено фоном.
       const guests = config as unknown as GuestsWidgetConfig;
-      // Свободная раскладка — без полей: рамки мест считаются от всего кадра, как
-      // в OBS, и поле сдвинуло бы их относительно ручек раскладки в редакторе.
+      // Без полей вокруг: в OBS их нет, и предпросмотр обязан совпадать с кадром.
       return (
-        <div className={cn('h-full w-full', guests.layout !== 'free' && 'p-4')}>
+        <div className="h-full w-full">
           <ParticipantLayout config={guests} tiles={sample.guests} />
         </div>
       );

@@ -20,6 +20,7 @@ import {
   GoalBar,
   TimerDisplay,
   TopDonorsList,
+  WidgetStage,
   exitAnimationName,
   useAlertQueue,
 } from '@streamkit/ui';
@@ -143,71 +144,82 @@ export function OverlayApp(): React.JSX.Element | null {
   if (connection === 'invalid-token' || connection === 'revoked') return null;
   if (!widget || !widget.isEnabled) return null;
 
-  switch (widget.type) {
-    case 'alerts':
-      return (
-        <>
-          <AlertAnimationStyles />
-          {current && scenario ? (
-            <div
-              key={current.event.id}
-              style={{
-                width: '100%',
-                height: '100%',
-                animation: current.isLeaving
-                  ? `${exitAnimationName(scenario.animationOut)} ${ALERT_EXIT_DURATION_MS}ms ease-in both`
-                  : undefined,
-              }}
-            >
-              <AlertCard
-                event={current.event}
-                config={scenario}
-                animate={!current.isLeaving}
-                playSound={!current.isLeaving}
-              />
-            </div>
-          ) : null}
-        </>
-      );
+  const content = (): React.ReactNode => {
+    switch (widget.type) {
+      case 'alerts':
+        return (
+          <>
+            <AlertAnimationStyles />
+            {current && scenario ? (
+              <div
+                key={current.event.id}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  animation: current.isLeaving
+                    ? `${exitAnimationName(scenario.animationOut)} ${ALERT_EXIT_DURATION_MS}ms ease-in both`
+                    : undefined,
+                }}
+              >
+                <AlertCard
+                  event={current.event}
+                  config={scenario}
+                  animate={!current.isLeaving}
+                  playSound={!current.isLeaving}
+                />
+              </div>
+            ) : null}
+          </>
+        );
 
-    // Состояние приходит отдельным сообщением и приезжает уже в bootstrap.
-    // Пока его нет, рендерим с пустым состоянием: пустая полоса честнее, чем
-    // мигающая заглушка поверх эфира.
-    case 'goal':
-      return <GoalBar config={widget.config} state={state?.kind === 'goal' ? state : null} />;
+      // Состояние приходит отдельным сообщением и приезжает уже в bootstrap.
+      // Пока его нет, рендерим с пустым состоянием: пустая полоса честнее, чем
+      // мигающая заглушка поверх эфира.
+      case 'goal':
+        return <GoalBar config={widget.config} state={state?.kind === 'goal' ? state : null} />;
 
-    case 'timer':
-      return <TimerDisplay config={widget.config} state={state?.kind === 'timer' ? state : null} />;
+      case 'timer':
+        return (
+          <TimerDisplay config={widget.config} state={state?.kind === 'timer' ? state : null} />
+        );
 
-    case 'top-donors':
-      return (
-        <TopDonorsList config={widget.config} state={state?.kind === 'top-donors' ? state : null} />
-      );
+      case 'top-donors':
+        return (
+          <TopDonorsList
+            config={widget.config}
+            state={state?.kind === 'top-donors' ? state : null}
+          />
+        );
 
-    // Гости выводятся из комнаты LiveKit, а не из сокета оверлея: сокет
-    // сообщает только, какая комната выбрана, медиа идёт напрямую с медиасервера.
-    case 'guests':
-      return token ? (
-        <Suspense fallback={null}>
-          <GuestsOverlay overlayToken={token} config={widget.config} />
-        </Suspense>
-      ) : null;
+      // Гости выводятся из комнаты LiveKit, а не из сокета оверлея: сокет
+      // сообщает только, какая комната выбрана, медиа идёт напрямую с медиасервера.
+      case 'guests':
+        return token ? (
+          <Suspense fallback={null}>
+            <GuestsOverlay overlayToken={token} config={widget.config} />
+          </Suspense>
+        ) : null;
 
-    // Сообщения приезжают отдельным потоком, а не состоянием: у чата нечего
-    // пересчитывать, есть только лента, и накапливает её сам оверлей.
-    //
-    // Буфер фильтруется по текущим каналам — подключённым площадкам владельца.
-    // Смена подключения переселяет сокет в новые комнаты, но строки старого
-    // канала остаются в буфере — и без фильтра висели бы под новыми, а на тихом
-    // канале при негаснущих сообщениях часами.
-    case 'chat':
-      return (
-        <ChatBox
-          config={widget.config}
-          messages={messages.filter((message) => chatChannels.has(chatChannelKey(message)))}
-        />
-      );
-  }
+      // Сообщения приезжают отдельным потоком, а не состоянием: у чата нечего
+      // пересчитывать, есть только лента, и накапливает её сам оверлей.
+      //
+      // Буфер фильтруется по текущим каналам — подключённым площадкам владельца.
+      // Смена подключения переселяет сокет в новые комнаты, но строки старого
+      // канала остаются в буфере — и без фильтра висели бы под новыми, а на тихом
+      // канале при негаснущих сообщениях часами.
+      case 'chat':
+        return (
+          <ChatBox
+            config={widget.config}
+            messages={messages.filter((message) => chatChannels.has(chatChannelKey(message)))}
+          />
+        );
+    }
+  };
+
+  // Окно виджета: рисуем ровно в заданных пикселях и масштабируем под сорс, —
+  // иначе в сорсе другого размера элементы стояли бы не там, где их поставили.
+  return <WidgetStage canvas={widget.config.canvas}>{content()}</WidgetStage>;
 }
 
 /**

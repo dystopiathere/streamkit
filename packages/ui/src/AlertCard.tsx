@@ -127,8 +127,11 @@ export function AlertCard({
           src={config.imageUrl}
           sound={playSound && sound.kind === 'video' ? { volume: sound.volume } : null}
           style={{
-            maxWidth: 320,
-            maxHeight: 240,
+            // Своя ширина из раскладки — высота по пропорциям картинки; иначе
+            // прежнее «не больше 320 × 240».
+            ...(config.slots.image.width
+              ? { width: config.slots.image.width, height: 'auto' }
+              : { maxWidth: 320, maxHeight: 240 }),
             objectFit: 'contain',
             ...slotCss(config.slots.image, config.text.fontSize),
           }}

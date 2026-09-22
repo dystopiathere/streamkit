@@ -106,11 +106,22 @@ export const widgetSlotSchema = z.object({
   y: z.number().min(0).max(100).nullable().default(null),
   color: hexColorSchema.nullable().default(null),
   fontSize: z.number().int().min(8).max(200).nullable().default(null),
+  /**
+   * Ширина элемента в пикселях окна — у картинки оповещения; высота следует
+   * за пропорциями картинки. null — прежний размер «не больше 320 × 240».
+   */
+  width: z.number().int().min(16).max(3840).nullable().default(null),
 });
 export type WidgetSlot = z.infer<typeof widgetSlotSchema>;
 
 /** Пустой слот — им же `applyPlanToConfig` заменяет настроенные без тарифа. */
-export const EMPTY_SLOT: WidgetSlot = { x: null, y: null, color: null, fontSize: null };
+export const EMPTY_SLOT: WidgetSlot = {
+  x: null,
+  y: null,
+  color: null,
+  fontSize: null,
+  width: null,
+};
 
 /**
  * Схема набора слотов по их именам.
@@ -129,6 +140,43 @@ function slotsSchema<T extends string>(slots: readonly T[]) {
     },
   );
 }
+
+/**
+ * Окно, в котором рисуется виджет: ширина и высота браузер-сорса в OBS, в
+ * пикселях.
+ *
+ * Позиции элементов — проценты окна, а шрифты и картинки — пиксели. Пока окно
+ * было «каким откроют», одна и та же раскладка в редакторе и в OBS другого
+ * размера расходилась: элементы, выставленные рядом, в сорсе 800×600 и
+ * 1920×1080 стояли по-разному относительно друг друга. С заданным окном виджет
+ * рисуется ровно в нём, а в сорсе другого размера — масштабируется целиком,
+ * без искажения композиции.
+ *
+ * `null` — окно не задано, виджет растягивается на весь сорс, как было раньше.
+ * Так читаются виджеты, настроенные до появления окна (миграция пишет им
+ * `null`): дать им 800×600 значило бы увеличить весь текст у того, чей сорс
+ * 1920×1080, прямо посреди эфира. Новые виджеты создаются с 800×600.
+ */
+export const widgetCanvasSchema = z.object({
+  width: z.number().int().min(100).max(3840),
+  height: z.number().int().min(100).max(2160),
+});
+export type WidgetCanvas = z.infer<typeof widgetCanvasSchema>;
+
+export const DEFAULT_WIDGET_CANVAS: WidgetCanvas = { width: 800, height: 600 };
+
+/** Поле окна в конфиге: у всех типов одно и то же. */
+const canvasField = () =>
+  widgetCanvasSchema.nullable().default(() => ({ ...DEFAULT_WIDGET_CANVAS }));
+
+/** Частые размеры браузер-сорса — подсказка в редакторе, не ограничение. */
+export const CANVAS_PRESETS: readonly WidgetCanvas[] = [
+  { width: 800, height: 600 },
+  { width: 1280, height: 720 },
+  { width: 1920, height: 1080 },
+  { width: 600, height: 200 },
+  { width: 400, height: 800 },
+];
 
 export const ALERT_SLOTS = ['image', 'title', 'message'] as const;
 export const GOAL_SLOTS = ['title', 'bar', 'amount'] as const;
@@ -323,6 +371,7 @@ export type AlertScenarioConfig = z.infer<typeof alertScenariosSchema>['donation
  * разных типов идут в ней друг за другом.
  */
 export const alertWidgetConfigSchema = z.object({
+  canvas: canvasField(),
   /** Пауза между алертами, чтобы они не слипались. */
   gapMs: z.number().int().min(0).max(10000).default(500),
   scenarios: alertScenariosSchema.prefault({}),
@@ -349,6 +398,7 @@ export type AlertWidgetConfig = z.infer<typeof alertWidgetConfigSchema>;
  * схема отбрасывает.
  */
 export const goalWidgetConfigSchema = z.object({
+  canvas: canvasField(),
   title: z.string().min(1).max(80).default('Цель'),
   targetMinor: z.number().int().positive().max(1_000_000_000).default(1_000_000),
   /**
@@ -383,6 +433,7 @@ export type GoalWidgetConfig = z.infer<typeof goalWidgetConfigSchema>;
 /* ------------------------------------------------------------------ */
 
 export const timerWidgetConfigSchema = z.object({
+  canvas: canvasField(),
   title: z.string().max(80).default(''),
   /** Сколько времени на часах при запуске и после сброса. */
   initialSeconds: z
@@ -445,6 +496,7 @@ export type TopDonorsPeriod = z.infer<typeof topDonorsPeriodSchema>;
  * хуже, чем её не показывать.
  */
 export const topDonorsWidgetConfigSchema = z.object({
+  canvas: canvasField(),
   title: z.string().max(80).default('Топ донатеров'),
   period: topDonorsPeriodSchema.default('30d'),
   limit: z.number().int().min(1).max(10).default(5),
@@ -492,6 +544,7 @@ const chatPlatformsSchema = z.object(
 );
 
 export const chatWidgetConfigSchema = z.object({
+  canvas: canvasField(),
   /** Сколько строк держим на экране. Больше полусотни не читает никто. */
   maxMessages: z.number().int().min(1).max(50).default(20),
   /** Через сколько секунд строка гаснет. 0 — не гаснет вовсе. */
@@ -580,6 +633,7 @@ export function guestSeat(seats: readonly GuestSeat[], index: number): GuestSeat
 }
 
 export const guestsWidgetConfigSchema = z.object({
+  canvas: canvasField(),
   roomId: z.union([uuidSchema, z.literal('')]).default(''),
   layout: z.enum(GUEST_LAYOUTS).default('grid'),
   /**

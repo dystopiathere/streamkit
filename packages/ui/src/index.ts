@@ -22,6 +22,7 @@ export {
 } from './ParticipantLayout';
 export { isVideoUrl, Media } from './media';
 export { isPositioned, slotCss, WidgetBackgroundLayer, WidgetFrame } from './slots';
+export { canvasScale, WidgetStage } from './stage';
 export { textStyleToCss } from './text-style';
 export { TimerDisplay, type TimerDisplayProps } from './TimerDisplay';
 export { TopDonorsList, type TopDonorsListProps } from './TopDonorsList';

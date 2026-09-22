@@ -4,15 +4,9 @@ import {
   type GuestsWidgetConfig,
   layoutTiles,
 } from '@streamkit/contracts';
-import {
-  type CSSProperties,
-  type ReactNode,
-  type RefObject,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react';
+import { type CSSProperties, type ReactNode, useRef } from 'react';
 import { textStyleToCss } from './text-style';
+import { useBoxSize } from './use-box-size';
 
 export interface ParticipantTile {
   /** Устойчивый ключ: идентичность участника в комнате. */
@@ -178,30 +172,4 @@ export function fitTile(
   const cellHeight = (size.height - gap * (rows - 1)) / rows;
   const width = Math.max(gap, Math.min(cellWidth, cellHeight * GUEST_TILE_ASPECT));
   return { width, height: width / GUEST_TILE_ASPECT };
-}
-
-/**
- * Размер элемента, пока он на странице. null — ещё не измерен или браузер не
- * умеет `ResizeObserver` (тесты в jsdom): тогда сетка работает долями.
- */
-function useBoxSize(ref: RefObject<HTMLElement | null>): { width: number; height: number } | null {
-  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
-  useLayoutEffect(() => {
-    const node = ref.current;
-    if (!node || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(([entry]) => {
-      if (!entry) return;
-      const { width, height } = entry.contentRect;
-      setSize((previous) =>
-        previous && previous.width === width && previous.height === height
-          ? previous
-          : width > 0 && height > 0
-            ? { width, height }
-            : null,
-      );
-    });
-    observer.observe(node);
-    return () => observer.disconnect();
-  });
-  return size;
 }

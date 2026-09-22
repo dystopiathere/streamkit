@@ -5,18 +5,20 @@ import {
   EMPTY_SLOT,
   FONT_FAMILIES,
   hasWidgetBackground,
+  type WidgetCanvas,
   type WidgetSlot,
   WIDGET_SLOTS,
   type WidgetType,
 } from '@streamkit/contracts';
-import { type ReactNode, useLayoutEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { FieldValues, UseFormReturn } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Button, cn } from '@streamkit/app-kit';
+import { WidgetStage } from '@streamkit/ui';
 import { PlanPaywall, usePlanAccess } from '@/features/billing/PlanPaywall';
 import { NullableColorField, RangeField, SelectField, TextField } from './fields';
 import { FrameGuides } from './FrameGuides';
-import { WidgetSurface } from './WidgetPreview';
+import { CanvasFrame, canvasOf, WidgetSurface } from './WidgetPreview';
 
 /**
  * Продвинутое оформление: раскладка элементов в кадре, шрифт, фон и картинки.
@@ -68,6 +70,7 @@ export function LayoutSection({
         form={form}
         prefix={prefix}
         slots={slots}
+        canvas={canvasOf({ canvas: form.watch('canvas') })}
         underlay={
           <WidgetSurface
             type={type}
@@ -186,6 +189,9 @@ const FIRST_POSITION: Record<string, { x: number; y: number }> = {
   list: { x: 50, y: 60 },
 };
 
+/** Элементы-картинки: у них ширина, а не размер шрифта и цвет. */
+const MEDIA_SLOTS = new Set(['image']);
+
 /** Шаг клавиатуры в процентах кадра. С Shift — крупный: пройти кадр за десяток нажатий. */
 const STEP = 1;
 const BIG_STEP = 10;
@@ -194,25 +200,27 @@ const BIG_STEP = 10;
  * Кадр с перетаскиваемыми элементами.
  *
  * Выбранный элемент — одно состояние на всё: его обводит кадр, через него идут
- * направляющие, и под кадром — его настройки. Раньше выбор ничем не отмечался:
- * элемент подсвечивался только в движении, и после щелчка было непонятно,
- * выбран он или щелчок пропал. Под кадром тогда стояли настройки ВСЕХ элементов
- * списком, и найти нужный можно было только по подписи.
+ * направляющие, и под кадром — его настройки. Мышью — и клавиатурой: элемент —
+ * это кнопка, Tab выбирает (фокус и есть выбор), стрелки двигают, под кадром —
+ * ползунки (WCAG 2.1.1).
  *
- * Мышью — и клавиатурой: раскладка только указателем закрыла бы функцию тем, кто
- * работает с клавиатуры (WCAG 2.1.1). Поэтому элемент — это кнопка: Tab выбирает
- * (фокус и есть выбор), стрелки двигают, а в панели под кадром — ползунки X и Y
- * для точного значения.
+ * Кадр — окно виджета (`canvas`, браузер-сорс OBS), в его пропорциях, а под
+ * ручками — настоящий виджет, нарисованный в этом окне. Координаты хранятся
+ * процентами окна, а показываются в пикселях: так их сверяют с OBS. Без окна
+ * (виджеты до его появления) кадр 16:9 и проценты, как раньше.
  *
- * Координаты — проценты кадра, а не пиксели: размер браузер-сорса в OBS задаёт
- * стример, и пиксели разъехались бы у каждого по-своему. Кадр здесь 16:9 —
- * обычная сцена OBS; сам виджет показывается в предпросмотре рядом.
+ * Раскладка либо вся в потоке (как без продвинутого оформления), либо вся
+ * закреплена. Первое же перемещение любого элемента закрепляет ВСЕ на тех
+ * местах, где они сейчас нарисованы. Раньше закреплялся только тронутый: он
+ * выходил из потока, а соседи съезжали на его место — двигаешь заголовок,
+ * уезжает сумма.
  */
 function LayoutCanvas({
   form,
   prefix,
   slots,
   underlay,
+  canvas,
   locked = false,
 }: {
   form: UseFormReturn<FieldValues>;
@@ -220,6 +228,8 @@ function LayoutCanvas({
   slots: readonly string[];
   /** Настоящий виджет под ручками: двигают то, что видно в кадре. */
   underlay?: ReactNode;
+  /** Окно виджета; null — не задано. */
+  canvas: WidgetCanvas | null;
   /**
    * Тариф не даёт раскладку. `fieldset disabled` гасит щелчки и клавиши, но не
    * события указателя: без этого флага элемент без «Про» перетаскивался, а
@@ -235,9 +245,9 @@ function LayoutCanvas({
 
   // Где виджет под ручками на самом деле нарисовал элементы без позиции. Без
   // замера ручка такого элемента стояла на условном месте, а сам элемент — в
-  // другом углу кадра: «двигаешь то, что видишь» не выполнялось. Замер — после
-  // каждого рендера (изменился шрифт или текст — сдвинулся и элемент), но
-  // состояние меняется только при заметном сдвиге, иначе рендер зациклится.
+  // другом углу кадра. Меряется содержимое, а не блок: у заголовка в потоке
+  // блок во всю ширину, и его середина — середина кадра, даже когда текст
+  // прижат влево. Закреплённый по середине блока, текст уехал бы вправо.
   const [measured, setMeasured] = useState<Record<string, { x: number; y: number }>>({});
   useLayoutEffect(() => {
     const box = frame.current?.getBoundingClientRect();
@@ -245,7 +255,7 @@ function LayoutCanvas({
     const next: Record<string, { x: number; y: number }> = {};
     for (const slot of slots) {
       const node = frame.current?.querySelector(`[data-slot="${slot}"]`);
-      const rect = node?.getBoundingClientRect();
+      const rect = node ? contentRect(node) : null;
       if (!rect || rect.width === 0) continue;
       next[slot] = {
         x: clamp(((rect.left + rect.width / 2 - box.left) / box.width) * 100),
@@ -272,30 +282,44 @@ function LayoutCanvas({
     y: numberOrNull(form.watch(at(slot, 'y'))),
     color: (form.watch(at(slot, 'color')) as string | null) ?? null,
     fontSize: numberOrNull(form.watch(at(slot, 'fontSize'))),
+    width: numberOrNull(form.watch(at(slot, 'width'))),
   });
+  const isPlaced = (slot: string): boolean => {
+    const value = read(slot);
+    return value.x !== null && value.y !== null;
+  };
 
   const put = (slot: string, x: number, y: number): void => {
     form.setValue(at(slot, 'x'), clamp(x), { shouldDirty: true });
     form.setValue(at(slot, 'y'), clamp(y), { shouldDirty: true });
   };
 
-  const release = (slot: string): void => {
-    form.setValue(at(slot, 'x'), null, { shouldDirty: true });
-    form.setValue(at(slot, 'y'), null, { shouldDirty: true });
+  // Закрепить всех, кто ещё в потоке, там, где они нарисованы сейчас.
+  const pinAll = (): void => {
+    for (const slot of slots) {
+      if (isPlaced(slot)) continue;
+      const spot = restingSpot(slot);
+      put(slot, spot.x, spot.y);
+    }
   };
 
-  const anyCustomized = slots.some((slot) => {
-    const value = read(slot);
-    return value.x !== null || value.y !== null || value.color !== null || value.fontSize !== null;
+  // Позицию одного элемента задали ползунком под кадром — остальные
+  // закрепляются так же, как при перетаскивании: половина раскладки в потоке,
+  // половина закреплена — это и есть «соседи съезжают».
+  const placedCount = slots.filter(isPlaced).length;
+  useEffect(() => {
+    if (locked || placedCount === 0 || placedCount === slots.length) return;
+    pinAll();
   });
 
-  // Сброс — ко всему кадру сразу: «вернуть как было» ищут одной кнопкой, а не
-  // обходом каждого элемента. Цвет и размер элементов тоже сбрасываются: это
-  // та же раскладка, и половинчатый сброс оставил бы непонятную смесь.
+  const anyCustomized = slots.some((slot) =>
+    Object.values(read(slot)).some((value) => value !== null),
+  );
+
+  // Сброс — ко всему кадру сразу: раскладка возвращается в поток целиком.
   const resetAll = (): void => {
     // По листьям, а не объектом слота: react-hook-form не переносит значение
-    // объекта в уже зарегистрированные поля под ним, и ползунки X и Y
-    // выбранного элемента оставались бы на старом месте.
+    // объекта в уже зарегистрированные поля под ним.
     for (const slot of slots) {
       for (const [field, value] of Object.entries(EMPTY_SLOT)) {
         form.setValue(at(slot, field), value, { shouldDirty: true });
@@ -310,8 +334,7 @@ function LayoutCanvas({
     if (!box) return;
     setSelected(slot);
     // Элемент берётся в переменную СРАЗУ: React обнуляет `currentTarget` у
-    // события, как только обработчик вернул управление, а слушатели ниже живут
-    // до отпускания кнопки мыши.
+    // события, как только обработчик вернул управление.
     const target = event.currentTarget;
     // Захват указателя на самой кнопке: без него курсор, вышедший за пределы
     // кадра, «отпускает» элемент там, где мышь уже не над ним.
@@ -321,11 +344,12 @@ function LayoutCanvas({
     let moved = false;
     const move = (moveEvent: PointerEvent): void => {
       // Щелчок — это выбор, а не перенос: без порога дрожь руки при щелчке
-      // ставила бы элементу, стоящему в потоке, позицию, о которой не просили.
+      // закрепляла бы раскладку, о которой не просили.
       if (!moved && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 3) return;
       if (!moved) {
         moved = true;
         setDragging(slot);
+        pinAll();
       }
       put(
         slot,
@@ -341,8 +365,7 @@ function LayoutCanvas({
     };
     target.addEventListener('pointermove', move);
     target.addEventListener('pointerup', stop);
-    // Отмена указателя (системный жест, потеря фокуса окна) не даёт `pointerup`,
-    // и без этой строки элемент продолжал бы ездить за мышью после отпускания.
+    // Отмена указателя (системный жест, потеря фокуса окна) не даёт `pointerup`.
     target.addEventListener('pointercancel', stop);
   };
 
@@ -354,136 +377,150 @@ function LayoutCanvas({
     event.preventDefault();
     const current = read(slot);
     const start = restingSpot(slot);
+    pinAll();
     put(slot, (current.x ?? start.x) + shift.x * step, (current.y ?? start.y) + shift.y * step);
   };
 
   const active = read(selected);
   const activePlaced = active.x !== null && active.y !== null;
   const slotName = (slot: string): string => t(`widgets.slot.${slot}`);
+  // Пиксели окна на экране, проценты в конфиге. Без окна — проценты и на экране.
+  const toPixelsX = canvas ? canvas.width / 100 : 1;
+  const toPixelsY = canvas ? canvas.height / 100 : 1;
+  const coordinate = (value: number, axis: 'x' | 'y'): number =>
+    Math.round(value * (axis === 'x' ? toPixelsX : toPixelsY));
+  const coordinateUnit = canvas ? 'px' : '%';
+
+  const frameClass = 'checkerboard touch-none rounded-lg border border-border-strong select-none';
+  const contents = (
+    <>
+      <FrameGuides />
+      {underlay ? (
+        // Виджет — под ручками и без ввода: щелчок достаётся ручке, а не
+        // кнопкам и ссылкам внутри рендерера.
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-90">
+          <WidgetStage canvas={canvas}>{underlay}</WidgetStage>
+        </div>
+      ) : null}
+
+      {/* Направляющие через центр выбранного элемента: по ним видно, что он
+          стоит ровно по центру или на одной линии с соседом. */}
+      {activePlaced ? (
+        <>
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 w-px bg-accent/50"
+            style={{ left: `${active.x}%` }}
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 h-px bg-accent/50"
+            style={{ top: `${active.y}%` }}
+          />
+        </>
+      ) : null}
+
+      {slots.map((slot) => {
+        const value = read(slot);
+        const placed = value.x !== null && value.y !== null;
+        const spot = placed ? { x: value.x!, y: value.y! } : restingSpot(slot);
+        const isSelected = slot === selected;
+        return (
+          <button
+            key={slot}
+            type="button"
+            // Кнопка, а не div с onMouseDown: её берёт Tab, и стрелки работают
+            // без дополнительных ролей и tabIndex.
+            aria-pressed={isSelected}
+            className={cn(
+              'absolute flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium whitespace-nowrap',
+              'transition-[box-shadow,background-color,transform] duration-150 ease-out',
+              locked ? 'cursor-not-allowed' : dragging === slot ? 'cursor-grabbing' : 'cursor-grab',
+              placed
+                ? 'border border-accent bg-bg/85 text-fg'
+                : 'border border-dashed border-border-strong bg-bg/85 text-muted',
+              isSelected &&
+                'z-10 border-fg bg-fg text-bg shadow-[0_4px_14px_rgb(0_0_0/0.45)] ring-2 ring-accent ring-offset-2 ring-offset-bg',
+              dragging === slot && 'scale-105',
+            )}
+            style={{ left: `${spot.x}%`, top: `${spot.y}%` }}
+            onPointerDown={drag(slot)}
+            onFocus={() => setSelected(slot)}
+            onKeyDown={nudge(slot)}
+            aria-label={
+              placed
+                ? t('widgets.layout.element', {
+                    element: slotName(slot),
+                    x: coordinate(spot.x, 'x'),
+                    y: coordinate(spot.y, 'y'),
+                    unit: coordinateUnit,
+                  })
+                : t('widgets.layout.elementInFlow', { element: slotName(slot) })
+            }
+          >
+            {slotName(slot)}
+            {isSelected && placed ? (
+              <span className="font-normal tabular-nums opacity-80">
+                {coordinate(spot.x, 'x')}·{coordinate(spot.y, 'y')}
+              </span>
+            ) : null}
+          </button>
+        );
+      })}
+    </>
+  );
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="max-w-prose">
           <h3 className="text-sm font-medium">{t('widgets.section.layout')}</h3>
-          <p className="mt-0.5 text-xs text-muted">{t('widgets.hint.layout')}</p>
+          <p className="mt-0.5 text-xs text-muted">
+            {canvas
+              ? t('widgets.hint.layoutCanvas', { width: canvas.width, height: canvas.height })
+              : t('widgets.hint.layout')}
+          </p>
         </div>
         <Button type="button" variant="secondary" onClick={resetAll} disabled={!anyCustomized}>
           {t('widgets.layout.resetAll')}
         </Button>
       </div>
 
-      {/* Клетчатый фон — как в предпросмотре: на однотонной подложке не видно,
-          где кадр прозрачен. */}
-      <div
-        ref={frame}
-        className="checkerboard relative aspect-video w-full touch-none overflow-hidden rounded-lg border border-border-strong select-none"
-      >
-        <FrameGuides />
-        {underlay ? (
-          // Виджет — под ручками и без ввода: щелчок достаётся ручке, а не
-          // кнопкам и ссылкам внутри рендерера.
-          <div aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-90">
-            {underlay}
-          </div>
-        ) : null}
-
-        {/* Направляющие через центр выбранного элемента: по ним видно, что он
-            стоит ровно по центру или на одной линии с соседом. */}
-        {activePlaced ? (
-          <>
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-y-0 w-px bg-accent/50"
-              style={{ left: `${active.x}%` }}
-            />
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 h-px bg-accent/50"
-              style={{ top: `${active.y}%` }}
-            />
-          </>
-        ) : null}
-
-        {slots.map((slot) => {
-          const value = read(slot);
-          const placed = value.x !== null && value.y !== null;
-          const spot = placed ? { x: value.x!, y: value.y! } : restingSpot(slot);
-          const isSelected = slot === selected;
-          return (
-            <button
-              key={slot}
-              type="button"
-              // Кнопка, а не div с onMouseDown: её берёт Tab, и стрелки работают
-              // без дополнительных ролей и tabIndex.
-              aria-pressed={isSelected}
-              className={cn(
-                'absolute flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium whitespace-nowrap',
-                'transition-[box-shadow,background-color,transform] duration-150 ease-out',
-                locked
-                  ? 'cursor-not-allowed'
-                  : dragging === slot
-                    ? 'cursor-grabbing'
-                    : 'cursor-grab',
-                placed
-                  ? 'border border-accent bg-bg/85 text-fg'
-                  : 'border border-dashed border-border-strong bg-bg/85 text-muted',
-                isSelected &&
-                  'z-10 border-fg bg-fg text-bg shadow-[0_4px_14px_rgb(0_0_0/0.45)] ring-2 ring-accent ring-offset-2 ring-offset-bg',
-                dragging === slot && 'scale-105',
-              )}
-              style={{ left: `${spot.x}%`, top: `${spot.y}%` }}
-              onPointerDown={drag(slot)}
-              onFocus={() => setSelected(slot)}
-              onKeyDown={nudge(slot)}
-              aria-label={
-                placed
-                  ? t('widgets.layout.element', {
-                      element: slotName(slot),
-                      x: Math.round(spot.x),
-                      y: Math.round(spot.y),
-                    })
-                  : t('widgets.layout.elementInFlow', { element: slotName(slot) })
-              }
-            >
-              {slotName(slot)}
-              {isSelected && placed ? (
-                <span className="font-normal tabular-nums opacity-80">
-                  {Math.round(spot.x)}·{Math.round(spot.y)}
-                </span>
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
+      {canvas ? (
+        <CanvasFrame canvas={canvas} frameRef={frame} testId="layout-frame" className={frameClass}>
+          {contents}
+        </CanvasFrame>
+      ) : (
+        <div
+          ref={frame}
+          data-testid="layout-frame"
+          className={cn('relative aspect-video w-full overflow-hidden', frameClass)}
+        >
+          {contents}
+        </div>
+      )}
 
       {/* Панель выбранного элемента. Подпись статуса — словом: «в потоке» по
           одному пунктиру не прочитать. */}
       <div className="space-y-4 rounded-lg border border-border bg-bg/40 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm">
-            <span className="font-medium">{slotName(selected)}</span>{' '}
-            <span className="text-muted">
-              — {activePlaced ? t('widgets.layout.placed') : t('widgets.layout.inFlow')}
-            </span>
-          </p>
-          {activePlaced ? (
-            <Button type="button" variant="ghost" onClick={() => release(selected)}>
-              {t('widgets.layout.reset')}
-            </Button>
-          ) : null}
-        </div>
+        <p className="text-sm">
+          <span className="font-medium">{slotName(selected)}</span>{' '}
+          <span className="text-muted">
+            — {activePlaced ? t('widgets.layout.placed') : t('widgets.layout.inFlow')}
+          </span>
+        </p>
         <div key={selected} className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
           <RangeField
             form={form}
             name={at(selected, 'x')}
             label={t('widgets.field.x')}
             min={0}
-            max={100}
-            step={0.5}
-            unit="%"
+            max={canvas ? canvas.width : 100}
+            step={canvas ? 1 : 0.5}
+            scale={toPixelsX}
+            unit={coordinateUnit}
             nullable
-            fallback={Math.round(restingSpot(selected).x)}
+            fallback={coordinate(restingSpot(selected).x, 'x')}
             nullLabel={t('widgets.layout.auto')}
           />
           <RangeField
@@ -491,34 +528,69 @@ function LayoutCanvas({
             name={at(selected, 'y')}
             label={t('widgets.field.y')}
             min={0}
-            max={100}
-            step={0.5}
-            unit="%"
+            max={canvas ? canvas.height : 100}
+            step={canvas ? 1 : 0.5}
+            scale={toPixelsY}
+            unit={coordinateUnit}
             nullable
-            fallback={Math.round(restingSpot(selected).y)}
+            fallback={coordinate(restingSpot(selected).y, 'y')}
             nullLabel={t('widgets.layout.auto')}
           />
-          <RangeField
-            form={form}
-            name={at(selected, 'fontSize')}
-            label={t('widgets.field.size')}
-            min={8}
-            max={200}
-            unit="px"
-            nullable
-            fallback={Number(form.watch(`${prefix}text.fontSize`)) || 32}
-            nullLabel={t('widgets.layout.asText')}
-            resetLabel={t('widgets.layout.clear')}
-          />
-          <NullableColorField
-            form={form}
-            name={at(selected, 'color')}
-            label={t('widgets.field.color')}
-          />
+          {MEDIA_SLOTS.has(selected) ? (
+            // Ширина картинки в пикселях окна; высота — по её пропорциям.
+            <RangeField
+              form={form}
+              name={at(selected, 'width')}
+              label={t('widgets.field.imageWidth')}
+              min={16}
+              max={canvas ? canvas.width : 1920}
+              unit="px"
+              nullable
+              fallback={320}
+              nullLabel={t('widgets.layout.auto')}
+              resetLabel={t('widgets.layout.clear')}
+            />
+          ) : (
+            <>
+              <RangeField
+                form={form}
+                name={at(selected, 'fontSize')}
+                label={t('widgets.field.size')}
+                min={8}
+                max={200}
+                unit="px"
+                nullable
+                fallback={Number(form.watch(`${prefix}text.fontSize`)) || 32}
+                nullLabel={t('widgets.layout.asText')}
+                resetLabel={t('widgets.layout.clear')}
+              />
+              <NullableColorField
+                form={form}
+                name={at(selected, 'color')}
+                label={t('widgets.field.color')}
+              />
+            </>
+          )}
         </div>
       </div>
     </div>
   );
+}
+
+/**
+ * Прямоугольник того, что элемент рисует: у текста — сам текст, а не блок во
+ * всю ширину; у картинки и видео — сам элемент.
+ */
+function contentRect(node: Element): DOMRect | null {
+  if (node instanceof HTMLImageElement || node instanceof HTMLVideoElement) {
+    return node.getBoundingClientRect();
+  }
+  const range = document.createRange();
+  range.selectNodeContents(node);
+  // jsdom не считает раскладку диапазонов — там берём сам элемент.
+  const rect =
+    typeof range.getBoundingClientRect === 'function' ? range.getBoundingClientRect() : null;
+  return rect && rect.width > 0 ? rect : node.getBoundingClientRect();
 }
 
 const ARROWS: Record<string, { x: number; y: number } | undefined> = {

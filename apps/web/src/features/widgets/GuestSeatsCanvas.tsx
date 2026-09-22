@@ -4,24 +4,30 @@ import {
   guestSeat,
   type GuestSeat,
   MAX_GUESTS_PER_ROOM,
+  type WidgetCanvas,
 } from '@streamkit/contracts';
 import { type ReactNode, useRef, useState } from 'react';
 import type { FieldValues, UseFormReturn } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Button, cn } from '@streamkit/app-kit';
+import { WidgetStage } from '@streamkit/ui';
 import { FrameGuides } from './FrameGuides';
 import { RangeField } from './fields';
+import { CanvasFrame } from './WidgetPreview';
 
 /** Шаг клавиатуры в процентах кадра; с Shift — крупный. */
 const STEP = 1;
 const BIG_STEP = 10;
+/** Кадр без заданного окна виджета — 16:9, как обычная сцена OBS. */
+const DEFAULT_FRAME_ASPECT = 16 / 9;
+
 /**
- * Кадр редактора — 16:9, как сцена OBS. В нём плитка 16:9 шириной `w` процентов
- * кадра занимает те же `w` процентов его высоты: доли равны, и рамку места
- * можно считать квадратом в процентах.
+ * Высота плитки 16:9 в процентах высоты кадра при ширине `width` процентов его
+ * ширины. В кадре 16:9 доли равны; в окне 800×600 плитка той же ширины ниже.
  */
-const FRAME_ASPECT = 16 / 9;
-const heightOf = (width: number): number => (width * FRAME_ASPECT) / GUEST_TILE_ASPECT;
+function heightIn(width: number, frameAspect: number): number {
+  return (width * frameAspect) / GUEST_TILE_ASPECT;
+}
 
 /** Меньше пяти процентов плитка — уже не видео, а цветная точка. */
 const MIN_SIZE = 5;
@@ -53,13 +59,21 @@ const ARROWS: Record<string, { x: number; y: number } | undefined> = {
 export function GuestSeatsCanvas({
   form,
   underlay,
+  canvas,
 }: {
   form: UseFormReturn<FieldValues>;
+  /** Окно виджета: кадр в его пропорциях и координаты в пикселях. */
+  canvas: WidgetCanvas | null;
   /** Настоящий виджет гостей под рамками: двигают то, что будет в кадре. */
   underlay?: ReactNode;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const frame = useRef<HTMLDivElement>(null);
+  const frameAspect = canvas ? canvas.width / canvas.height : DEFAULT_FRAME_ASPECT;
+  const heightOf = (width: number): number => heightIn(width, frameAspect);
+  const toPixelsX = canvas ? canvas.width / 100 : 1;
+  const toPixelsY = canvas ? canvas.height / 100 : 1;
+  const unit = canvas ? 'px' : '%';
   const [selected, setSelected] = useState(0);
   const [active, setActive] = useState<{ index: number; mode: 'move' | 'resize' } | null>(null);
 
@@ -82,7 +96,7 @@ export function GuestSeatsCanvas({
   };
 
   const write = (index: number, seat: GuestSeat): void => {
-    const fitted = fit(seat);
+    const fitted = fit(seat, frameAspect);
     // По листьям, а не объектом места: react-hook-form не переносит значение
     // объекта в уже зарегистрированные под ним ползунки.
     for (const field of ['x', 'y', 'width'] as const) {
@@ -183,15 +197,11 @@ export function GuestSeatsCanvas({
         </Button>
       </div>
 
-      <div
-        ref={frame}
-        data-testid="guest-seats"
-        className="checkerboard relative aspect-video w-full touch-none overflow-hidden rounded-lg border border-border-strong select-none"
-      >
+      <SeatsFrame canvas={canvas} frameRef={frame}>
         <FrameGuides />
         {underlay ? (
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-90">
-            {underlay}
+            <WidgetStage canvas={canvas}>{underlay}</WidgetStage>
           </div>
         ) : null}
 
@@ -243,7 +253,7 @@ export function GuestSeatsCanvas({
             </button>
           );
         })}
-      </div>
+      </SeatsFrame>
 
       <div className="space-y-4 rounded-lg border border-border bg-bg/40 p-4">
         <p className="text-sm font-medium">{seatName(current)}</p>
@@ -253,30 +263,33 @@ export function GuestSeatsCanvas({
             name={at(current, 'x')}
             label={t('widgets.field.x')}
             min={0}
-            max={100}
-            step={0.5}
-            unit="%"
-            fallback={selectedSeat.x}
+            max={canvas ? canvas.width : 100}
+            step={canvas ? 1 : 0.5}
+            scale={toPixelsX}
+            unit={unit}
+            fallback={Math.round(selectedSeat.x * toPixelsX)}
           />
           <RangeField
             form={form}
             name={at(current, 'y')}
             label={t('widgets.field.y')}
             min={0}
-            max={100}
-            step={0.5}
-            unit="%"
-            fallback={selectedSeat.y}
+            max={canvas ? canvas.height : 100}
+            step={canvas ? 1 : 0.5}
+            scale={toPixelsY}
+            unit={unit}
+            fallback={Math.round(selectedSeat.y * toPixelsY)}
           />
           <RangeField
             form={form}
             name={at(current, 'width')}
             label={t('widgets.seats.width')}
             min={MIN_SIZE}
-            max={100}
-            step={0.5}
-            unit="%"
-            fallback={selectedSeat.width}
+            max={canvas ? canvas.width : 100}
+            step={canvas ? 1 : 0.5}
+            scale={toPixelsX}
+            unit={unit}
+            fallback={Math.round(selectedSeat.width * toPixelsX)}
           />
         </div>
       </div>
@@ -289,10 +302,12 @@ export function GuestSeatsCanvas({
  * выходили за него. Плитка, наполовину уехавшая за край, в OBS просто обрезана,
  * и заметить это можно только в эфире.
  */
-export function fit(seat: GuestSeat): GuestSeat {
-  // Плитке 16:9 в кадре 16:9 ограничение одно на обе стороны: ширина ≤ 100 %.
-  const width = round(Math.min(100, Math.max(MIN_SIZE, seat.width)));
-  const height = heightOf(width);
+export function fit(seat: GuestSeat, frameAspect = DEFAULT_FRAME_ASPECT): GuestSeat {
+  // Плитка не выше кадра: в окне, более узком, чем 16:9, ширину ограничивает
+  // высота кадра.
+  const widest = Math.min(100, (100 * GUEST_TILE_ASPECT) / frameAspect);
+  const width = round(Math.min(widest, Math.max(MIN_SIZE, seat.width)));
+  const height = heightIn(width, frameAspect);
   return {
     width,
     x: round(Math.min(100 - width / 2, Math.max(width / 2, seat.x))),
@@ -303,4 +318,30 @@ export function fit(seat: GuestSeat): GuestSeat {
 /** Десятые доли процента: больше точности кадр не различит, а конфиг раздует. */
 function round(value: number): number {
   return Math.round(value * 10) / 10;
+}
+
+/** Рамка кадра мест: в пропорциях окна виджета, без окна — 16:9. */
+function SeatsFrame({
+  canvas,
+  frameRef,
+  children,
+}: {
+  canvas: WidgetCanvas | null;
+  frameRef: React.Ref<HTMLDivElement>;
+  children: ReactNode;
+}): React.JSX.Element {
+  const className = 'checkerboard touch-none rounded-lg border border-border-strong select-none';
+  return canvas ? (
+    <CanvasFrame canvas={canvas} frameRef={frameRef} testId="guest-seats" className={className}>
+      {children}
+    </CanvasFrame>
+  ) : (
+    <div
+      ref={frameRef}
+      data-testid="guest-seats"
+      className={`relative aspect-video w-full overflow-hidden ${className}`}
+    >
+      {children}
+    </div>
+  );
 }

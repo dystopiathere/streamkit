@@ -14,6 +14,7 @@ import {
   sectionsFor,
   WidgetConfigForm,
 } from '@/features/widgets/WidgetConfigForm';
+import { CanvasSize } from '@/features/widgets/CanvasSize';
 import { WidgetPreview } from '@/features/widgets/WidgetPreview';
 import { TypeMark } from '@/features/widgets/TypeMark';
 import { WidgetStateControls } from '@/features/widgets/WidgetStateControls';
@@ -152,6 +153,10 @@ export function WidgetEditorPage(): React.JSX.Element {
               state={state.data ?? null}
               alertScenario={alertScenario}
             />
+            <div className="mt-4 space-y-2 border-t border-border pt-4">
+              <h3 className="text-sm font-medium">{t('widgets.canvas.title')}</h3>
+              <CanvasSize form={form} />
+            </div>
           </Card>
 
           <WidgetStateControls widget={widget.data} />

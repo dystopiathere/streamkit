@@ -26,7 +26,7 @@ import { ApiError } from '@/lib/api';
 import { useSendTestAlert } from './queries';
 import { LayoutSection, StyleSection } from './AdvancedStyling';
 import { GuestSeatsCanvas } from './GuestSeatsCanvas';
-import { WidgetSurface } from './WidgetPreview';
+import { canvasOf, WidgetSurface } from './WidgetPreview';
 import {
   CheckboxField,
   CheckboxGroupField,
@@ -1219,6 +1219,7 @@ function GuestsLayout({ form }: { form: UseFormReturn<FieldValues> }): React.JSX
       {free ? (
         <GuestSeatsCanvas
           form={form}
+          canvas={canvasOf({ canvas: form.watch('canvas') })}
           underlay={
             <WidgetSurface
               type="guests"

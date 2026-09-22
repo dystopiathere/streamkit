@@ -147,7 +147,8 @@
       "x": "Horizontal",
       "y": "Vertical",
       "size": "Size",
-      "soundSource": "Sound source"
+      "soundSource": "Sound source",
+      "imageWidth": "Image width"
     },
     "templateHint": "Available variables: {{vars}}",
     "tokens": {
@@ -191,12 +192,13 @@
       "gapMs": "One queue for all scenarios: alerts follow each other with this pause.",
       "minCount": "0 — show all.",
       "imageUrl": "An https link to an image, GIF or WebM video. Empty means no image.",
-      "layout": "Click an element to select it and drag it. With the keyboard: Tab selects, arrows move by 1%, with Shift by 10%. Dashed lines are safe areas: keep anything important inside the inner frame.",
+      "layout": "The window size is not set: the frame is 16:9 and coordinates are percentages. Set the window on the right so the layout matches the OBS browser source. Drag an element and the others are pinned where they are; with the keyboard use Tab and arrows.",
       "barImage": "The image is cropped to the progress, not stretched.",
       "currencyFromDonations": "Currency: {{currency}} — most of your donations arrive in it. There is nothing to pick, and donations in other currencies are not counted here.",
       "backgroundOpacity": "0% — the background is invisible, 100% — solid.",
       "neverFades": "never fades",
-      "soundFromVideo": "The sound comes from the alert’s video."
+      "soundFromVideo": "The sound comes from the alert’s video.",
+      "layoutCanvas": "The frame is the widget window, {{width}} × {{height}} px, like the browser source in OBS. Drag an element and the others are pinned where they are. With the keyboard: Tab selects, arrows move, Shift for bigger steps. Dashed lines are safe areas."
     },
     "state": {
       "raised": "Raised",
@@ -234,8 +236,7 @@
       "center": "Centered",
       "banner": "Top banner",
       "side": "Side",
-      "element": "{{element}}: {{x}}% across, {{y}}% down",
-      "reset": "Back to flow",
+      "element": "{{element}}: {{x}} {{unit}} horizontally, {{y}} {{unit}} vertically",
       "resetAll": "Reset layout",
       "elementInFlow": "{{element}}: no position set",
       "placed": "has its own position",
@@ -326,6 +327,17 @@
         "title": "Sound from the video",
         "hint": "The video’s own audio track, in sync with the picture. The video loops until the alert ends and stops with it."
       }
+    },
+    "canvas": {
+      "title": "Widget window",
+      "width": "Width, px",
+      "height": "Height, px",
+      "preset": "Common sizes",
+      "custom": "Custom size",
+      "hint": "Give the OBS browser source the same width and height. In a source of another size the widget scales as a whole and elements stay in place.",
+      "unset": "The window size is not set: the widget stretches over the whole browser source, and in a source of another size the elements move.",
+      "set": "Set {{width}} × {{height}} px",
+      "clear": "Stretch over the whole source"
     }
   },
   "sources": {

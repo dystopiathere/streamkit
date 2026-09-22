@@ -39,14 +39,17 @@ function renderEditor(): void {
   );
 }
 
-/** Точное значение ползунка выбранного элемента — в поле числа рядом с ним. */
+/**
+ * Точное значение ползунка выбранного элемента — в поле числа рядом с ним.
+ * В пикселях окна виджета: у новых виджетов окно 800 × 600.
+ */
 function value(label: string): string {
-  return (screen.getByLabelText(`${label}, %`) as HTMLInputElement).value;
+  return (screen.getByLabelText(`${label}, px`) as HTMLInputElement).value;
 }
 
 /** Кадр в jsdom размеров не имеет: задаём их, как это сделал бы браузер. */
-function sizeFrame(width = 800, height = 450): void {
-  const frame = document.querySelector('.aspect-video');
+function sizeFrame(width = 800, height = 600): void {
+  const frame = document.querySelector('[data-testid="layout-frame"]');
   if (!frame) throw new Error('Кадр раскладки не найден');
   frame.getBoundingClientRect = () =>
     ({ left: 0, top: 0, width, height, right: width, bottom: height, x: 0, y: 0 }) as DOMRect;
@@ -69,7 +72,7 @@ describe('раскладка элементов в кадре', () => {
     const bar = element('Полоса');
     expect(bar.getAttribute('aria-pressed')).toBe('false');
 
-    fireEvent.pointerDown(bar, { pointerId: 1, button: 0, clientX: 400, clientY: 225 });
+    fireEvent.pointerDown(bar, { pointerId: 1, button: 0, clientX: 400, clientY: 300 });
     fireEvent.pointerUp(bar, { pointerId: 1 });
 
     expect(bar.getAttribute('aria-pressed')).toBe('true');
@@ -83,18 +86,19 @@ describe('раскладка элементов в кадре', () => {
     sizeFrame();
     const title = element('Заголовок');
 
-    fireEvent.pointerDown(title, { pointerId: 1, button: 0, clientX: 400, clientY: 225 });
+    fireEvent.pointerDown(title, { pointerId: 1, button: 0, clientX: 400, clientY: 300 });
     // Движение приходит УЖЕ ПОСЛЕ того, как обработчик вернул управление, —
     // именно здесь React обнуляет `currentTarget` у синтетического события.
     fireEvent.pointerMove(title, { pointerId: 1, clientX: 200, clientY: 90 });
 
-    expect(value('По горизонтали')).toBe('25');
-    expect(value('По вертикали')).toBe('20');
+    // Кадр 800 × 600 на экране — окно 800 × 600: пиксели совпадают.
+    expect(value('По горизонтали')).toBe('200');
+    expect(value('По вертикали')).toBe('90');
 
     fireEvent.pointerUp(title, { pointerId: 1 });
     // После отпускания элемент за мышью не едет.
     fireEvent.pointerMove(title, { pointerId: 1, clientX: 720, clientY: 400 });
-    expect(value('По горизонтали')).toBe('25');
+    expect(value('По горизонтали')).toBe('200');
   });
 
   it('стрелки двигают элемент, а Shift — крупным шагом', () => {
@@ -102,14 +106,14 @@ describe('раскладка элементов в кадре', () => {
     const title = element('Заголовок');
 
     fireEvent.keyDown(title, { key: 'ArrowRight' });
-    // Первое нажатие считается от места в потоке, а не от нуля.
-    expect(value('По горизонтали')).toBe('51');
+    // Первое нажатие считается от места в потоке, а не от нуля: 51 % от 800.
+    expect(value('По горизонтали')).toBe('408');
 
     fireEvent.keyDown(title, { key: 'ArrowRight', shiftKey: true });
-    expect(value('По горизонтали')).toBe('61');
+    expect(value('По горизонтали')).toBe('488');
 
     fireEvent.keyDown(title, { key: 'ArrowUp', shiftKey: true });
-    expect(value('По вертикали')).toBe('10');
+    expect(value('По вертикали')).toBe('60');
   });
 
   it('за края кадра элемент не уходит', () => {
@@ -119,6 +123,17 @@ describe('раскладка элементов в кадре', () => {
       fireEvent.keyDown(title, { key: 'ArrowLeft', shiftKey: true });
     }
     expect(value('По горизонтали')).toBe('0');
+  });
+
+  it('перемещение одного элемента закрепляет остальные на их местах', () => {
+    // Раньше закреплялся только тронутый: он выходил из потока, а соседи
+    // съезжали на освободившееся место.
+    renderEditor();
+    fireEvent.keyDown(element('Заголовок'), { key: 'ArrowRight' });
+
+    for (const name of ['Заголовок', 'Полоса', 'Суммы']) {
+      expect(element(name).getAttribute('aria-label')).not.toContain('позиция не задана');
+    }
   });
 
   it('«Сбросить раскладку» возвращает все элементы в поток', () => {
