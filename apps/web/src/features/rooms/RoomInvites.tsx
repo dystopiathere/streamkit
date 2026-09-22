@@ -48,14 +48,14 @@ export function RoomInvites({ roomId }: { roomId: string }): React.JSX.Element {
     <Card className="space-y-4">
       <h2 className="font-medium">{t('rooms.invites.title')}</h2>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <Input
           value={label}
           onChange={(event) => setLabel(event.target.value)}
           placeholder={t('rooms.invites.labelPlaceholder')}
           aria-label={t('rooms.invites.labelPlaceholder')}
           maxLength={80}
-          className="max-w-xs"
+          className="sm:min-w-0 sm:flex-1"
           onKeyDown={(event) => {
             if (event.key === 'Enter') void handleCreate();
           }}
@@ -65,6 +65,7 @@ export function RoomInvites({ roomId }: { roomId: string }): React.JSX.Element {
           onClick={handleCreate}
           isLoading={createInvite.isPending}
           disabled={label.trim().length === 0}
+          className="sm:shrink-0"
         >
           {t('rooms.invites.create')}
         </Button>

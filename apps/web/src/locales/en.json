@@ -148,7 +148,25 @@
       "y": "Vertical",
       "size": "Size",
       "soundSource": "Sound source",
-      "imageWidth": "Image width"
+      "imageWidth": "Image width",
+      "latestEvent": "Which event to show",
+      "latestTitle": "Title",
+      "latestTemplate": "Event line",
+      "showMessage": "Show the donation or reward text on its own line",
+      "emptyText": "Text before the first event",
+      "rouletteTitle": "Title above the wheel",
+      "donationSpins": "Donations spin the wheel",
+      "spinPrice": "Spin price",
+      "spinDuration": "Spin duration",
+      "resultDuration": "How long the result stays",
+      "showDonor": "Show the donor name and amount",
+      "hideWhenIdle": "Show the wheel only while it spins",
+      "wheelSize": "Wheel diameter",
+      "rimColor": "Rim and gaps",
+      "pointerColor": "Pointer and prize",
+      "voiceEnabled": "Play voice donations",
+      "voiceVolume": "Voice volume",
+      "voiceMaxSeconds": "No longer than"
     },
     "templateHint": "Available variables: {{vars}}",
     "tokens": {
@@ -169,7 +187,9 @@
       "timer": "Timer",
       "top-donors": "Top donors",
       "chat": "Chat",
-      "guests": "Room guests"
+      "guests": "Room guests",
+      "latest": "Latest event",
+      "roulette": "Roulette"
     },
     "period": {
       "24h": "Last 24 hours",
@@ -198,7 +218,13 @@
       "backgroundOpacity": "0% — the background is invisible, 100% — solid.",
       "neverFades": "never fades",
       "soundFromVideo": "The sound comes from the alert’s video.",
-      "layoutCanvas": "The frame is the widget window, {{width}} × {{height}} px, like the browser source in OBS. Drag an element and the others are pinned where they are. With the keyboard: Tab selects, arrows move, Shift for bigger steps. Dashed lines are safe areas."
+      "layoutCanvas": "The frame is the widget window, {{width}} × {{height}} px, like the browser source in OBS. Drag an element and the others are pinned where they are. With the keyboard: Tab selects, arrows move, Shift for bigger steps. Dashed lines are safe areas.",
+      "emptyText": "Leave empty to keep the widget invisible until the first event.",
+      "latestTest": "Test events never land here: a “Test viewer” would stay on screen until a real donation.",
+      "spinPrice": "A donation of at least this amount is one spin, however much it exceeds the price. A currency without a price does not spin the wheel: we do not convert currencies.",
+      "manualOnly": "The wheel spins only from the button in the “Controls” block — for giveaways without donations.",
+      "voice": "A voice donation is a recording the donor made in DonationAlerts. The alert stays on screen while it plays, and the scenario sound is skipped: together they turn into noise.",
+      "voiceMaxSeconds": "A longer recording is cut off: its length is set by the donor, not by you."
     },
     "state": {
       "raised": "Raised",
@@ -208,7 +234,8 @@
       "addTenMinutes": "+10 minutes",
       "paused": "paused",
       "topEmpty": "No donations in the selected period yet",
-      "until": "until"
+      "until": "until",
+      "latestEmpty": "No events of this type yet — the widget is empty or shows the “no events yet” text."
     },
     "guestsLayout": {
       "grid": "Grid",
@@ -219,7 +246,8 @@
     "roomNotSelected": "— not selected —",
     "defaultTitle": {
       "goal": "Goal",
-      "topDonors": "Top donors"
+      "topDonors": "Top donors",
+      "roulette": "Roulette"
     },
     "scenario": {
       "title": "Scenarios",
@@ -278,7 +306,10 @@
       "bar": "Bar",
       "amount": "Amounts",
       "clock": "Clock",
-      "list": "List"
+      "list": "List",
+      "value": "Event line",
+      "wheel": "Wheel",
+      "result": "Result"
     },
     "tab": {
       "label": "Settings sections",
@@ -296,7 +327,12 @@
       "room": "Room",
       "look": "Text and colors",
       "pro": "Pro",
-      "hasError": "has an error"
+      "hasError": "has an error",
+      "triggers": "Triggers",
+      "latest": "Event",
+      "sectors": "Sectors",
+      "spin": "Spin",
+      "wheel": "Wheel"
     },
     "editor": {
       "saved": "Settings saved",
@@ -338,6 +374,90 @@
       "unset": "The window size is not set: the widget stretches over the whole browser source, and in a source of another size the elements move.",
       "set": "Set {{width}} × {{height}} px",
       "clear": "Stretch over the whole source"
+    },
+    "latestTitle": {
+      "donation": "Latest donation",
+      "follow": "Latest follower",
+      "subscription": "Latest subscriber",
+      "gift": "Latest gift",
+      "resubscription": "Latest resub",
+      "cheer": "Latest bits",
+      "raid": "Latest raid",
+      "reward": "Latest reward"
+    },
+    "triggers": {
+      "intro": "A trigger gives a donation its own alert look by amount. They are checked top to bottom and the first match wins. When none matches, the donation uses the base look.",
+      "listLabel": "Triggers by priority",
+      "name": "Trigger {{number}} name",
+      "up": "Move “{{name}}” up in priority",
+      "down": "Move “{{name}}” down in priority",
+      "operatorLabel": "Condition",
+      "operator": {
+        "gte": "at least",
+        "gt": "more than",
+        "eq": "exactly",
+        "lte": "at most",
+        "lt": "less than",
+        "between": "between"
+      },
+      "from": "From",
+      "amount": "Amount",
+      "to": "To",
+      "currency": "Currency",
+      "shadowed": "A {{amount}} donation is caught by the trigger above — “{{name}}”. Move this one up or narrow its condition.",
+      "edit": "Edit look",
+      "editing": "Editing",
+      "test": "Test with {{amount}}",
+      "testNamed": "Test trigger “{{name}}” in OBS",
+      "fallback": "Base look",
+      "fallbackHint": "When no trigger matches.",
+      "add": "Add trigger",
+      "count": "{{used}} of {{max}}",
+      "summary": {
+        "gte": "from {{amount}}",
+        "gt": "over {{amount}}",
+        "eq": "exactly {{amount}}",
+        "lte": "up to {{amount}}",
+        "lt": "under {{amount}}",
+        "between": "{{amount}} to {{to}}"
+      },
+      "editingBanner": "Trigger look:",
+      "backToBase": "Back to base look",
+      "previewMark": "trigger"
+    },
+    "roulette": {
+      "newSector": "Sector {{number}}",
+      "color": "Color",
+      "label": "Sector",
+      "weight": "Weight",
+      "chance": "Chance",
+      "listLabel": "Wheel sectors",
+      "unnamed": "sector {{number}}",
+      "colorOf": "Color of “{{name}}”",
+      "labelOf": "Sector {{number}} name",
+      "weightOf": "Weight of “{{name}}”",
+      "up": "Move “{{name}}” back around the wheel",
+      "down": "Move “{{name}}” forward around the wheel",
+      "add": "Add sector",
+      "recolor": "Recolor",
+      "count": "{{used}} of {{max}}",
+      "weightHint": "A sector’s chance is its weight divided by the sum of weights. On the wheel it takes the same share of the circle, so viewers see the real odds. Default colors are checked so that neighbouring sectors stay distinct, including for colour-blind viewers.",
+      "sample": {
+        "1": "Sing a song",
+        "2": "Challenge",
+        "3": "Pick the game",
+        "4": "Nothing",
+        "5": "React to a video",
+        "6": "Push-ups"
+      },
+      "trySpin": "Try a spin here",
+      "spin": "Spin the wheel on stream",
+      "spinHint": "The spin goes to OBS right away. The server picks the sector — the same as for a donation.",
+      "history": "Recent spins",
+      "clear": "Clear",
+      "clearConfirm": "Erase the spin history? The wheel and its sectors stay.",
+      "historyEmpty": "The wheel has not been spun yet.",
+      "manual": "by button"
     }
   },
   "sources": {
@@ -408,7 +528,18 @@
       "cheer_other": "{{formatted}} bits",
       "raid_one": "{{formatted}} viewer",
       "raid_other": "{{formatted}} viewers"
-    }
+    },
+    "pageSize": "Per page",
+    "newArrived_one": "{{count}} new event arrived — show",
+    "newArrived_other": "{{count}} new events arrived — show",
+    "pagination": {
+      "nav": "Event history pages",
+      "previous": "Previous",
+      "next": "Next",
+      "page": "Page {{page}}",
+      "range": "{{from}}–{{to}} of {{total}}"
+    },
+    "voice": "voice"
   },
   "privacy": {
     "title": "Privacy and data",

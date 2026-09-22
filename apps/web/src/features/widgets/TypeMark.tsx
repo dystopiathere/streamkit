@@ -1,4 +1,4 @@
-import type { WidgetType } from '@streamkit/contracts';
+import { ROULETTE_COLORS, type WidgetType } from '@streamkit/contracts';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@streamkit/app-kit';
 
@@ -18,11 +18,24 @@ export function TypeMark({
   const { t } = useTranslation();
   return (
     <span className={cn('inline-flex items-center gap-1.5', className)}>
-      <span
-        aria-hidden="true"
-        className="h-3 w-1.5 shrink-0 rounded-[1px]"
-        style={{ backgroundColor: `var(--color-bar-${type})` }}
-      />
+      {type === 'roulette' ? (
+        // Рулетка — составной меткой: три сегмента цветов колеса вместо ещё
+        // одного оттенка, неотличимого от соседних (см. `--color-bar-latest`).
+        <span
+          aria-hidden="true"
+          className="flex h-3 w-1.5 shrink-0 flex-col overflow-hidden rounded-[1px]"
+        >
+          {ROULETTE_COLORS.slice(0, 3).map((color) => (
+            <span key={color} className="flex-1" style={{ backgroundColor: color }} />
+          ))}
+        </span>
+      ) : (
+        <span
+          aria-hidden="true"
+          className="h-3 w-1.5 shrink-0 rounded-[1px]"
+          style={{ backgroundColor: `var(--color-bar-${type})` }}
+        />
+      )}
       {t(`widgets.type.${type}`)}
     </span>
   );

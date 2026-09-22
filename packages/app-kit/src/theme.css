@@ -68,6 +68,14 @@
   --color-bar-guests: #cf7c38;
   --color-bar-timer: #2ea3b4;
   --color-bar-chat: #9670e0;
+  /*
+   * Седьмая полоса проходит тот же валидатор после чата (ΔE 9.6 у соседей).
+   * Восьмой отдельный оттенок при контрасте 3:1 с surface места не нашёл:
+   * лучший кандидат держал ΔE 5.8 ко всем. Рулетка поэтому метится не цветом,
+   * а составом — тремя сегментами палитры колеса (`TypeMark`), как советует
+   * dataviz для девятой серии: форма вместо ещё одного оттенка.
+   */
+  --color-bar-latest: #bd4334;
 
   /* Заголовки — узкий гротеск, как надписи опознавания канала на таблице.
      Файлы свои (packages/ui/fonts): CSP закрывает чужие шрифты. */
@@ -84,6 +92,9 @@
        белыми пятнами на тёмной странице. */
     color-scheme: dark;
     accent-color: var(--color-accent);
+    /* Стрелка выпадающего списка — цветом muted (картинка не наследует
+       currentColor, поэтому цвет записан числом). */
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b0ada6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   }
 
   body {

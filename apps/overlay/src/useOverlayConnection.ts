@@ -11,6 +11,8 @@ import {
   chatChannelMessageSchema,
   configUpdatedMessageSchema,
   overlayBootstrapSchema,
+  type RouletteSpin,
+  rouletteSpinMessageSchema,
   widgetStateMessageSchema,
 } from '@streamkit/contracts';
 import { useEffect, useRef, useState } from 'react';
@@ -30,6 +32,8 @@ export interface OverlayConnectionHandlers {
   onChat: (message: ChatMessage) => void;
   /** Канал чата сменился: стример подключил другой Twitch или отключил площадку. */
   onChatChannels: (channels: ChatChannelRef[]) => void;
+  /** Прокрут рулетки: сектор уже выбран сервером, колесо только доводится до него. */
+  onRouletteSpin: (spin: RouletteSpin) => void;
 }
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
@@ -131,6 +135,11 @@ export function useOverlayConnection(
       if (parsed.success) {
         handlersRef.current.onConfig(parsed.data);
       }
+    });
+
+    socket.on(SOCKET_EVENTS.rouletteSpin, (payload: unknown) => {
+      const parsed = rouletteSpinMessageSchema.safeParse(payload);
+      if (parsed.success) handlersRef.current.onRouletteSpin(parsed.data.spin);
     });
 
     socket.on(SOCKET_EVENTS.widgetState, (payload: unknown) => {

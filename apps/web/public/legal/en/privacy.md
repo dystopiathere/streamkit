@@ -1,6 +1,6 @@
 # StreamKit Privacy Policy
 
-Version No. 11 of 20.09.2026
+Version No. 12 of 24.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/privacy?lang=ru); if the two
@@ -90,7 +90,10 @@ Article 6 of Federal Law No. 152-FZ):
 - **event participants** from services connected by the user (donations;
   follows, subscriptions, gifted subscriptions, Bits, raids and Channel Points
   rewards on Twitch): name or nickname, message text, amount and currency or a
-  quantity (Bits, raid viewers, months subscribed, number of gifts), time. Stored in the user's event history. The Top donors widget shows names on
+  quantity (Bits, raid viewers, months subscribed, number of gifts), time. For a
+  voice donation we receive a link to the recording instead of text: the
+  recording stays with the service the donation was made through, we neither
+  copy nor store it and only play it on the widget page. Stored in the user's event history. The Top donors widget shows names on
   the widget page, which the user adds to the stream;
 - **Twitch and YouTube chat viewers** on the channels the user has connected to
   the service: username or name, for YouTube the author's channel ID, and message
@@ -213,7 +216,8 @@ Deletion is confirmed with the password. The email address and display name are
 anonymized, the password and the second factor are deleted, sessions are ended,
 widget links are revoked, platform connections with their tokens and metrics are
 deleted, rooms and invites are deleted, auto-renewal is turned off, and the
-saved payment method is erased. Donors' names and messages are anonymized.
+saved payment method is erased. Donors' names and messages are anonymized, and links to voice donations are
+deleted.
 Event amounts and dates and the payment history are kept in anonymized form for
 the periods in section 8 — for accounting and dispute resolution.
 

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isoDateSchema, moneySchema, uuidSchema } from './common.js';
+import { httpsUrlSchema, isoDateSchema, moneySchema, uuidSchema } from './common.js';
 import { LANGUAGES } from './messages.js';
 
 /**
@@ -62,6 +62,15 @@ export const incomingAlertEventSchema = z.object({
   message: z.string().max(500).default(''),
   amount: moneySchema.nullable().default(null),
   count: eventCountSchema,
+  /**
+   * Голосовой донат: ссылка на запись у провайдера, а не текст.
+   *
+   * Файл остаётся у него — мы храним только ссылку и проигрываем её в кадре.
+   * Своего хранилища для чужого голоса заводить нечего: это данные третьего
+   * лица, поручённые стримером, и срок их жизни должен совпадать со сроком
+   * жизни самого события.
+   */
+  audioUrl: httpsUrlSchema.nullable().default(null),
   isTest: z.boolean().default(false),
   occurredAt: isoDateSchema.optional(),
 });
@@ -90,9 +99,46 @@ export const webhookAlertPayloadSchema = z.object({
   message: z.string().max(500).default(''),
   amount: moneySchema.nullable().default(null),
   count: eventCountSchema,
+  /** Голосовой донат: ссылка на запись. Только https — её играет браузер-сорс. */
+  audioUrl: httpsUrlSchema.nullable().default(null),
   occurredAt: isoDateSchema.optional(),
 });
 export type WebhookAlertPayload = z.infer<typeof webhookAlertPayloadSchema>;
+
+/**
+ * Страница истории событий.
+ *
+ * Номера страниц, а не курсор: стример листает историю, чтобы найти донат
+ * «где-то на прошлой неделе», и прыжок на пятую страницу ему нужнее, чем
+ * «дальше» пять раз. Сдвиг, от которого курсор защищает, закрыт отсечкой
+ * `until`: страницы считаются от момента первой загрузки, и донат, пришедший
+ * во время листания, не сдвигает строки между страницами — он появляется
+ * наверху первой, когда стример к ней вернётся.
+ */
+export const EVENTS_PAGE_SIZES = [25, 50, 100] as const;
+
+export const eventsPageQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).max(100_000).default(1),
+  pageSize: z.coerce
+    .number()
+    .int()
+    .refine((value) => (EVENTS_PAGE_SIZES as readonly number[]).includes(value), {
+      message: 'Недопустимый размер страницы',
+    })
+    .default(25),
+  until: isoDateSchema.optional(),
+});
+export type EventsPageQuery = z.infer<typeof eventsPageQuerySchema>;
+
+export const eventsPageSchema = z.object({
+  items: z.array(alertEventSchema),
+  total: z.number().int().nonnegative(),
+  page: z.number().int().min(1),
+  pageSize: z.number().int().min(1),
+  /** Отсечка, от которой считаются страницы: её передают в следующие запросы. */
+  until: isoDateSchema,
+});
+export type EventsPage = z.infer<typeof eventsPageSchema>;
 
 /**
  * Итог обнуления истории событий.
@@ -124,6 +170,11 @@ export const testEventSchema = z
   .object({
     language: z.enum(LANGUAGES).optional(),
     type: alertEventTypeSchema.optional(),
+    /**
+     * Сумма тестового доната — проверка триггера: «донат от тысячи» с
+     * тестовыми 500 ₽ не проверить. У остальных типов суммы нет, и её нет в тесте.
+     */
+    amount: moneySchema.optional(),
   })
   .default({});
 export type TestEventInput = z.infer<typeof testEventSchema>;

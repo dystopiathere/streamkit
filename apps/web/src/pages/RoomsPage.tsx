@@ -36,14 +36,14 @@ export function RoomsPage(): React.JSX.Element {
       <PlanPaywall gate="rooms" />
 
       <Card>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <Input
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder={t('rooms.namePlaceholder')}
             aria-label={t('rooms.namePlaceholder')}
             maxLength={80}
-            className="max-w-xs"
+            className="sm:min-w-0 sm:flex-1"
             onKeyDown={(event) => {
               if (event.key === 'Enter') void handleCreate();
             }}
@@ -52,6 +52,7 @@ export function RoomsPage(): React.JSX.Element {
             onClick={handleCreate}
             isLoading={createRoom.isPending}
             disabled={!roomsAccess || name.trim().length === 0}
+            className="sm:shrink-0"
           >
             {t('rooms.create')}
           </Button>

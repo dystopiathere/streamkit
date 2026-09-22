@@ -110,9 +110,15 @@ export function Input({
   );
 }
 
-/** Выпадающий список в оформлении поля ввода. */
+/**
+ * Выпадающий список в оформлении поля ввода.
+ *
+ * Стрелка своя (`--select-chevron` в теме), а не браузерная: системная
+ * прижималась к самой рамке и в каждом браузере была своей. Отступ справа —
+ * под неё, чтобы длинный вариант не заезжал под стрелку.
+ */
 export const selectClasses =
-  'w-full rounded-lg border border-border-strong bg-bg px-3 py-2 text-sm text-fg';
+  'w-full appearance-none rounded-lg border border-border-strong bg-bg bg-[image:var(--select-chevron)] bg-[length:1rem_1rem] bg-[position:right_0.75rem_center] bg-no-repeat py-2 pr-9 pl-3 text-sm text-fg';
 
 export function Label({
   className,

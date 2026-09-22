@@ -56,6 +56,10 @@ export const MESSAGES_EN: Readonly<Record<string, string>> = {
   'Идентификатор канала YouTube: UC и 22 символа':
     'YouTube channel ID: UC followed by 22 characters',
   'Ник без пробелов, до 64 символов': 'A name without spaces, up to 64 characters',
+  'Верхняя граница должна быть не меньше нижней':
+    'The upper bound must not be lower than the lower one',
+  'Назовите сектор': 'Name the sector',
+  'Недопустимый размер страницы': 'Unsupported page size',
   'Для добавления времени нужно указать секунды': 'Specify the seconds to add',
   'Этот сервис сейчас недоступен': 'This service is unavailable right now',
   'Эта площадка сейчас недоступна': 'This platform is unavailable right now',

@@ -251,6 +251,14 @@ export interface DonationAlertsMessage {
   message?: string | null;
   /** `text` или `audio`: у голосового доната в `message` не текст. */
   message_type?: string | null;
+  /**
+   * Ссылка на запись голосового доната.
+   *
+   * Поля нет в документации DonationAlerts, и на живом аккаунте оно ещё не
+   * проверено: разбор написан «если придёт». Не пришло — донат показывается
+   * без голоса, как раньше, а не теряется.
+   */
+  audio_url?: string | null;
   amount: number | string;
   currency: string;
 }
@@ -276,6 +284,7 @@ export function normalizeDonation(raw: DonationAlertsMessage, userId: string): I
     externalId: String(raw.id),
     username: (raw.username?.trim() || 'Аноним').slice(0, 64),
     message: raw.message_type === 'audio' ? '' : (raw.message ?? '').slice(0, 500),
+    audioUrl: raw.message_type === 'audio' ? voiceUrl(raw.audio_url) : null,
     amount:
       amountMinor !== null && amountMinor >= 0 && knownCurrency
         ? { amountMinor, currency: currency as Currency }
@@ -283,6 +292,17 @@ export function normalizeDonation(raw: DonationAlertsMessage, userId: string): I
     count: null,
     isTest: false,
   };
+}
+
+/**
+ * Ссылка на голосовой донат — только https и только в пределах длины поля.
+ *
+ * Проверяется здесь, а не схемой события: непригодная ссылка не повод потерять
+ * донат целиком — он покажется без голоса. Схема же на `null` не ругается.
+ */
+function voiceUrl(url: string | null | undefined): string | null {
+  const value = url?.trim();
+  return value && value.startsWith('https://') && value.length <= 2048 ? value : null;
 }
 
 function describe(error: unknown): string {

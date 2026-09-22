@@ -1,4 +1,9 @@
-import { WIDGET_TYPES, type CreateWidgetInput, type WidgetType } from '@streamkit/contracts';
+import {
+  WIDGET_TYPES,
+  type CreateWidgetInput,
+  defaultRouletteSectors,
+  type WidgetType,
+} from '@streamkit/contracts';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -13,6 +18,32 @@ import {
 } from '@/features/widgets/queries';
 import { TypeMark } from '@/features/widgets/TypeMark';
 import { ApiError } from '@/lib/api';
+
+/**
+ * Конфиг нового виджета — пустой, дефолты досыпает сервер. Кроме того, что
+ * видно в кадре: заголовки и подписи секторов по умолчанию русские, и
+ * английский стример получил бы «Цель» в кадре своей трансляции.
+ */
+function createConfig(type: WidgetType, t: (key: string) => string): Record<string, unknown> {
+  switch (type) {
+    case 'goal':
+      return { title: t('widgets.defaultTitle.goal') };
+    case 'top-donors':
+      return { title: t('widgets.defaultTitle.topDonors') };
+    case 'latest':
+      return { title: t('widgets.latestTitle.donation') };
+    case 'roulette':
+      return {
+        title: t('widgets.defaultTitle.roulette'),
+        sectors: defaultRouletteSectors().map((sector, index) => ({
+          ...sector,
+          label: t(`widgets.roulette.sample.${index + 1}`),
+        })),
+      };
+    default:
+      return {};
+  }
+}
 
 export function WidgetsPage(): React.JSX.Element {
   const { t } = useTranslation();
@@ -41,12 +72,7 @@ export function WidgetsPage(): React.JSX.Element {
     // стримера. Сбитые часы означали цель, которая молча никогда не наполнится.
     // Исключение — заголовки, которые видны в кадре: по умолчанию они русские,
     // и английский стример получил бы «Цель» на экране трансляции.
-    const config =
-      type === 'goal'
-        ? { title: t('widgets.defaultTitle.goal') }
-        : type === 'top-donors'
-          ? { title: t('widgets.defaultTitle.topDonors') }
-          : {};
+    const config = createConfig(type, t);
     try {
       await createWidget.mutateAsync({ name: trimmed, type, config } as CreateWidgetInput);
       setName('');
@@ -84,13 +110,16 @@ export function WidgetsPage(): React.JSX.Element {
       </div>
 
       <Card>
-        <div className="flex flex-wrap gap-3">
+        {/* Одна строка: название тянется, тип и кнопка — по содержимому. Во
+            `flex-wrap` поле во всю ширину сталкивало список и кнопку на свои
+            строки, и три элемента занимали три строки. */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <Input
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder={t('widgets.namePlaceholder')}
             aria-label={t('widgets.namePlaceholder')}
-            className="max-w-xs"
+            className="sm:min-w-0 sm:flex-1"
             onKeyDown={(event) => {
               if (event.key === 'Enter') void handleCreate();
             }}
@@ -100,7 +129,7 @@ export function WidgetsPage(): React.JSX.Element {
               все настройки. Отдельный виджет честнее. */}
           <select
             aria-label={t('widgets.field.type')}
-            className={`${selectClasses} w-auto`}
+            className={`${selectClasses} sm:w-56 sm:shrink-0`}
             value={type}
             onChange={(event) => setType(event.target.value as WidgetType)}
           >
@@ -114,6 +143,7 @@ export function WidgetsPage(): React.JSX.Element {
             onClick={handleCreate}
             isLoading={createWidget.isPending}
             disabled={name.trim().length === 0 || limitReached}
+            className="sm:shrink-0"
           >
             {t('widgets.create')}
           </Button>

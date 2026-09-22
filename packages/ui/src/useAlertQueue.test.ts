@@ -11,7 +11,11 @@ const CONFIG = alertWidgetConfigSchema.parse({
 /** Полный цикл одного показа доната: держим → уходим → пауза перед следующим. */
 const CYCLE_MS = 1000 + ALERT_EXIT_DURATION_MS + CONFIG.gapMs;
 
-function event(id: string, type: AlertEvent['type'] = 'donation'): AlertEvent {
+function event(
+  id: string,
+  type: AlertEvent['type'] = 'donation',
+  audioUrl: string | null = null,
+): AlertEvent {
   return {
     id,
     userId: '00000000-0000-4000-8000-000000000001',
@@ -22,6 +26,7 @@ function event(id: string, type: AlertEvent['type'] = 'donation'): AlertEvent {
     message: '',
     amount: { amountMinor: 10_000, currency: 'RUB' },
     count: null,
+    audioUrl,
     isTest: false,
     createdAt: new Date().toISOString(),
   };
@@ -103,5 +108,27 @@ describe('useAlertQueue', () => {
 
     // Первый уже на экране, в очереди остались двое.
     expect(result.current.pending).toBe(2);
+  });
+});
+
+describe('голосовой донат в очереди', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('держится в кадре своё время, а следующий ждёт, как обычно', () => {
+    const { result } = renderHook(() => useAlertQueue(CONFIG));
+    act(() => {
+      // Запись на восемь секунд вместо секунды сценария.
+      result.current.enqueue(event('voice', 'donation', 'https://cdn/voice.mp3'), 8000);
+      result.current.enqueue(event('next'));
+    });
+    expect(result.current.current?.event.id).toBe('voice');
+
+    // Сценарий показал бы секунду — голосовой донат ещё в кадре.
+    act(() => vi.advanceTimersByTime(1000 + ALERT_EXIT_DURATION_MS + CONFIG.gapMs));
+    expect(result.current.current?.event.id).toBe('voice');
+
+    act(() => vi.advanceTimersByTime(7000 + ALERT_EXIT_DURATION_MS + CONFIG.gapMs));
+    expect(result.current.current?.event.id).toBe('next');
   });
 });

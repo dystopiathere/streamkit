@@ -82,6 +82,7 @@ export class WebhookService {
       message: payload.message,
       amount: payload.amount,
       count: payload.count,
+      audioUrl: payload.audioUrl,
       isTest: false,
       occurredAt: payload.occurredAt,
     });

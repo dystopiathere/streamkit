@@ -3,6 +3,8 @@ import type {
   AlertEventType,
   CreatedOverlayToken,
   CreateWidgetInput,
+  EventsPage,
+  Money,
   OverlayTokenView,
   Page,
   UpdateWidgetInput,
@@ -57,11 +59,12 @@ export function useUpdateWidget(id: string) {
 }
 
 /** Состояние виджета: собранная сумма, остаток таймера, топ. */
-export function useWidgetState(id: string, enabled: boolean) {
+export function useWidgetState(id: string, enabled: boolean, refetchInterval?: number) {
   return useQuery({
     queryKey: widgetKeys.state(id),
     queryFn: () => api.get<WidgetState | null>(`/widgets/${id}/state`),
     enabled,
+    refetchInterval,
   });
 }
 
@@ -111,8 +114,29 @@ export function useRevokeOverlayToken(widgetId: string) {
 export function useSendTestAlert() {
   return useMutation({
     // Язык — чтобы имя и текст тестового алерта в OBS были на языке дашборда.
-    mutationFn: (type?: AlertEventType) =>
-      api.post<AlertEvent>('/events/test', { language: currentLanguage(), type }),
+    // Сумма — у проверки триггера доната: «от тысячи» тестом на 500 ₽ не проверить.
+    mutationFn: (input?: AlertEventType | { type: AlertEventType; amount?: Money }) => {
+      const { type, amount } = typeof input === 'string' ? { type: input } : (input ?? {});
+      return api.post<AlertEvent>('/events/test', { language: currentLanguage(), type, amount });
+    },
+  });
+}
+
+/**
+ * Страница истории событий. Отсечка `until` приходит с первой страницей и
+ * передаётся в следующие: пришедший во время листания донат не сдвигает строки
+ * между страницами.
+ */
+export function useEventsPage(page: number, pageSize: number, until: string | null) {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (until) params.set('until', until);
+  return useQuery({
+    queryKey: ['events', 'history', page, pageSize, until],
+    queryFn: () => api.get<EventsPage>(`/events/history?${params.toString()}`),
+    staleTime: 0,
+    // Соседняя страница рисуется поверх прежней, пока грузится: таблица не
+    // схлопывается в «загрузку» на каждом переходе.
+    placeholderData: (previous) => previous,
   });
 }
 

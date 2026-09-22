@@ -5,9 +5,12 @@ import type {
   AlertEvent,
   AlertEventType,
   CursorPagination,
+  EventsPage,
+  EventsPageQuery,
   EventsResetResult,
   IncomingAlertEvent,
   Language,
+  Money,
   Page,
 } from '@streamkit/contracts';
 import { type AuditContext, AuditService } from '../../common/audit/audit.service';
@@ -32,12 +35,14 @@ const TEST_EVENT_TEXT: Record<Language, { username: string; message: string; rew
 function testSample(
   type: AlertEventType,
   text: (typeof TEST_EVENT_TEXT)[Language],
+  amount?: Money,
 ): Pick<IncomingAlertEvent, 'message' | 'amount' | 'count'> {
   switch (type) {
+    // Сумму можно задать: так проверяют триггер «донат от тысячи».
     case 'donation':
       return {
         message: text.message,
-        amount: { amountMinor: 50_000, currency: 'RUB' },
+        amount: amount ?? { amountMinor: 50_000, currency: 'RUB' },
         count: null,
       };
     case 'gift':
@@ -102,6 +107,7 @@ export class EventsService {
           externalId: incoming.externalId,
           username: incoming.username,
           message: incoming.message,
+          audioUrl: incoming.audioUrl,
           amountMinor: incoming.amount?.amountMinor ?? null,
           currency: incoming.amount?.currency ?? null,
           count: incoming.count,
@@ -161,6 +167,7 @@ export class EventsService {
     userId: string,
     type: AlertEventType = 'donation',
     language: Language = 'ru',
+    amount?: Money,
   ): Promise<AlertEvent> {
     const text = TEST_EVENT_TEXT[language];
     const result = await this.ingest({
@@ -169,7 +176,9 @@ export class EventsService {
       provider: 'manual',
       externalId: `test-${randomUUID()}`,
       username: text.username,
-      ...testSample(type, text),
+      ...testSample(type, text, amount),
+      // Тестовый алерт — без голосового доната: записи у него нет.
+      audioUrl: null,
       isTest: true,
       occurredAt: new Date().toISOString(),
     });
@@ -202,6 +211,35 @@ export class EventsService {
   }
 
   /**
+   * Страница истории для раздела «События».
+   *
+   * Страницы считаются от отсечки `until`, а не от «сейчас»: иначе донат,
+   * пришедший между переходами, сдвигал бы все строки, и последняя строка
+   * первой страницы повторялась первой строкой второй. Первая страница
+   * отсечку назначает, следующие её передают.
+   */
+  async page(userId: string, query: EventsPageQuery): Promise<EventsPage> {
+    const until = query.until ? new Date(query.until) : new Date();
+    const where = { userId, createdAt: { lte: until } };
+    const [total, rows] = await Promise.all([
+      this.prisma.alertEvent.count({ where }),
+      this.prisma.alertEvent.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+    ]);
+    return {
+      items: rows.map(toContractEvent),
+      total,
+      page: query.page,
+      pageSize: query.pageSize,
+      until: until.toISOString(),
+    };
+  }
+
+  /**
    * Обнуление истории событий: донаты, фолловеры, подписки — всё.
    *
    * Удаление, а не флажок «скрыто»: стример просит убрать данные, а не
@@ -222,8 +260,17 @@ export class EventsService {
 
     // Пересчёт и рассылка — после удаления: сцены в OBS обязаны показать нули
     // немедленно, иначе цель висит с прежней суммой до следующего доната.
+    // История рулетки — имена донатеров и суммы, то есть та же история
+    // донатов. Стирается здесь же и у выключенных виджетов, и не рассылкой, а
+    // удалением строки: сбой рассылки не должен оставлять имена в базе.
+    await this.prisma.widgetState.deleteMany({ where: { widget: { userId, type: 'ROULETTE' } } });
+
     const widgets = await this.prisma.widget.findMany({
-      where: { userId, isEnabled: true, type: { in: ['GOAL', 'TOP_DONORS'] } },
+      where: {
+        userId,
+        isEnabled: true,
+        type: { in: ['GOAL', 'TOP_DONORS', 'LATEST', 'ROULETTE'] },
+      },
     });
     for (const widget of widgets) {
       await this.widgetState

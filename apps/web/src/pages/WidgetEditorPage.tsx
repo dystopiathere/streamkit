@@ -1,5 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { type AlertEventType, configSchemaFor, hasWidgetState } from '@streamkit/contracts';
+import {
+  type AlertEventType,
+  configSchemaFor,
+  hasWidgetState,
+  pickRouletteSector,
+  type RouletteSpin,
+  rouletteWidgetConfigSchema,
+} from '@streamkit/contracts';
 import { useEffect, useState } from 'react';
 import { type FieldValues, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -44,6 +51,16 @@ export function WidgetEditorPage(): React.JSX.Element {
   const state = useWidgetState(id, Boolean(widget.data) && hasWidgetState(type));
   // Открытый сценарий оповещений: его поля в форме и его же пример в предпросмотре.
   const [alertScenario, setAlertScenario] = useState<AlertEventType>('donation');
+  // Триггер, чей вид правят разделы. Сбрасывается сменой сценария: у фолловера
+  // триггеров доната нет.
+  const [alertTrigger, setAlertTrigger] = useState<string | null>(null);
+  const selectScenario = (scenario: AlertEventType): void => {
+    setAlertScenario(scenario);
+    setAlertTrigger(null);
+  };
+  // Прокрут рулетки, который играет предпросмотр: пробный или тот же, что
+  // только что ушёл в эфир кнопкой.
+  const [previewSpin, setPreviewSpin] = useState<RouletteSpin | null>(null);
   const [section, setSection] = useState<SectionId>(() => sectionsFor(type)[0]!.id);
 
   const form = useForm<FieldValues>({
@@ -91,7 +108,7 @@ export function WidgetEditorPage(): React.JSX.Element {
       // Ошибка может сидеть в закрытом разделе или в другом сценарии — тогда
       // «Сохранить» выглядела бы сломанной. Ведём туда, где её видно.
       const place = locateError(type, errors);
-      if (place?.scenario) setAlertScenario(place.scenario);
+      if (place?.scenario) selectScenario(place.scenario);
       if (place) setSection(place.section);
       toast.error(t('widgets.editor.invalid'));
     },
@@ -128,7 +145,9 @@ export function WidgetEditorPage(): React.JSX.Element {
             section={section}
             onSectionChange={setSection}
             alertScenario={alertScenario}
-            onAlertScenarioChange={setAlertScenario}
+            onAlertScenarioChange={selectScenario}
+            alertTrigger={alertTrigger}
+            onAlertTriggerChange={setAlertTrigger}
           />
         </form>
 
@@ -144,7 +163,20 @@ export function WidgetEditorPage(): React.JSX.Element {
             <div className="mb-3 flex items-baseline justify-between gap-3">
               <h2 className="font-medium">{t('widgets.preview')}</h2>
               {type === 'alerts' ? (
-                <span className="text-xs text-muted">{t(`events.type.${alertScenario}`)}</span>
+                <span className="text-xs text-muted">
+                  {t(`events.type.${alertScenario}`)}
+                  {alertTrigger ? ` · ${t('widgets.triggers.previewMark')}` : ''}
+                </span>
+              ) : null}
+              {type === 'roulette' ? (
+                <Button
+                  variant="ghost"
+                  className="-my-1 px-2 py-1 text-xs"
+                  disabled={previewSpin !== null}
+                  onClick={() => setPreviewSpin(trialSpin(previewConfig))}
+                >
+                  {t('widgets.roulette.trySpin')}
+                </Button>
               ) : null}
             </div>
             <WidgetPreview
@@ -152,6 +184,9 @@ export function WidgetEditorPage(): React.JSX.Element {
               config={previewConfig as Record<string, unknown>}
               state={state.data ?? null}
               alertScenario={alertScenario}
+              alertTrigger={alertTrigger}
+              rouletteSpin={previewSpin}
+              onRouletteFinished={() => setPreviewSpin(null)}
             />
             <div className="mt-4 space-y-2 border-t border-border pt-4">
               <h3 className="text-sm font-medium">{t('widgets.canvas.title')}</h3>
@@ -159,13 +194,38 @@ export function WidgetEditorPage(): React.JSX.Element {
             </div>
           </Card>
 
-          <WidgetStateControls widget={widget.data} />
+          <WidgetStateControls widget={widget.data} onSpin={setPreviewSpin} />
 
           <OverlayTokens widgetId={id} />
         </aside>
       </div>
     </div>
   );
+}
+
+/**
+ * Пробный прокрут в предпросмотре — выбор здесь же, в браузере: он никуда не
+ * уходит и ничего не обещает зрителям. Настоящий выбирает сервер.
+ */
+function trialSpin(values: FieldValues): RouletteSpin | null {
+  const parsed = rouletteWidgetConfigSchema.safeParse(values);
+  if (!parsed.success) return null;
+  const { sectors, spinDurationMs } = parsed.data;
+  const index = pickRouletteSector(sectors, Math.random());
+  const sector = sectors[index]!;
+  return {
+    id: crypto.randomUUID(),
+    sectorId: sector.id,
+    sectorIndex: index,
+    label: sector.label,
+    color: sector.color,
+    offset: 0.15 + Math.random() * 0.7,
+    turns: Math.max(3, Math.round(spinDurationMs / 1000)),
+    source: 'manual',
+    username: null,
+    amount: null,
+    createdAt: new Date().toISOString(),
+  };
 }
 
 /**
