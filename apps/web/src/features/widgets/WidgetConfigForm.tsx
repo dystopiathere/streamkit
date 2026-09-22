@@ -10,6 +10,7 @@ import {
   type WidgetState,
   GUEST_LAYOUTS,
   isVideoUrl,
+  LATEST_DEFAULT_TEMPLATES,
   MAX_GUESTS_PER_ROOM,
   TOP_DONORS_PERIODS,
   type WidgetType,
@@ -17,7 +18,7 @@ import {
 import type { FieldErrors, FieldValues, UseFormReturn } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { Button, cn } from '@streamkit/app-kit';
+import { Button, cn, Label, selectClasses } from '@streamkit/app-kit';
 import { toast } from 'sonner';
 import { useChannels } from '@/features/analytics/queries';
 import { usePlanAccess } from '@/features/billing/PlanPaywall';
@@ -25,6 +26,8 @@ import { useRooms } from '@/features/rooms/queries';
 import { ApiError } from '@/lib/api';
 import { useSendTestAlert } from './queries';
 import { LayoutSection, StyleSection } from './AdvancedStyling';
+import { AlertTriggers, conditionSummary } from './AlertTriggers';
+import { RouletteSectors } from './RouletteSectors';
 import { GuestSeatsCanvas } from './GuestSeatsCanvas';
 import { canvasOf, WidgetSurface } from './WidgetPreview';
 import {
@@ -46,7 +49,8 @@ const LAYOUTS = ['center', 'banner', 'side'] as const;
 /* Разделы                                                             */
 /* ------------------------------------------------------------------ */
 
-export type SectionId = 'main' | 'show' | 'text' | 'media' | 'lines' | 'look' | 'layout' | 'style';
+export type SectionId =
+  'main' | 'show' | 'text' | 'media' | 'lines' | 'look' | 'layout' | 'style' | 'triggers' | 'spin';
 
 interface SectionDef {
   id: SectionId;
@@ -84,7 +88,10 @@ const STYLE_SECTION: SectionDef = {
  * предпросмотром, а порядок вкладок — порядок настройки: что показывать, как
  * выглядит текст, где стоит в кадре.
  */
-export function sectionsFor(type: WidgetType): readonly SectionDef[] {
+export function sectionsFor(
+  type: WidgetType,
+  scenario: AlertEventType = 'donation',
+): readonly SectionDef[] {
   switch (type) {
     case 'alerts':
       return [
@@ -101,6 +108,11 @@ export function sectionsFor(type: WidgetType): readonly SectionDef[] {
             'animationOut',
           ],
         },
+        // Триггеры — только у доната: сумма есть только у него. Сразу после
+        // «Показа», до вида: от них зависит, ЧЕЙ вид правят следующие вкладки.
+        ...(scenario === 'donation'
+          ? [{ id: 'triggers', label: 'widgets.tab.triggers', fields: ['triggers'] } as const]
+          : []),
         {
           id: 'text',
           label: 'widgets.tab.text',
@@ -191,6 +203,37 @@ export function sectionsFor(type: WidgetType): readonly SectionDef[] {
         // У гостей из продвинутого — только шрифт имён: фона и раскладки нет.
         { ...STYLE_SECTION, label: 'widgets.tab.font' },
       ];
+    case 'latest':
+      return [
+        {
+          id: 'main',
+          label: 'widgets.tab.latest',
+          fields: ['eventType', 'title', 'template', 'showMessage', 'emptyText'],
+        },
+        { id: 'look', label: 'widgets.tab.text', fields: ['text'] },
+        LAYOUT_SECTION,
+        STYLE_SECTION,
+      ];
+    case 'roulette':
+      return [
+        { id: 'main', label: 'widgets.tab.sectors', fields: ['sectors'] },
+        {
+          id: 'spin',
+          label: 'widgets.tab.spin',
+          fields: [
+            'title',
+            'donationSpins',
+            'spinPrice',
+            'spinDurationMs',
+            'resultMs',
+            'hideWhenIdle',
+            'showDonor',
+          ],
+        },
+        { id: 'look', label: 'widgets.tab.wheel', fields: ['wheelSize', 'rimColor', 'text'] },
+        LAYOUT_SECTION,
+        STYLE_SECTION,
+      ];
   }
 }
 
@@ -199,21 +242,25 @@ export function locateError(
   type: WidgetType,
   errors: FieldErrors<FieldValues>,
 ): { scenario?: AlertEventType; section: SectionId } | null {
-  const sections = sectionsFor(type);
-  const sectionOf = (tree: Record<string, unknown>): SectionId | null =>
-    sections.find((section) => section.fields.some((field) => tree[field]))?.id ?? null;
+  const sectionOf = (
+    tree: Record<string, unknown>,
+    scenario: AlertEventType = 'donation',
+  ): SectionId | null =>
+    sectionsFor(type, scenario).find((section) => section.fields.some((field) => tree[field]))
+      ?.id ?? null;
 
   if (type === 'alerts') {
-    // Пауза — общая настройка, и живёт она в разделе «Показ».
-    if (errors.gapMs) return { section: 'show' };
+    // Пауза и голосовые донаты — общие настройки, живут в разделе «Показ».
+    if (errors.gapMs || errors.voice) return { section: 'show' };
     const scenarios = (errors.scenarios ?? {}) as Record<string, Record<string, unknown>>;
     for (const scenario of ALERT_EVENT_TYPES) {
       const tree = scenarios[scenario];
       if (!tree) continue;
-      return { scenario, section: sectionOf(tree) ?? 'show' };
+      return { scenario, section: sectionOf(tree, scenario) ?? 'show' };
     }
     return null;
   }
+  const sections = sectionsFor(type);
   const section = sectionOf(errors as Record<string, unknown>);
   return section
     ? { section }
@@ -239,6 +286,8 @@ export function WidgetConfigForm({
   onSectionChange,
   alertScenario,
   onAlertScenarioChange,
+  alertTrigger = null,
+  onAlertTriggerChange,
   currency,
   state,
 }: {
@@ -253,21 +302,65 @@ export function WidgetConfigForm({
   /** Открытый сценарий оповещений — его же показывает предпросмотр. */
   alertScenario: AlertEventType;
   onAlertScenarioChange: (scenario: AlertEventType) => void;
+  /** Триггер, чей вид правят разделы; null — вид самого сценария. */
+  alertTrigger?: string | null;
+  onAlertTriggerChange?: (trigger: string | null) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const sections = sectionsFor(type);
+  const sections = sectionsFor(type, alertScenario);
   const current = sections.find((item) => item.id === section) ?? sections[0]!;
-  const prefix = type === 'alerts' ? `scenarios.${alertScenario}.` : '';
+  const triggers = (
+    type === 'alerts' ? (form.watch(`scenarios.${alertScenario}.triggers`) ?? []) : []
+  ) as { id: string; name: string; condition: Parameters<typeof conditionSummary>[1] }[];
+  const triggerIndex = alertTrigger ? triggers.findIndex((item) => item.id === alertTrigger) : -1;
+  const trigger = triggerIndex === -1 ? null : triggers[triggerIndex]!;
+  // Разделы вида правят либо сам сценарий, либо выбранный триггер: путь в форме
+  // отличается только префиксом, а поля те же.
+  const scenarioPrefix = `scenarios.${alertScenario}.`;
+  const prefix =
+    type !== 'alerts'
+      ? ''
+      : trigger
+        ? `${scenarioPrefix}triggers.${triggerIndex}.`
+        : scenarioPrefix;
   const errorTree = (
     type === 'alerts'
-      ? (form.formState.errors.scenarios as Record<string, unknown> | undefined)?.[alertScenario]
+      ? prefix
+          .slice(0, -1)
+          .split('.')
+          .reduce<unknown>(
+            (node, key) => (node as Record<string, unknown> | undefined)?.[key],
+            form.formState.errors,
+          )
       : form.formState.errors
   ) as Record<string, unknown> | undefined;
+
+  const editTrigger = (id: string | null): void => {
+    onAlertTriggerChange?.(id);
+    // Взялись за вид — сразу к нему: список триггеров вид не показывает.
+    if (id) onSectionChange('show');
+  };
 
   return (
     <div className="overflow-hidden rounded-card border border-border bg-surface">
       {type === 'alerts' ? (
         <ScenarioHeader form={form} selected={alertScenario} onSelect={onAlertScenarioChange} />
+      ) : null}
+
+      {/* Чей вид правят разделы — словом над вкладками: одинаковые поля у
+          сценария и триггера иначе неотличимы, и правка ушла бы не туда. */}
+      {trigger ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface-hover/50 px-5 py-3 sm:px-6">
+          <p className="text-sm">
+            <span className="text-muted">{t('widgets.triggers.editingBanner')} </span>
+            <span className="font-medium">
+              {triggerIndex + 1}. {trigger.name.trim() || conditionSummary(t, trigger.condition)}
+            </span>
+          </p>
+          <Button variant="ghost" onClick={() => onAlertTriggerChange?.(null)}>
+            {t('widgets.triggers.backToBase')}
+          </Button>
+        </div>
       ) : null}
 
       <SectionTabs
@@ -276,7 +369,9 @@ export function WidgetConfigForm({
         onSelect={onSectionChange}
         hasError={(item) =>
           item.fields.some((field) => errorTree?.[field]) ||
-          (type === 'alerts' && item.id === 'show' && Boolean(form.formState.errors.gapMs))
+          (type === 'alerts' &&
+            item.id === 'show' &&
+            Boolean(form.formState.errors.gapMs || form.formState.errors.voice))
         }
       />
 
@@ -287,15 +382,25 @@ export function WidgetConfigForm({
         aria-labelledby={`section-tab-${current.id}`}
         className="p-5 sm:p-6"
       >
-        <SectionBody
-          type={type}
-          form={form}
-          section={current.id}
-          scenario={alertScenario}
-          prefix={prefix}
-          currency={currency}
-          state={state}
-        />
+        {current.id === 'triggers' ? (
+          <AlertTriggers
+            form={form}
+            scenario={alertScenario}
+            editing={trigger ? trigger.id : null}
+            onEdit={editTrigger}
+          />
+        ) : (
+          <SectionBody
+            type={type}
+            form={form}
+            section={current.id}
+            scenario={alertScenario}
+            trigger={trigger ? trigger.id : null}
+            prefix={prefix}
+            currency={currency}
+            state={state}
+          />
+        )}
       </div>
 
       {type === 'alerts' ? (
@@ -312,6 +417,7 @@ function SectionBody({
   form,
   section,
   scenario,
+  trigger,
   prefix,
   currency,
   state,
@@ -320,6 +426,7 @@ function SectionBody({
   form: UseFormReturn<FieldValues>;
   section: SectionId;
   scenario: AlertEventType;
+  trigger: string | null;
   prefix: string;
   currency: string;
   state: WidgetState | null;
@@ -327,13 +434,28 @@ function SectionBody({
   if (section === 'layout' && type === 'guests') return <GuestsLayout form={form} />;
   if (section === 'layout')
     return (
-      <LayoutSection form={form} type={type} prefix={prefix} scenario={scenario} state={state} />
+      <LayoutSection
+        form={form}
+        type={type}
+        prefix={prefix}
+        scenario={scenario}
+        trigger={trigger}
+        state={state}
+      />
     );
   if (section === 'style') return <StyleSection form={form} type={type} prefix={prefix} />;
 
   switch (type) {
     case 'alerts':
-      return <AlertSection form={form} section={section} scenario={scenario} />;
+      return (
+        <AlertSection
+          form={form}
+          section={section}
+          scenario={scenario}
+          prefix={prefix}
+          isTrigger={trigger !== null}
+        />
+      );
     case 'goal':
       return section === 'look' ? (
         <GoalLook form={form} />
@@ -361,6 +483,15 @@ function SectionBody({
       );
     case 'guests':
       return section === 'look' ? <TextSection form={form} /> : <GuestsMain form={form} />;
+    case 'latest':
+      return section === 'look' ? (
+        <TextSection form={form} withHighlight />
+      ) : (
+        <LatestMain form={form} />
+      );
+    case 'roulette':
+      if (section === 'spin') return <RouletteSpinSettings form={form} />;
+      return section === 'look' ? <RouletteLook form={form} /> : <RouletteSectors form={form} />;
   }
 }
 
@@ -643,13 +774,18 @@ function AlertSection({
   form,
   section,
   scenario,
+  prefix,
+  isTrigger,
 }: {
   form: UseFormReturn<FieldValues>;
   section: SectionId;
   scenario: AlertEventType;
+  /** Путь до вида: сценарий или его триггер. */
+  prefix: string;
+  /** Правят вид триггера: порогов и общей паузы у него нет. */
+  isTrigger: boolean;
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const prefix = `scenarios.${scenario}.`;
   const at = (field: string): string => `${prefix}${field}`;
   const textLabels = useTextLabels();
   const countLabel = COUNT_THRESHOLDS[scenario];
@@ -777,7 +913,7 @@ function AlertSection({
 
   return (
     <div className="space-y-6">
-      {scenario === 'donation' || countLabel ? (
+      {!isTrigger && (scenario === 'donation' || countLabel) ? (
         <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
           {scenario === 'donation' ? <DonationThresholds form={form} prefix={prefix} /> : null}
           {countLabel ? (
@@ -825,7 +961,7 @@ function AlertSection({
 
       {/* Пауза — одна на все сценарии: очередь у виджета общая. Живёт здесь,
           потому что это тоже «как показывать», но подписана как общая. */}
-      <div className="space-y-4 border-t border-border pt-5">
+      <div className={cn('space-y-4 border-t border-border pt-5', isTrigger && 'hidden')}>
         <h3 className="text-sm font-medium">{t('widgets.section.allScenarios')}</h3>
         <RangeField
           form={form}
@@ -838,7 +974,50 @@ function AlertSection({
           unit={t('widgets.unit.seconds')}
           hint={t('widgets.hint.gapMs')}
         />
+        <VoiceSettings form={form} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Голосовые донаты: запись донатера играет вместе с его оповещением.
+ *
+ * Настройка на весь виджет, а не на сценарий: голос приходит с донатом как
+ * есть. Потолок обязателен — длину записи задаёт донатер, и без него минутная
+ * тирада держала бы очередь оповещений столько, сколько захочет чужой человек.
+ */
+function VoiceSettings({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.Element {
+  const { t } = useTranslation();
+  const enabled = form.watch('voice.enabled') !== false;
+
+  return (
+    <div className="space-y-4">
+      <CheckboxField form={form} name="voice.enabled" label={t('widgets.field.voiceEnabled')} />
+      {enabled ? (
+        <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+          <RangeField
+            form={form}
+            name="voice.volume"
+            label={t('widgets.field.voiceVolume')}
+            min={0}
+            max={100}
+            scale={100}
+            unit="%"
+          />
+          <RangeField
+            form={form}
+            name="voice.maxSeconds"
+            label={t('widgets.field.voiceMaxSeconds')}
+            min={5}
+            max={300}
+            step={5}
+            unit={t('widgets.unit.seconds')}
+            hint={t('widgets.hint.voiceMaxSeconds')}
+          />
+        </div>
+      ) : null}
+      <p className="text-xs text-muted">{t('widgets.hint.voice')}</p>
     </div>
   );
 }
@@ -1177,6 +1356,167 @@ function GuestsMain({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.E
           form={form}
           name="showWithoutVideo"
           label={t('widgets.field.showWithoutVideo')}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Последнее событие                                                   */
+/* ------------------------------------------------------------------ */
+
+function LatestMain({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.Element {
+  const { t } = useTranslation();
+
+  // Смена события меняет шаблон и заголовок, только если их не трогали: у
+  // фолловера нет суммы, и «{username} — {amount}» оставил бы висящее тире. А
+  // свой шаблон стримера смена события не стирает.
+  const switchEvent = (next: AlertEventType, previous: AlertEventType): void => {
+    if (form.getValues('template') === LATEST_DEFAULT_TEMPLATES[previous]) {
+      form.setValue('template', LATEST_DEFAULT_TEMPLATES[next], { shouldDirty: true });
+    }
+    if (form.getValues('title') === t(`widgets.latestTitle.${previous}`)) {
+      form.setValue('title', t(`widgets.latestTitle.${next}`), { shouldDirty: true });
+    }
+  };
+  // Прежнее значение — из этого рендера: обработчик вызывается уже после
+  // записи нового, и спрашивать форму поздно.
+  const current = form.watch('eventType') as AlertEventType;
+  const eventType = form.register('eventType', {
+    onChange: (event: React.ChangeEvent<HTMLSelectElement>) =>
+      switchEvent(event.target.value as AlertEventType, current),
+  });
+
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="eventType">{t('widgets.field.latestEvent')}</Label>
+          <select id="eventType" className={selectClasses} {...eventType}>
+            {ALERT_EVENT_TYPES.map((value) => (
+              <option key={value} value={value}>
+                {t(`events.type.${value}`)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <TextField form={form} name="title" label={t('widgets.field.latestTitle')} />
+      </div>
+      <TextField
+        form={form}
+        name="template"
+        label={t('widgets.field.latestTemplate')}
+        hint={t('widgets.templateHint', {
+          vars: ALERT_TEMPLATE_VARS.map((name) => `{${name}}`).join(', '),
+        })}
+      />
+      <CheckboxField form={form} name="showMessage" label={t('widgets.field.showMessage')} />
+      <TextField
+        form={form}
+        name="emptyText"
+        label={t('widgets.field.emptyText')}
+        hint={t('widgets.hint.emptyText')}
+      />
+      <p className="text-xs text-muted">{t('widgets.hint.latestTest')}</p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Рулетка                                                             */
+/* ------------------------------------------------------------------ */
+
+function RouletteSpinSettings({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.Element {
+  const { t } = useTranslation();
+  const donations = Boolean(form.watch('donationSpins'));
+
+  return (
+    <div className="space-y-6">
+      <TextField form={form} name="title" label={t('widgets.field.rouletteTitle')} />
+
+      <div className="space-y-4 border-t border-border pt-5">
+        <CheckboxField form={form} name="donationSpins" label={t('widgets.field.donationSpins')} />
+        {/* Цена — только когда донаты крутят колесо; значения при этом
+            хранятся: включил обратно — цены на месте. */}
+        {donations ? (
+          <fieldset aria-describedby="spin-price-hint">
+            <legend className="text-sm font-medium text-muted">
+              {t('widgets.field.spinPrice')}
+            </legend>
+            <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {CURRENCIES.map((currency) => (
+                <MoneyField
+                  key={currency}
+                  form={form}
+                  name={`spinPrice.${currency}`}
+                  label={currency}
+                  currency={currency}
+                  emptyValue={0}
+                />
+              ))}
+            </div>
+            <p id="spin-price-hint" className="mt-2 text-xs text-muted">
+              {t('widgets.hint.spinPrice')}
+            </p>
+          </fieldset>
+        ) : (
+          <p className="text-sm text-muted">{t('widgets.hint.manualOnly')}</p>
+        )}
+      </div>
+
+      <div className="grid gap-x-6 gap-y-5 border-t border-border pt-5 sm:grid-cols-2">
+        <RangeField
+          form={form}
+          name="spinDurationMs"
+          label={t('widgets.field.spinDuration')}
+          min={3}
+          max={20}
+          step={0.5}
+          scale={0.001}
+          unit={t('widgets.unit.seconds')}
+        />
+        <RangeField
+          form={form}
+          name="resultMs"
+          label={t('widgets.field.resultDuration')}
+          min={1}
+          max={30}
+          step={0.5}
+          scale={0.001}
+          unit={t('widgets.unit.seconds')}
+        />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <CheckboxField form={form} name="showDonor" label={t('widgets.field.showDonor')} />
+        <CheckboxField form={form} name="hideWhenIdle" label={t('widgets.field.hideWhenIdle')} />
+      </div>
+    </div>
+  );
+}
+
+function RouletteLook({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.Element {
+  const { t } = useTranslation();
+  const textLabels = useTextLabels();
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+        <RangeField
+          form={form}
+          name="wheelSize"
+          label={t('widgets.field.wheelSize')}
+          min={160}
+          max={1200}
+          step={10}
+          unit="px"
+        />
+        <ColorField form={form} name="rimColor" label={t('widgets.field.rimColor')} />
+      </div>
+      <div className="border-t border-border pt-5">
+        <TextStyleFields
+          form={form}
+          labels={{ ...textLabels, highlightColor: t('widgets.field.pointerColor') }}
+          withHighlight
         />
       </div>
     </div>

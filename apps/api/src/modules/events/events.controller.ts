@@ -16,6 +16,9 @@ import {
   type AlertEvent,
   type CursorPagination,
   cursorPaginationSchema,
+  type EventsPage,
+  type EventsPageQuery,
+  eventsPageQuerySchema,
   type EventsResetResult,
   type Page,
   type TestEventInput,
@@ -47,6 +50,15 @@ export class EventsController {
     return this.events.list(user.id, query);
   }
 
+  /** Постранично — для раздела «События»; курсорная `list` остаётся ленте окна эфира. */
+  @Get('history')
+  async history(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query(new ZodValidationPipe(eventsPageQuerySchema)) query: EventsPageQuery,
+  ): Promise<EventsPage> {
+    return this.events.page(user.id, query);
+  }
+
   /** Тестовый алерт: проверка настройки виджета без ожидания реального доната. */
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('test')
@@ -54,7 +66,7 @@ export class EventsController {
     @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodValidationPipe(testEventSchema)) body: TestEventInput,
   ): Promise<AlertEvent> {
-    return this.events.createTestEvent(user.id, body.type, body.language);
+    return this.events.createTestEvent(user.id, body.type, body.language, body.amount);
   }
 
   /**

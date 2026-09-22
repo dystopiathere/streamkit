@@ -196,6 +196,8 @@ enum WidgetType {
   TOP_DONORS
   CHAT
   GUESTS
+  LATEST
+  ROULETTE
 }
 
 model Widget {
@@ -366,6 +368,8 @@ model AlertEvent {
   externalId  String
   username    String
   message     String         @db.VarChar(500)
+  /// Голосовой донат: ссылка на запись у провайдера. Файл не наш, храним адрес.
+  audioUrl    String?        @db.VarChar(2048)
   amountMinor Int?
   currency    String?        @db.VarChar(3)
   /// Не деньги: биты, зрители рейда, месяцы подписки, число подарков.

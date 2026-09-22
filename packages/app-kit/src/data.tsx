@@ -112,6 +112,108 @@ export function LoadMore({
   );
 }
 
+/**
+ * Номера страниц для навигации: первая, последняя, текущая с соседями, между
+ * ними — разрыв (`null`). Двадцать кнопок подряд не читаются, а прыжок в
+ * конец нужен всегда: там самое старое.
+ */
+export function pageWindow(page: number, pages: number): (number | null)[] {
+  if (pages <= 7) return Array.from({ length: pages }, (_, index) => index + 1);
+  const around = [page - 1, page, page + 1].filter((value) => value > 1 && value < pages);
+  const result: (number | null)[] = [1];
+  if (around[0]! > 2) result.push(null);
+  result.push(...around);
+  if (around.at(-1)! < pages - 1) result.push(null);
+  result.push(pages);
+  return result;
+}
+
+/**
+ * Постраничная навигация: «назад», номера, «вперёд» и где мы — словами.
+ *
+ * Подписи приходят от приложения: у дашборда два языка, у админки один, а
+ * своих словарей у пакета нет. Текущая страница отмечена `aria-current`, а не
+ * только цветом.
+ */
+export function Pagination({
+  page,
+  pageSize,
+  total,
+  onPage,
+  labels,
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+  onPage: (page: number) => void;
+  labels: {
+    nav: string;
+    previous: string;
+    next: string;
+    /** «Страница 3» — для диктора у номера. */
+    page: (page: number) => string;
+    /** «26–50 из 412». */
+    range: (from: number, to: number, total: number) => string;
+  };
+}): React.JSX.Element | null {
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  if (total === 0) return null;
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(total, page * pageSize);
+
+  return (
+    <nav
+      aria-label={labels.nav}
+      className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <p className="text-sm text-muted tabular-nums">{labels.range(from, to, total)}</p>
+      {pages > 1 ? (
+        <ul className="flex flex-wrap items-center gap-1">
+          <li>
+            <Button
+              variant="ghost"
+              className="px-3"
+              disabled={page <= 1}
+              onClick={() => onPage(page - 1)}
+            >
+              {labels.previous}
+            </Button>
+          </li>
+          {pageWindow(page, pages).map((value, index) =>
+            value === null ? (
+              <li key={`gap-${index}`} aria-hidden="true" className="px-1 text-muted">
+                …
+              </li>
+            ) : (
+              <li key={value}>
+                <Button
+                  variant={value === page ? 'secondary' : 'ghost'}
+                  className={cn('min-w-9 px-2 tabular-nums', value === page && 'text-fg')}
+                  aria-label={labels.page(value)}
+                  aria-current={value === page ? 'page' : undefined}
+                  onClick={() => onPage(value)}
+                >
+                  {value}
+                </Button>
+              </li>
+            ),
+          )}
+          <li>
+            <Button
+              variant="ghost"
+              className="px-3"
+              disabled={page >= pages}
+              onClick={() => onPage(page + 1)}
+            >
+              {labels.next}
+            </Button>
+          </li>
+        </ul>
+      ) : null}
+    </nav>
+  );
+}
+
 export type StatusTone = 'neutral' | 'success' | 'warning' | 'danger' | 'accent';
 
 const TONES: Record<StatusTone, string> = {

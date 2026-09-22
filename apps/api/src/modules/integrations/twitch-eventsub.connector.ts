@@ -101,6 +101,8 @@ export function normalizeEventSubNotification(
     provider: 'twitch' as const,
     externalId: message.metadata.message_id,
     amount: null,
+    // Голосовых донатов у Twitch нет: записи приходят только от донат-сервисов.
+    audioUrl: null,
     isTest: false,
     occurredAt: message.metadata.message_timestamp,
   };

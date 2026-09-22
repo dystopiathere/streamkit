@@ -1,3 +1,4 @@
+import { randomInt, randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import type { Widget as PrismaWidget } from '@prisma/client';
 import {
@@ -6,7 +7,15 @@ import {
   CURRENCIES,
   donationSeconds,
   type GoalWidgetConfig,
+  donationSpins,
   goalWidgetConfigSchema,
+  type LatestEvent,
+  latestWidgetConfigSchema,
+  pickRouletteSector,
+  ROULETTE_HISTORY_LIMIT,
+  type RouletteSpin,
+  rouletteSpinSchema,
+  rouletteWidgetConfigSchema,
   timerWidgetConfigSchema,
   type TopDonorsPeriod,
   type TopDonorsWidgetConfig,
@@ -37,6 +46,24 @@ const storedTimerSchema = z.object({
   pausedSeconds: z.number().int().nonnegative().nullable().default(null),
 });
 
+/**
+ * История рулетки. Прокрут, который схема уже не читает (сектор переименовали
+ * за пределы длины, схема поменялась), выбрасывается, а не роняет состояние:
+ * история — справка для стримера, а не деньги.
+ */
+const storedRouletteSchema = z.object({
+  spins: z.array(z.unknown()).default([]),
+});
+
+function readSpins(raw: unknown): RouletteSpin[] {
+  const stored = storedRouletteSchema.safeParse(raw ?? {});
+  if (!stored.success) return [];
+  return stored.data.spins.flatMap((spin) => {
+    const parsed = rouletteSpinSchema.safeParse(spin);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
+
 type StoredGoal = z.infer<typeof storedGoalSchema>;
 export type StoredTimer = z.infer<typeof storedTimerSchema>;
 
@@ -55,6 +82,39 @@ function timerLockKey(widgetId: string): string {
 
 /** Внутри блокировки два запроса к БД — секунды хватает с запасом. */
 const TIMER_LOCK_TTL_MS = 5_000;
+
+/** История рулетки дописывается под блокировкой: два доната в одну секунду — два прокрута. */
+function rouletteLockKey(widgetId: string): string {
+  return `streamkit:lock:widget-roulette:${widgetId}`;
+}
+
+/** Точность случайной точки внутри сектора: десятитысячные доли. */
+const OFFSET_STEPS = 10_000;
+
+/**
+ * Где внутри сектора остановится стрелка: не у самых краёв.
+ *
+ * Стрелка на границе двух секторов выглядит спорной, даже если сервер знает,
+ * какой выпал, — зрители спорят с тем, что видят. Поле в 15 % с каждой стороны
+ * снимает спор, а случайная точка в середине не даёт колесу замирать
+ * подозрительно одинаково.
+ */
+function spinOffset(): number {
+  return 0.15 + (0.7 * randomInt(0, OFFSET_STEPS + 1)) / OFFSET_STEPS;
+}
+
+/**
+ * Сколько оборотов до остановки: около одного в секунду прокрута, но не меньше
+ * трёх — медленное колесо читается как «решили заранее».
+ */
+function spinTurns(durationMs: number): number {
+  return Math.max(3, Math.round(durationMs / 1000)) + randomInt(0, 2);
+}
+
+/** Криптографически стойкое число из [0, 1) для выбора сектора. */
+function secureRandom(): number {
+  return randomInt(0, 2 ** 48 - 1) / 2 ** 48;
+}
 
 export interface TimerSnapshot {
   endsAt: string | null;
@@ -162,6 +222,10 @@ export class WidgetStateService {
         return this.timerState(widget, currency);
       case 'TOP_DONORS':
         return this.topDonorsState(widget, currency);
+      case 'LATEST':
+        return this.latestState(widget);
+      case 'ROULETTE':
+        return { kind: 'roulette', spins: readSpins(await this.read(widget.id)) };
       default:
         return null;
     }
@@ -215,7 +279,11 @@ export class WidgetStateService {
    */
   async onAlertEvent(userId: string, event: AlertEvent): Promise<void> {
     const widgets = await this.prisma.widget.findMany({
-      where: { userId, isEnabled: true, type: { in: ['GOAL', 'TIMER', 'TOP_DONORS'] } },
+      where: {
+        userId,
+        isEnabled: true,
+        type: { in: ['GOAL', 'TIMER', 'TOP_DONORS', 'LATEST', 'ROULETTE'] },
+      },
     });
     if (widgets.length === 0) return;
 
@@ -239,6 +307,28 @@ export class WidgetStateService {
     // это запись, а не пересчёт. Остальным типам достаточно посчитать заново.
     if (widget.type === 'TIMER') {
       await this.addDonationTime(widget, event, currency);
+      return;
+    }
+    // Последнее событие меняет только событие своего типа, а тестовое — никакое:
+    // «Тестовый зритель» висел бы в кадре последним донатом до настоящего.
+    if (widget.type === 'LATEST') {
+      const config = latestWidgetConfigSchema.parse(widget.config);
+      if (event.isTest || event.type !== config.eventType) return;
+      await this.publish(widget);
+      return;
+    }
+    // Рулетку крутит донат не меньше цены прокрута. Тестовый донат — нет:
+    // «Проверить в OBS» проверяет оповещение, а колесо проверяют кнопкой прокрута.
+    if (widget.type === 'ROULETTE') {
+      const config = rouletteWidgetConfigSchema.parse(widget.config);
+      if (event.isTest || event.type !== 'donation' || !donationSpins(config, event.amount)) {
+        return;
+      }
+      await this.spinRoulette(widget, {
+        source: 'donation',
+        username: event.username,
+        amount: event.amount,
+      });
       return;
     }
     await this.publish(widget, currency);
@@ -443,6 +533,100 @@ export class WidgetStateService {
       amountMinor: row._sum.amountMinor ?? 0,
       count: row._count._all,
     }));
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Последнее событие                                                  */
+  /* ---------------------------------------------------------------- */
+
+  private async latestState(widget: PrismaWidget): Promise<WidgetState> {
+    const config = latestWidgetConfigSchema.parse(widget.config);
+    const row = await this.prisma.alertEvent.findFirst({
+      where: { userId: widget.userId, isTest: false, type: toPrismaEventType(config.eventType) },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+    const event: LatestEvent | null = row
+      ? {
+          type: config.eventType,
+          username: row.username,
+          message: row.message,
+          amount:
+            row.amountMinor !== null && row.currency
+              ? { amountMinor: row.amountMinor, currency: row.currency as Currency }
+              : null,
+          count: row.count,
+          createdAt: row.createdAt.toISOString(),
+        }
+      : null;
+    return { kind: 'latest', event };
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Рулетка                                                            */
+  /* ---------------------------------------------------------------- */
+
+  /**
+   * Прокрут: выбрать сектор, записать в историю, разослать.
+   *
+   * Сектор выбирает сервер, а не оверлей: у двух сцен OBS с одной ссылкой
+   * выпадало бы разное, и стример не знал бы, что обещано зрителям. Прокрут
+   * уходит отдельным сообщением шины, история — состоянием: состояние приходит
+   * и при переподключении, и прокрут в нём крутился бы заново.
+   */
+  async spinRoulette(
+    widget: PrismaWidget,
+    trigger: Pick<RouletteSpin, 'source' | 'username' | 'amount'>,
+  ): Promise<RouletteSpin> {
+    const config = rouletteWidgetConfigSchema.parse(widget.config);
+    const index = pickRouletteSector(config.sectors, secureRandom());
+    const sector = config.sectors[index]!;
+    const spin: RouletteSpin = {
+      id: randomUUID(),
+      sectorId: sector.id,
+      sectorIndex: index,
+      label: sector.label,
+      color: sector.color,
+      offset: spinOffset(),
+      turns: spinTurns(config.spinDurationMs),
+      ...trigger,
+      createdAt: new Date().toISOString(),
+    };
+
+    // История дописывается под блокировкой: два доната в одну секунду читают
+    // один список, и без неё второй прокрут затирал бы первый.
+    const spins = await this.lock.withLockWaiting(
+      rouletteLockKey(widget.id),
+      TIMER_LOCK_TTL_MS,
+      async () => {
+        const next = [spin, ...readSpins(await this.read(widget.id))].slice(
+          0,
+          ROULETTE_HISTORY_LIMIT,
+        );
+        await this.write(widget.id, { spins: next });
+        return next;
+      },
+    );
+
+    await this.bus.publish({ kind: 'roulette-spin', widgetId: widget.id, spin });
+    await this.bus.publish({
+      kind: 'widget-state',
+      widgetId: widget.id,
+      state: { kind: 'roulette', spins },
+    });
+    return spin;
+  }
+
+  /**
+   * Стереть историю прокрутов. В ней имена донатеров и суммы, поэтому она
+   * уходит и вместе с историей событий, а не только по кнопке виджета.
+   */
+  async clearRouletteHistory(widget: PrismaWidget): Promise<WidgetState> {
+    await this.lock.withLockWaiting(rouletteLockKey(widget.id), TIMER_LOCK_TTL_MS, () =>
+      this.write(widget.id, { spins: [] }),
+    );
+    const state: WidgetState = { kind: 'roulette', spins: [] };
+    await this.bus.publish({ kind: 'widget-state', widgetId: widget.id, state });
+    return state;
   }
 
   /* ---------------------------------------------------------------- */

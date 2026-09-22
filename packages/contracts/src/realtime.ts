@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { channelStatsSchema } from './analytics.js';
 import { chatChannelRefSchema } from './chat.js';
 import { alertEventSchema } from './events.js';
-import { widgetConfigSchema, widgetStateSchema } from './widgets.js';
+import { rouletteSpinSchema, widgetConfigSchema, widgetStateSchema } from './widgets.js';
 
 /**
  * Имена socket.io-событий. Вынесены в константы, чтобы опечатка в строке
@@ -43,6 +43,8 @@ export const SOCKET_EVENTS = {
    * Twitch или отключил площадку. Строки прежнего канала оверлей убирает.
    */
   chatChannel: 'chat:channel',
+  /** Сервер → overlay рулетки: прокрутить колесо до выпавшего сектора. */
+  rouletteSpin: 'roulette:spin',
 } as const;
 
 export type SocketEventName = (typeof SOCKET_EVENTS)[keyof typeof SOCKET_EVENTS];
@@ -108,6 +110,17 @@ export type ConfigUpdatedMessage = z.infer<typeof configUpdatedMessageSchema>;
 /** Каналы чата оверлея сменились: подключили или отключили площадку. */
 export const chatChannelMessageSchema = z.object({ channels: z.array(chatChannelRefSchema) });
 export type ChatChannelMessage = z.infer<typeof chatChannelMessageSchema>;
+
+/**
+ * Прокрут рулетки. Отдельным сообщением, а не состоянием: состояние приходит и
+ * при каждом подключении, и сцена, переподключившаяся посреди эфира, прокрутила
+ * бы последний розыгрыш ещё раз.
+ */
+export const rouletteSpinMessageSchema = z.object({
+  widgetId: z.string().uuid(),
+  spin: rouletteSpinSchema,
+});
+export type RouletteSpinMessage = z.infer<typeof rouletteSpinMessageSchema>;
 
 /** Пересчитанное сервером состояние виджета. */
 export const widgetStateMessageSchema = z.object({

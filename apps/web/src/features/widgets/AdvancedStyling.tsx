@@ -49,6 +49,7 @@ export function LayoutSection({
   type,
   prefix = '',
   scenario = 'donation',
+  trigger = null,
   state = null,
 }: {
   form: UseFormReturn<FieldValues>;
@@ -57,6 +58,8 @@ export function LayoutSection({
   prefix?: string;
   /** Сценарий оповещений, чья карточка лежит под ручками. */
   scenario?: AlertEventType;
+  /** Триггер сценария, чей вид правят: под ручками — его карточка. */
+  trigger?: string | null;
   /** То же состояние, что у предпросмотра: два «настоящих» рендера на одной странице не должны спорить. */
   state?: WidgetState | null;
 }): React.JSX.Element | null {
@@ -77,6 +80,7 @@ export function LayoutSection({
             config={form.watch() as Record<string, unknown>}
             state={state}
             alertScenario={scenario}
+            alertTrigger={trigger}
           />
         }
       />
@@ -187,6 +191,9 @@ const FIRST_POSITION: Record<string, { x: number; y: number }> = {
   amount: { x: 50, y: 80 },
   clock: { x: 50, y: 55 },
   list: { x: 50, y: 60 },
+  value: { x: 50, y: 50 },
+  wheel: { x: 50, y: 50 },
+  result: { x: 50, y: 88 },
 };
 
 /** Элементы-картинки: у них ширина, а не размер шрифта и цвет. */

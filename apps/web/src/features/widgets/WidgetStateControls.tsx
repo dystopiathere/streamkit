@@ -1,4 +1,5 @@
 import {
+  type RouletteSpin,
   type Widget,
   type WidgetState,
   formatDuration,
@@ -14,6 +15,9 @@ import { ApiError } from '@/lib/api';
 import { useWidgetCommand, useWidgetState } from './queries';
 import { formatMoney, intlLocale } from '@/lib/locale';
 
+/** Как часто переспрашивать историю рулетки, пока открыт редактор. */
+const ROULETTE_REFRESH_MS = 15_000;
+
 /**
  * Управление состоянием виджета из дашборда.
  *
@@ -22,19 +26,35 @@ import { formatMoney, intlLocale } from '@/lib/locale';
  * немедленно и видно зрителям. Смешать их в одной форме значило бы запускать
  * марафон случайным нажатием Enter.
  */
-export function WidgetStateControls({ widget }: { widget: Widget }): React.JSX.Element | null {
+export function WidgetStateControls({
+  widget,
+  onSpin,
+}: {
+  widget: Widget;
+  /** Прокрут ушёл в эфир — предпросмотр проигрывает его же. */
+  onSpin?: (spin: RouletteSpin) => void;
+}): React.JSX.Element | null {
   const { t } = useTranslation();
   const hasState = hasWidgetState(widget.type);
-  const state = useWidgetState(widget.id, hasState);
+  // История рулетки пополняется донатами, пока редактор открыт, а сокета
+  // состояний у дашборда нет — переспрашиваем, как ленту событий.
+  const state = useWidgetState(
+    widget.id,
+    hasState,
+    widget.type === 'roulette' ? ROULETTE_REFRESH_MS : undefined,
+  );
   const command = useWidgetCommand(widget.id);
 
   if (!hasState) return null;
 
-  const run = async (input: Parameters<typeof command.mutateAsync>[0]): Promise<void> => {
+  const run = async (
+    input: Parameters<typeof command.mutateAsync>[0],
+  ): Promise<WidgetState | null | undefined> => {
     try {
-      await command.mutateAsync(input);
+      return await command.mutateAsync(input);
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : t('common.error'));
+      return undefined;
     }
   };
 
@@ -59,6 +79,25 @@ export function WidgetStateControls({ widget }: { widget: Widget }): React.JSX.E
       ) : null}
 
       {widget.type === 'top-donors' ? <TopDonorsSummary state={state.data ?? null} /> : null}
+
+      {widget.type === 'latest' ? <LatestSummary state={state.data ?? null} /> : null}
+
+      {widget.type === 'roulette' ? (
+        <RouletteControls
+          state={state.data ?? null}
+          isPending={command.isPending}
+          onSpin={async () => {
+            const next = await run({ kind: 'roulette', action: 'spin' });
+            // Свежий прокрут — первый в истории: его же крутит предпросмотр.
+            if (next?.kind === 'roulette' && next.spins[0]) onSpin?.(next.spins[0]);
+          }}
+          onClear={() => {
+            if (window.confirm(t('widgets.roulette.clearConfirm'))) {
+              void run({ kind: 'roulette', action: 'clear' });
+            }
+          }}
+        />
+      ) : null}
     </Card>
   );
 }
@@ -215,6 +254,105 @@ function TimerControls({
  * истории событий. Показываем то, что прямо сейчас увидят зрители — иначе
  * проверить настройки периода и валюты можно только через OBS.
  */
+/** Что сейчас в кадре у «последнего события»: то, что там увидят зрители. */
+function LatestSummary({ state }: { state: WidgetState | null }): React.JSX.Element {
+  const { t } = useTranslation();
+  const event = state?.kind === 'latest' ? state.event : null;
+  if (!event) return <p className="text-sm text-muted">{t('widgets.state.latestEmpty')}</p>;
+  return (
+    <p className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm">
+      <span className="min-w-0 truncate">
+        <span className="font-medium">{event.username}</span>
+        {event.amount ? (
+          <span className="ml-2 tabular-nums">{formatMoney(event.amount)}</span>
+        ) : null}
+      </span>
+      <time className="text-xs text-muted tabular-nums" dateTime={event.createdAt}>
+        {new Date(event.createdAt).toLocaleString(intlLocale(), {
+          dateStyle: 'short',
+          timeStyle: 'short',
+        })}
+      </time>
+    </p>
+  );
+}
+
+/**
+ * Рулетка: прокрут кнопкой и история прокрутов.
+ *
+ * Кнопка действует сразу и видна зрителям — поэтому здесь, а не в форме
+ * настроек, как «запустить» у таймера. История — единственное место, где
+ * стример видит, что выпало, если пропустил момент в кадре.
+ */
+function RouletteControls({
+  state,
+  isPending,
+  onSpin,
+  onClear,
+}: {
+  state: WidgetState | null;
+  isPending: boolean;
+  onSpin: () => Promise<void>;
+  onClear: () => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const spins = state?.kind === 'roulette' ? state.spins : [];
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Button onClick={() => void onSpin()} isLoading={isPending} className="w-full">
+          {t('widgets.roulette.spin')}
+        </Button>
+        <p className="text-xs text-muted">{t('widgets.roulette.spinHint')}</p>
+      </div>
+
+      <div className="space-y-2 border-t border-border pt-4">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-medium">{t('widgets.roulette.history')}</h3>
+          {spins.length > 0 ? (
+            <Button variant="ghost" className="-my-1 px-2 py-1 text-xs" onClick={onClear}>
+              {t('widgets.roulette.clear')}
+            </Button>
+          ) : null}
+        </div>
+        {spins.length === 0 ? (
+          <p className="text-sm text-muted">{t('widgets.roulette.historyEmpty')}</p>
+        ) : (
+          <ol className="space-y-1.5 text-sm">
+            {spins.map((spin) => (
+              <li
+                key={spin.id}
+                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-2"
+              >
+                <span
+                  aria-hidden="true"
+                  className="h-2.5 w-2.5 self-center rounded-[2px]"
+                  style={{ backgroundColor: spin.color }}
+                />
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">{spin.label}</span>
+                  <span className="block truncate text-xs text-muted">
+                    {spin.username
+                      ? `${spin.username}${spin.amount ? ` · ${formatMoney(spin.amount)}` : ''}`
+                      : t('widgets.roulette.manual')}
+                  </span>
+                </span>
+                <time className="text-xs text-muted tabular-nums" dateTime={spin.createdAt}>
+                  {new Date(spin.createdAt).toLocaleTimeString(intlLocale(), {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </time>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TopDonorsSummary({ state }: { state: WidgetState | null }): React.JSX.Element {
   const { t } = useTranslation();
   if (state?.kind !== 'top-donors' || state.entries.length === 0) {

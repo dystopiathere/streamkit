@@ -8,6 +8,12 @@ export interface QueuedAlert {
   isLeaving: boolean;
 }
 
+/** Событие в очереди и время показа, если оно не из сценария (голосовой донат). */
+interface PendingAlert {
+  event: AlertEvent;
+  durationMs?: number;
+}
+
 /**
  * Очередь показа алертов.
  *
@@ -20,13 +26,17 @@ export interface QueuedAlert {
  */
 export function useAlertQueue(config: Pick<AlertWidgetConfig, 'gapMs' | 'scenarios'>): {
   current: QueuedAlert | null;
-  enqueue: (event: AlertEvent) => void;
+  /**
+   * `durationMs` — время показа вместо сценарного: у голосового доната
+   * оповещение держится, пока звучит запись (с потолком настройки).
+   */
+  enqueue: (event: AlertEvent, durationMs?: number) => void;
   pending: number;
 } {
   const [current, setCurrent] = useState<QueuedAlert | null>(null);
   const [pending, setPending] = useState(0);
 
-  const queue = useRef<AlertEvent[]>([]);
+  const queue = useRef<PendingAlert[]>([]);
   /**
    * Ровно один отложенный вызов за раз.
    *
@@ -72,10 +82,12 @@ export function useAlertQueue(config: Pick<AlertWidgetConfig, 'gapMs' | 'scenari
     }
 
     isBusy.current = true;
-    setCurrent({ event: next, isLeaving: false });
+    setCurrent({ event: next.event, isLeaving: false });
 
     // Время на экране — у сценария типа события: фолловера показывают коротко,
-    // крупный донат — дольше.
+    // крупный донат — дольше. Голосовой донат приносит своё время: оно
+    // посчитано по длине записи ещё до показа.
+    const durationMs = next.durationMs ?? timings.current.scenarios[next.event.type].durationMs;
 
     schedule(() => {
       setCurrent((active) => (active ? { ...active, isLeaving: true } : null));
@@ -84,15 +96,15 @@ export function useAlertQueue(config: Pick<AlertWidgetConfig, 'gapMs' | 'scenari
         setCurrent(null);
         schedule(() => showNextRef.current(), timings.current.gapMs);
       }, ALERT_EXIT_DURATION_MS);
-    }, timings.current.scenarios[next.type].durationMs);
+    }, durationMs);
   }, [schedule]);
 
   useEffect(() => {
     showNextRef.current = showNext;
   }, [showNext]);
 
-  const enqueue = useCallback((event: AlertEvent) => {
-    queue.current.push(event);
+  const enqueue = useCallback((event: AlertEvent, durationMs?: number) => {
+    queue.current.push({ event, durationMs });
     setPending(queue.current.length);
 
     // Запуск идёт напрямую, а не из функции обновления состояния: React может

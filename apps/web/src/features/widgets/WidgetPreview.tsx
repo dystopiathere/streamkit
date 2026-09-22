@@ -6,6 +6,9 @@ import type {
   ChatWidgetConfig,
   GoalWidgetConfig,
   GuestsWidgetConfig,
+  LatestWidgetConfig,
+  RouletteSpin,
+  RouletteWidgetConfig,
   TimerWidgetConfig,
   TopDonorsWidgetConfig,
   WidgetCanvas,
@@ -13,6 +16,8 @@ import type {
   WidgetType,
 } from '@streamkit/contracts';
 import {
+  ALERT_APPEARANCE_FIELDS,
+  type AlertTrigger,
   applyPlanToConfig,
   widgetCanvasSchema,
   defaultAlertWidgetConfig,
@@ -24,7 +29,9 @@ import {
   AlertCard,
   ChatBox,
   GoalBar,
+  LatestEventDisplay,
   ParticipantLayout,
+  RouletteWheel,
   TimerDisplay,
   TopDonorsList,
   WidgetStage,
@@ -51,16 +58,32 @@ export function WidgetPreview({
   config,
   state,
   alertScenario = 'donation',
+  alertTrigger = null,
+  rouletteSpin = null,
+  onRouletteFinished,
 }: {
   type: WidgetType;
   config: Record<string, unknown>;
   state: WidgetState | null;
   /** Какой сценарий оповещений показать — тот, что открыт в форме. */
   alertScenario?: AlertEventType;
+  /** Триггер сценария, чей вид правят сейчас. null — вид самого сценария. */
+  alertTrigger?: string | null;
+  /** Прокрут рулетки, который проиграть в предпросмотре. */
+  rouletteSpin?: RouletteSpin | null;
+  onRouletteFinished?: (spinId: string) => void;
 }): React.JSX.Element {
   const canvas = canvasOf(config);
   const surface = (
-    <Surface type={type} config={config} state={state} alertScenario={alertScenario} />
+    <Surface
+      type={type}
+      config={config}
+      state={state}
+      alertScenario={alertScenario}
+      alertTrigger={alertTrigger}
+      rouletteSpin={rouletteSpin}
+      onRouletteFinished={onRouletteFinished}
+    />
   );
   // Окно задано — предпросмотр показывает ровно браузер-сорс этого размера,
   // уменьшенный под колонку: и пропорции, и обрезку того, что вылезло за окно.
@@ -299,6 +322,7 @@ export function WidgetSurface(props: {
   config: Record<string, unknown>;
   state: WidgetState | null;
   alertScenario: AlertEventType;
+  alertTrigger?: string | null;
 }): React.JSX.Element | null {
   return <Surface {...props} />;
 }
@@ -308,11 +332,17 @@ function Surface({
   config: raw,
   state,
   alertScenario,
+  alertTrigger = null,
+  rouletteSpin = null,
+  onRouletteFinished,
 }: {
   type: WidgetType;
   config: Record<string, unknown>;
   state: WidgetState | null;
   alertScenario: AlertEventType;
+  alertTrigger?: string | null;
+  rouletteSpin?: RouletteSpin | null;
+  onRouletteFinished?: (spinId: string) => void;
 }): React.JSX.Element | null {
   const config = usePlanConfig(withDefaults(type, raw));
   // Примеры — на языке дашборда: русский «Зритель» в английском интерфейсе
@@ -324,17 +354,57 @@ function Surface({
       // Сценарий из формы поверх своих дефолтов — по той же причине, что и весь
       // конфиг выше: в переходном кадре формы его может ещё не быть.
       const scenarios = (config.scenarios ?? {}) as Partial<Record<AlertEventType, object>>;
-      const scenario = {
+      const base = {
         ...DEFAULT_SCENARIOS[alertScenario],
         ...scenarios[alertScenario],
       } as AlertScenarioConfig;
+      // Правят вид триггера — показываем его, и пример доната подходит под его
+      // условие: «от тысячи» с примером на 500 ₽ читался бы неправдой.
+      const trigger = alertTrigger
+        ? base.triggers?.find((item) => item.id === alertTrigger)
+        : undefined;
+      const scenario = trigger ? withTriggerAppearance(base, trigger) : base;
+      const event = trigger
+        ? { ...sample.events[alertScenario], amount: triggerSampleAmount(trigger) }
+        : sample.events[alertScenario];
       return (
         <>
           <AlertAnimationStyles />
-          <AlertCard event={sample.events[alertScenario]} config={scenario} animate={false} />
+          <AlertCard event={event} config={scenario} animate={false} />
         </>
       );
     }
+
+    case 'latest': {
+      const latest = config as unknown as LatestWidgetConfig;
+      // Настоящее последнее событие, если оно было, иначе пример выбранного
+      // типа: пустой предпросмотр ничего не говорит о шаблоне строки.
+      return (
+        <LatestEventDisplay
+          config={latest}
+          state={
+            state?.kind === 'latest' && state.event
+              ? state
+              : {
+                  kind: 'latest',
+                  event: {
+                    ...sample.events[latest.eventType],
+                    createdAt: '2026-09-12T20:00:00.000Z',
+                  },
+                }
+          }
+        />
+      );
+    }
+
+    case 'roulette':
+      return (
+        <RouletteWheel
+          config={config as unknown as RouletteWidgetConfig}
+          spin={rouletteSpin}
+          onFinished={onRouletteFinished}
+        />
+      );
 
     case 'goal': {
       const goal = config as unknown as GoalWidgetConfig;
@@ -421,6 +491,36 @@ function Surface({
 }
 
 const DEFAULT_SCENARIOS = defaultAlertWidgetConfig().scenarios;
+
+/** Сценарий с видом триггера — так же, как его соберёт `resolveAlertScenario` в кадре. */
+function withTriggerAppearance(
+  scenario: AlertScenarioConfig,
+  trigger: AlertTrigger,
+): AlertScenarioConfig {
+  const appearance = Object.fromEntries(
+    ALERT_APPEARANCE_FIELDS.map((field) => [field, trigger[field]]),
+  );
+  return { ...scenario, ...appearance } as AlertScenarioConfig;
+}
+
+/**
+ * Сумма, которая подходит под условие триггера: пример в предпросмотре и
+ * тестовый донат из редактора. Строго больше и строго меньше — на рубль в
+ * сторону от границы.
+ */
+export function triggerSampleAmount(trigger: Pick<AlertTrigger, 'condition'>): {
+  amountMinor: number;
+  currency: AlertTrigger['condition']['currency'];
+} {
+  const { operator, amountMinor, currency } = trigger.condition;
+  const value =
+    operator === 'gt'
+      ? amountMinor + 100
+      : operator === 'lt'
+        ? Math.max(0, amountMinor - 100)
+        : amountMinor;
+  return { amountMinor: Number.isFinite(value) ? value : 0, currency };
+}
 
 /** Тексты примеров. Имена и реплики выдуманы. */
 const SAMPLE_TEXT: Record<

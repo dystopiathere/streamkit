@@ -6,15 +6,31 @@ import {
   isoDateSchema,
   isVideoUrl,
   MINOR_UNITS_PER_MAJOR,
+  type Money,
+  moneySchema,
   uuidSchema,
 } from './common.js';
 import { type PlanFeatures } from './billing.js';
 import { CHAT_PLATFORMS, type ChatPlatform } from './chat.js';
 import { GUEST_LAYOUTS, MAX_GUESTS_PER_ROOM } from './rooms.js';
-import { type AlertEvent, type AlertEventType, alertEventTypeSchema } from './events.js';
+import {
+  type AlertEvent,
+  type AlertEventType,
+  alertEventSchema,
+  alertEventTypeSchema,
+} from './events.js';
 
 /** Типы виджетов. Новый тип = новая ветка в widgetConfigSchema + рендерер в packages/ui. */
-export const WIDGET_TYPES = ['alerts', 'goal', 'timer', 'top-donors', 'chat', 'guests'] as const;
+export const WIDGET_TYPES = [
+  'alerts',
+  'goal',
+  'timer',
+  'top-donors',
+  'chat',
+  'guests',
+  'latest',
+  'roulette',
+] as const;
 export const widgetTypeSchema = z.enum(WIDGET_TYPES);
 export type WidgetType = z.infer<typeof widgetTypeSchema>;
 
@@ -182,6 +198,8 @@ export const ALERT_SLOTS = ['image', 'title', 'message'] as const;
 export const GOAL_SLOTS = ['title', 'bar', 'amount'] as const;
 export const TIMER_SLOTS = ['title', 'clock'] as const;
 export const TOP_DONORS_SLOTS = ['title', 'list'] as const;
+export const LATEST_SLOTS = ['title', 'value', 'message'] as const;
+export const ROULETTE_SLOTS = ['title', 'wheel', 'result'] as const;
 
 /**
  * У каких типов есть фон.
@@ -200,6 +218,8 @@ export const WIDGET_SLOTS = {
   goal: GOAL_SLOTS,
   timer: TIMER_SLOTS,
   'top-donors': TOP_DONORS_SLOTS,
+  latest: LATEST_SLOTS,
+  roulette: ROULETTE_SLOTS,
 } as const;
 
 /**
@@ -289,6 +309,102 @@ const titleTemplateSchema = z.string().min(1).max(200);
 const messageTemplateSchema = z.string().max(300);
 
 /**
+ * Вид оповещения — всё, что зритель видит и слышит, без порогов и включения.
+ *
+ * Отдельно от сценария, потому что ровно этот набор повторяет триггер: «донат
+ * от тысячи выглядит так» — это другой вид при тех же порогах сценария.
+ */
+function alertAppearanceShape(
+  titleTemplate: z.ZodDefault<z.ZodString>,
+  messageTemplate: z.ZodDefault<z.ZodString>,
+) {
+  return {
+    layout: alertLayoutSchema.default('center'),
+    /** Сколько алерт висит на экране. */
+    durationMs: z.number().int().min(1000).max(60000).default(6000),
+    imageUrl: httpsUrlSchema.nullable().default(null),
+    titleTemplate,
+    messageTemplate,
+    text: textStyleSchema.prefault({}),
+    sound: alertSoundSchema.prefault({}),
+    animationIn: alertAnimationSchema.default('slide-up'),
+    animationOut: alertAnimationSchema.default('fade'),
+    /** Раскладка и фон — у каждого сценария свои: донат и фолловер выглядят по-разному. */
+    slots: slotsSchema(ALERT_SLOTS).prefault({}),
+    background: widgetBackgroundSchema.prefault({}),
+  };
+}
+
+/** Поля вида: их копирует новый триггер из сценария и их же он заменяет. */
+export const ALERT_APPEARANCE_FIELDS = [
+  'layout',
+  'durationMs',
+  'imageUrl',
+  'titleTemplate',
+  'messageTemplate',
+  'text',
+  'sound',
+  'animationIn',
+  'animationOut',
+  'slots',
+  'background',
+] as const;
+
+/**
+ * Условие триггера на сумму доната.
+ *
+ * Сумма — в ОДНОЙ валюте, как и порог показа: донат в долларах не сравнивается
+ * с условием в рублях, курс мы не считаем (см. цель). Такой донат проходит мимо
+ * триггера и показывается видом сценария.
+ *
+ * «Между» — включительно с обеих сторон: «от 500 до 999» читается стримером
+ * именно так, и донат ровно на 999 не должен выпасть из обоих соседних триггеров.
+ */
+export const TRIGGER_OPERATORS = ['gte', 'gt', 'eq', 'lte', 'lt', 'between'] as const;
+export type TriggerOperator = (typeof TRIGGER_OPERATORS)[number];
+
+const triggerAmountSchema = z.number().int().nonnegative().max(100_000_000_000);
+
+export const alertTriggerConditionSchema = z
+  .object({
+    operator: z.enum(TRIGGER_OPERATORS).default('gte'),
+    currency: currencySchema.default('RUB'),
+    amountMinor: triggerAmountSchema.default(100_000),
+    /** Верхняя граница — только у «между». */
+    toMinor: triggerAmountSchema.nullable().default(null),
+  })
+  .refine(
+    (condition) =>
+      condition.operator !== 'between' ||
+      (condition.toMinor !== null && condition.toMinor >= condition.amountMinor),
+    { path: ['toMinor'], message: 'Верхняя граница должна быть не меньше нижней' },
+  );
+export type AlertTriggerCondition = z.infer<typeof alertTriggerConditionSchema>;
+
+/** Сколько триггеров у сценария. Больше десятка ступеней на эфире не различить. */
+export const MAX_ALERT_TRIGGERS = 20;
+
+/**
+ * Триггер: условие и свой вид оповещения.
+ *
+ * Вид — полный, а не «что поменять»: стример настраивает триггер как отдельное
+ * оповещение, и частичное наследование («цвет свой, анимация общая») сделало бы
+ * вид триггера зависимым от правок сценария, которых стример к нему не относил.
+ * Новый триггер копирует вид сценария целиком (`ALERT_APPEARANCE_FIELDS`).
+ */
+export const alertTriggerSchema = z.object({
+  /** Ключ для списка в форме: у триггеров нет порядка кроме приоритета, а он меняется. */
+  id: z.string().min(1).max(64),
+  name: z.string().trim().max(60).default(''),
+  condition: alertTriggerConditionSchema.prefault({}),
+  ...alertAppearanceShape(
+    titleTemplateSchema.default('{username} — {amount}'),
+    messageTemplateSchema.default('{message}'),
+  ),
+});
+export type AlertTrigger = z.infer<typeof alertTriggerSchema>;
+
+/**
  * Сценарий с шаблонами по умолчанию своего типа — под то, что у события есть:
  * у фолловера нет ни суммы, ни текста, у рейда есть число зрителей.
  */
@@ -299,9 +415,6 @@ function alertScenarioSchema(
   return z
     .object({
       enabled: z.boolean().default(true),
-      layout: alertLayoutSchema.default('center'),
-      /** Сколько алерт висит на экране. */
-      durationMs: z.number().int().min(1000).max(60000).default(6000),
       /**
        * Минимальная сумма по валютам, в минорных единицах. Нет ключа или 0 —
        * донаты в этой валюте показываются все. Значение `undefined` схема
@@ -312,16 +425,20 @@ function alertScenarioSchema(
         .default({}),
       /** События с меньшим количеством не показываются (0 — показывать все). */
       minCount: z.number().int().nonnegative().max(1_000_000).default(0),
-      imageUrl: httpsUrlSchema.nullable().default(null),
-      titleTemplate,
-      messageTemplate,
-      text: textStyleSchema.prefault({}),
-      sound: alertSoundSchema.prefault({}),
-      animationIn: alertAnimationSchema.default('slide-up'),
-      animationOut: alertAnimationSchema.default('fade'),
-      /** Раскладка и фон — у каждого сценария свои: донат и фолловер выглядят по-разному. */
-      slots: slotsSchema(ALERT_SLOTS).prefault({}),
-      background: widgetBackgroundSchema.prefault({}),
+      ...alertAppearanceShape(titleTemplate, messageTemplate),
+      /**
+       * Триггеры по сумме: вид для доната, подходящего под условие. Порядок —
+       * приоритет: срабатывает ПЕРВЫЙ подошедший, остальные не проверяются.
+       * Ни один не подошёл — вид самого сценария, то есть «донат по умолчанию».
+       *
+       * Порог показа (`minAmounts`) сильнее триггера: донат ниже порога не
+       * показывается совсем, какой бы триггер под него ни подходил. Иначе
+       * «не показывать мелочь» пришлось бы повторять в каждом триггере.
+       *
+       * В схеме — у каждого сценария, в редакторе — только у доната: сумма есть
+       * только у него.
+       */
+      triggers: z.array(alertTriggerSchema).max(MAX_ALERT_TRIGGERS).default([]),
     })
     .prefault({});
 }
@@ -363,6 +480,60 @@ export const alertScenariosSchema = z.object({
 
 export type AlertScenarioConfig = z.infer<typeof alertScenariosSchema>['donation'];
 
+/** Подходит ли сумма под условие триггера. Сравнение — целыми минорными единицами. */
+export function matchesTriggerCondition(
+  condition: AlertTriggerCondition,
+  amount: Money | null,
+): boolean {
+  if (!amount || amount.currency !== condition.currency) return false;
+  const value = amount.amountMinor;
+  switch (condition.operator) {
+    case 'gte':
+      return value >= condition.amountMinor;
+    case 'gt':
+      return value > condition.amountMinor;
+    case 'eq':
+      return value === condition.amountMinor;
+    case 'lte':
+      return value <= condition.amountMinor;
+    case 'lt':
+      return value < condition.amountMinor;
+    case 'between':
+      return (
+        condition.toMinor !== null && value >= condition.amountMinor && value <= condition.toMinor
+      );
+  }
+}
+
+/** Первый по приоритету триггер, под который подходит событие. null — ни один. */
+export function matchAlertTrigger(
+  scenario: Pick<AlertScenarioConfig, 'triggers'>,
+  event: Pick<AlertEvent, 'amount'>,
+): AlertTrigger | null {
+  return (
+    scenario.triggers.find((trigger) => matchesTriggerCondition(trigger.condition, event.amount)) ??
+    null
+  );
+}
+
+/**
+ * Вид, которым показывается событие: сценарий с видом сработавшего триггера.
+ *
+ * Одна функция для оверлея и предпросмотра — как `shouldShowAlert`: иначе в
+ * редакторе донат на тысячу выглядел бы одним триггером, а в кадре другим.
+ */
+export function resolveAlertScenario(
+  scenario: AlertScenarioConfig,
+  event: Pick<AlertEvent, 'amount'>,
+): AlertScenarioConfig {
+  const trigger = matchAlertTrigger(scenario, event);
+  if (!trigger) return scenario;
+  const appearance = Object.fromEntries(
+    ALERT_APPEARANCE_FIELDS.map((field) => [field, trigger[field]]),
+  );
+  return { ...scenario, ...appearance } as AlertScenarioConfig;
+}
+
 /**
  * Конфиг alert-виджета. Одна и та же схема валидирует запись в API, генерирует форму
  * настроек в дашборде и управляет рендером в overlay.
@@ -370,10 +541,29 @@ export type AlertScenarioConfig = z.infer<typeof alertScenariosSchema>['donation
  * Общая здесь только пауза между алертами: очередь одна на виджет, и оповещения
  * разных типов идут в ней друг за другом.
  */
+/**
+ * Голосовые донаты: запись донатера играет вместе с его оповещением.
+ *
+ * Настройка на весь виджет, а не на сценарий и не на триггер: голос приходит
+ * с донатом как есть, и «для донатов от тысячи голос громче» — настройка,
+ * которой никто не просил, зато копия её в каждом триггере разъезжалась бы.
+ *
+ * Потолок обязателен: длину записи задаёт донатер, а не стример, и минутная
+ * тирада иначе держала бы очередь оповещений столько, сколько захочет чужой
+ * человек.
+ */
+export const alertVoiceSchema = z.object({
+  enabled: z.boolean().default(true),
+  volume: z.number().min(0).max(1).default(0.8),
+  maxSeconds: z.number().int().min(5).max(300).default(90),
+});
+export type AlertVoice = z.infer<typeof alertVoiceSchema>;
+
 export const alertWidgetConfigSchema = z.object({
   canvas: canvasField(),
   /** Пауза между алертами, чтобы они не слипались. */
   gapMs: z.number().int().min(0).max(10000).default(500),
+  voice: alertVoiceSchema.prefault({}),
   scenarios: alertScenariosSchema.prefault({}),
 });
 export type AlertWidgetConfig = z.infer<typeof alertWidgetConfigSchema>;
@@ -661,6 +851,245 @@ export const guestsWidgetConfigSchema = z.object({
 export type GuestsWidgetConfig = z.infer<typeof guestsWidgetConfigSchema>;
 
 /* ------------------------------------------------------------------ */
+/* Последнее событие                                                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Шаблон строки по умолчанию — под то, что у события есть: у фолловера нет ни
+ * суммы, ни количества, и «{username} — {amount}» оставил бы висящее тире.
+ */
+export const LATEST_DEFAULT_TEMPLATES: Record<AlertEventType, string> = {
+  donation: '{username} — {amount}',
+  follow: '{username}',
+  subscription: '{username}',
+  gift: '{username} × {count}',
+  resubscription: '{username} · {count}',
+  cheer: '{username} — {count}',
+  raid: '{username} · {count}',
+  reward: '{username} — {message}',
+};
+
+/**
+ * Конфиг виджета последнего события: последний донат, фолловер, подписчик.
+ *
+ * Один тип с выбором события, а не три: у них одинаково всё, кроме того, какое
+ * событие брать, — а три типа означали бы три копии формы, рендерера и
+ * состояния. Событие можно поменять после создания: у типа нет полей,
+ * которые от него зависят, кроме шаблона.
+ */
+export const latestWidgetConfigSchema = z.object({
+  canvas: canvasField(),
+  eventType: alertEventTypeSchema.default('donation'),
+  title: z.string().max(80).default('Последний донат'),
+  template: z.string().min(1).max(200).default(LATEST_DEFAULT_TEMPLATES.donation),
+  /** Текст доната или награды отдельной строкой — в кадре бывает длинным. */
+  showMessage: z.boolean().default(false),
+  /**
+   * Что написать, пока событий не было. Пусто — виджет не занимает место в
+   * кадре, как топ донатеров на свежем канале.
+   */
+  emptyText: z.string().max(80).default(''),
+  slots: slotsSchema(LATEST_SLOTS).prefault({}),
+  background: widgetBackgroundSchema.prefault({}),
+  text: textStyleSchema.prefault({}),
+});
+export type LatestWidgetConfig = z.infer<typeof latestWidgetConfigSchema>;
+
+/* ------------------------------------------------------------------ */
+/* Рулетка                                                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Цвета секторов по умолчанию.
+ *
+ * Порядок подобран валидатором dataviz для КОЛЬЦА: соседние сектора, включая
+ * замыкание последнего на первый, различимы при дейтеранопии (ΔE ≥ 9.8) и
+ * обычным зрением (ΔE ≥ 22.7) на тёмной подложке. Все восемь — средней
+ * светлоты, поэтому цвет подписи рендерер выбирает по контрасту с сектором.
+ */
+export const ROULETTE_COLORS = [
+  '#A3850F',
+  '#6B84EA',
+  '#E0473D',
+  '#2EA3B4',
+  '#CF7C38',
+  '#9670E0',
+  '#40A85A',
+  '#D0509C',
+] as const;
+
+/**
+ * Замена цвета последнего сектора: он встаёт рядом с первым.
+ *
+ * Тогда последний сектор встаёт рядом с первым (горчичным), а с ним
+ * неразличимы при дейтеранопии красный, оранжевый и зелёный (ΔE 2.1–5.9), и
+ * совпадает он сам — при девяти секторах.
+ * Замена различима и с первым, и с предпоследним сектором — посчитано тем же
+ * валидатором.
+ */
+const WRAP_REPLACEMENT: Partial<Record<number, number>> = { 0: 1, 2: 3, 4: 1, 6: 7 };
+
+/** Цвет нового сектора: по кругу палитры, с заменой на стыке кольца. */
+export function rouletteSectorColor(index: number, count: number): string {
+  const slot = index % ROULETTE_COLORS.length;
+  const last = index === count - 1 && count > 1;
+  const replaced = last ? (WRAP_REPLACEMENT[slot] ?? slot) : slot;
+  return ROULETTE_COLORS[replaced]!;
+}
+
+export const rouletteSectorSchema = z.object({
+  /** Ключ для списка и для итога прокрута: подпись сектора стример может переименовать. */
+  id: z.string().min(1).max(64),
+  label: z.string().trim().min(1, 'Назовите сектор').max(40),
+  /**
+   * Вес — шанс сектора относительно остальных. Размер сектора на колесе
+   * пропорционален весу: зрители видят настоящие шансы, а не равные доли при
+   * неравной вероятности.
+   */
+  weight: z.number().int().min(1).max(1000).default(1),
+  color: hexColorSchema,
+});
+export type RouletteSector = z.infer<typeof rouletteSectorSchema>;
+
+export const MIN_ROULETTE_SECTORS = 2;
+export const MAX_ROULETTE_SECTORS = 24;
+
+const DEFAULT_ROULETTE_LABELS = [
+  'Спеть песню',
+  'Челлендж',
+  'Выбор игры',
+  'Ничего',
+  'Реакция на видео',
+  'Отжимания',
+];
+
+export function defaultRouletteSectors(): RouletteSector[] {
+  return DEFAULT_ROULETTE_LABELS.map((label, index) => ({
+    id: `sector-${index + 1}`,
+    label,
+    weight: 1,
+    color: rouletteSectorColor(index, DEFAULT_ROULETTE_LABELS.length),
+  }));
+}
+
+/**
+ * Конфиг рулетки.
+ *
+ * Крутится двумя способами: донатом не меньше цены прокрута и кнопкой в
+ * дашборде (розыгрыши без донатов). Результат выбирает СЕРВЕР: оверлей только
+ * доводит колесо до присланного сектора. Иначе у двух сцен OBS с одной ссылкой
+ * и у предпросмотра выпадало бы разное, а стример не знал бы, что выпало.
+ */
+export const rouletteWidgetConfigSchema = z.object({
+  canvas: canvasField(),
+  title: z.string().max(80).default('Рулетка'),
+  sectors: z
+    .array(rouletteSectorSchema)
+    .min(MIN_ROULETTE_SECTORS)
+    .max(MAX_ROULETTE_SECTORS)
+    .default(defaultRouletteSectors),
+  /** Крутят ли колесо донаты. Выключено — только кнопкой из дашборда. */
+  donationSpins: z.boolean().default(true),
+  /**
+   * Цена прокрута по валютам, в минорных единицах. Донат от этой суммы — один
+   * прокрут, сколько бы он ни превышал цену: очередь из десятка прокрутов от
+   * одного крупного доната забила бы эфир на минуты.
+   *
+   * Валюта без цены (или с нулём) колесо НЕ крутит — наоборот порогу показа
+   * оповещений, где пустое поле значит «показывать все». Там пустое безопасно (лишний алерт),
+   * здесь — нет: пустая цена крутила бы колесо на донат в одну копейку.
+   */
+  spinPrice: z
+    .partialRecord(currencySchema, z.number().int().nonnegative().optional())
+    .default({ RUB: 30_000 }),
+  /** Сколько крутится колесо до остановки. */
+  spinDurationMs: z.number().int().min(3000).max(20000).default(7000),
+  /** Сколько итог держится на экране после остановки. */
+  resultMs: z.number().int().min(1000).max(30000).default(6000),
+  /** Колесо только на время прокрута: между прокрутами кадр свободен. */
+  hideWhenIdle: z.boolean().default(false),
+  /** Имя донатера в итоге. У прокрута кнопкой имени нет. */
+  showDonor: z.boolean().default(true),
+  /** Диаметр колеса в пикселях окна виджета. */
+  wheelSize: z.number().int().min(160).max(2000).default(420),
+  /** Цвет обода, зазоров между секторами и ступицы. */
+  rimColor: hexColorSchema.default('#100F0D'),
+  slots: slotsSchema(ROULETTE_SLOTS).prefault({}),
+  background: widgetBackgroundSchema.prefault({}),
+  text: textStyleSchema.prefault({ fontSize: 28 }),
+});
+export type RouletteWidgetConfig = z.infer<typeof rouletteWidgetConfigSchema>;
+
+/**
+ * Выбор сектора по весам. `random` — число из [0, 1): сервер передаёт сюда
+ * криптографически стойкое, тесты — заданное.
+ */
+export function pickRouletteSector(
+  sectors: readonly Pick<RouletteSector, 'weight'>[],
+  random: number,
+): number {
+  const total = sectors.reduce((sum, sector) => sum + sector.weight, 0);
+  let point = Math.min(Math.max(random, 0), 1 - Number.EPSILON) * total;
+  for (let index = 0; index < sectors.length; index += 1) {
+    point -= sectors[index]!.weight;
+    if (point < 0) return index;
+  }
+  return sectors.length - 1;
+}
+
+/** Хватает ли доната на прокрут. Сравнение — в валюте доната, без курса. */
+export function donationSpins(
+  config: Pick<RouletteWidgetConfig, 'donationSpins' | 'spinPrice'>,
+  amount: Money | null,
+): boolean {
+  if (!config.donationSpins || !amount) return false;
+  const price = config.spinPrice[amount.currency];
+  return price !== undefined && price > 0 && amount.amountMinor >= price;
+}
+
+/**
+ * Границы секторов на колесе в градусах по часовой стрелке от верха.
+ * Сектор занимает долю круга, равную доле своего веса.
+ */
+export function rouletteGeometry(
+  sectors: readonly Pick<RouletteSector, 'weight'>[],
+): { start: number; end: number }[] {
+  const total = sectors.reduce((sum, sector) => sum + sector.weight, 0) || 1;
+  let cursor = 0;
+  return sectors.map((sector) => {
+    const start = cursor;
+    cursor += (sector.weight / total) * 360;
+    return { start, end: cursor };
+  });
+}
+
+/**
+ * Прокрут: что выпало и как колесо должно остановиться.
+ *
+ * Точка остановки внутри сектора (`offset`) и число оборотов выбирает сервер,
+ * а не оверлей: две сцены OBS с одной ссылкой должны остановиться в одной
+ * точке, а не просто на одном секторе. Подпись и цвет сектора едут с прокрутом
+ * — стример может переименовать сектор, пока колесо крутится.
+ */
+export const rouletteSpinSchema = z.object({
+  id: uuidSchema,
+  sectorId: z.string().min(1).max(64),
+  sectorIndex: z.number().int().nonnegative(),
+  label: z.string().max(40),
+  color: hexColorSchema,
+  offset: z.number().min(0).max(1),
+  turns: z.number().int().min(1).max(20),
+  source: z.enum(['donation', 'manual']),
+  username: z.string().max(64).nullable(),
+  amount: moneySchema.nullable(),
+  createdAt: isoDateSchema,
+});
+export type RouletteSpin = z.infer<typeof rouletteSpinSchema>;
+
+/** Сколько последних прокрутов помнит сервер: историю видит стример в дашборде. */
+export const ROULETTE_HISTORY_LIMIT = 20;
+
+/* ------------------------------------------------------------------ */
 /* Объединение по типу                                                 */
 /* ------------------------------------------------------------------ */
 
@@ -672,6 +1101,8 @@ export const widgetConfigSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('top-donors'), config: topDonorsWidgetConfigSchema }),
   z.object({ type: z.literal('chat'), config: chatWidgetConfigSchema }),
   z.object({ type: z.literal('guests'), config: guestsWidgetConfigSchema }),
+  z.object({ type: z.literal('latest'), config: latestWidgetConfigSchema }),
+  z.object({ type: z.literal('roulette'), config: rouletteWidgetConfigSchema }),
 ]);
 export type WidgetConfig = z.infer<typeof widgetConfigSchema>;
 
@@ -690,6 +1121,8 @@ export const WIDGET_CONFIG_SCHEMAS = {
   'top-donors': topDonorsWidgetConfigSchema,
   chat: chatWidgetConfigSchema,
   guests: guestsWidgetConfigSchema,
+  latest: latestWidgetConfigSchema,
+  roulette: rouletteWidgetConfigSchema,
 } as const satisfies Record<
   WidgetType,
   z.ZodType<Record<string, unknown>, Record<string, unknown>>
@@ -752,6 +1185,13 @@ export function applyPlanToConfig<T extends Record<string, unknown>>(
       result[key] = basicAnimation(value);
       continue;
     }
+    // Триггеры сценария — такой же полный вид оповещения, как сам сценарий.
+    if (key === 'triggers' && Array.isArray(value)) {
+      result[key] = value.map((trigger: unknown) =>
+        isRecord(trigger) ? applyPlanToConfig(trigger, features) : trigger,
+      );
+      continue;
+    }
     // Сценарии алертов: у каждого свои слоты, фон, шрифт и анимации.
     if (key === 'scenarios' && isRecord(value)) {
       result[key] = Object.fromEntries(
@@ -804,7 +1244,13 @@ function basicAnimation(animation: string): AlertAnimation {
  * виджетов бессмысленно, и дашборд не должен рисовать им блок управления.
  */
 export function hasWidgetState(type: WidgetType): boolean {
-  return type === 'goal' || type === 'timer' || type === 'top-donors';
+  return (
+    type === 'goal' ||
+    type === 'timer' ||
+    type === 'top-donors' ||
+    type === 'latest' ||
+    type === 'roulette'
+  );
 }
 
 export const widgetSchema = z
@@ -943,10 +1389,45 @@ export const topDonorsStateSchema = z.object({
 });
 export type TopDonorsState = z.infer<typeof topDonorsStateSchema>;
 
+/**
+ * Последнее событие выбранного типа. Без id и провайдера: в кадр идёт только
+ * то, что в нём показывается.
+ */
+export const latestEventSchema = alertEventSchema.pick({
+  type: true,
+  username: true,
+  message: true,
+  amount: true,
+  count: true,
+  createdAt: true,
+});
+export type LatestEvent = z.infer<typeof latestEventSchema>;
+
+export const latestStateSchema = z.object({
+  kind: z.literal('latest'),
+  /** null — таких событий ещё не было. */
+  event: latestEventSchema.nullable(),
+});
+export type LatestState = z.infer<typeof latestStateSchema>;
+
+/**
+ * История рулетки — для дашборда, новые первыми.
+ *
+ * Оверлей её не крутит: колесо двигает только сообщение о прокруте. Иначе
+ * переподключившаяся сцена прокрутила бы заново последний розыгрыш.
+ */
+export const rouletteStateSchema = z.object({
+  kind: z.literal('roulette'),
+  spins: z.array(rouletteSpinSchema).max(ROULETTE_HISTORY_LIMIT),
+});
+export type RouletteState = z.infer<typeof rouletteStateSchema>;
+
 export const widgetStateSchema = z.discriminatedUnion('kind', [
   goalStateSchema,
   timerStateSchema,
   topDonorsStateSchema,
+  latestStateSchema,
+  rouletteStateSchema,
 ]);
 export type WidgetState = z.infer<typeof widgetStateSchema>;
 
@@ -974,6 +1455,11 @@ export const widgetStateCommandSchema = z
         .min(1)
         .max(24 * 3600)
         .optional(),
+    }),
+    z.object({
+      kind: z.literal('roulette'),
+      /** `spin` — прокрут кнопкой, `clear` — стереть историю прокрутов. */
+      action: z.enum(['spin', 'clear']),
     }),
   ])
   // Проверка связи полей висит на объединении, а не на его ветке: ветка
@@ -1044,6 +1530,39 @@ export function renderTemplate(
     const value = vars[key as AlertTemplateVar];
     return value === undefined ? match : value;
   });
+}
+
+/**
+ * Голос донатера, который играет с этим оповещением. null — играть нечего.
+ *
+ * Отдельно от звука сценария, потому что они не складываются: голос и звук
+ * оповещения, включённые разом, дают кашу, в которой не разобрать ни того, ни
+ * другого. Голос старше — его прислал донатер, а звук сценария стример слышал
+ * уже тысячу раз.
+ */
+export function alertVoiceUrl(
+  config: Pick<AlertWidgetConfig, 'voice'>,
+  event: Pick<AlertEvent, 'audioUrl'>,
+): string | null {
+  return config.voice.enabled && event.audioUrl ? event.audioUrl : null;
+}
+
+/**
+ * Сколько оповещение держится на экране с голосовым донатом: не меньше
+ * длительности сценария, не дольше потолка голоса.
+ *
+ * Длину записи браузер узнаёт заранее, до показа: оповещение, которое сначала
+ * появилось на секунды сценария, а потом «передумало» и осталось, выглядит
+ * зависшим.
+ */
+export function alertVoiceDurationMs(
+  config: Pick<AlertWidgetConfig, 'voice'>,
+  scenarioDurationMs: number,
+  voiceSeconds: number,
+): number {
+  const tail = 500;
+  const voiceMs = Math.round(voiceSeconds * 1000) + tail;
+  return Math.min(Math.max(scenarioDurationMs, voiceMs), config.voice.maxSeconds * 1000);
 }
 
 /**

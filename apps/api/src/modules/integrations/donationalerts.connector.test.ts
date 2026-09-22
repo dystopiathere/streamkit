@@ -59,6 +59,47 @@ describe('донат DonationAlerts → событие', () => {
     ).toBe('');
   });
 
+  it('берёт запись голосового доната, и только по https', () => {
+    const voice = normalizeDonation(
+      {
+        id: 8,
+        message_type: 'audio',
+        audio_url: 'https://cdn.donationalerts.ru/voice/8.mp3',
+        amount: 1,
+        currency: 'RUB',
+      },
+      userId,
+    );
+    expect(voice.audioUrl).toBe('https://cdn.donationalerts.ru/voice/8.mp3');
+
+    // Ссылка по http или мусором не повод потерять донат: он покажется без голоса.
+    expect(
+      normalizeDonation(
+        {
+          id: 9,
+          message_type: 'audio',
+          audio_url: 'http://cdn/voice.mp3',
+          amount: 1,
+          currency: 'RUB',
+        },
+        userId,
+      ).audioUrl,
+    ).toBeNull();
+    // Текстовый донат записи не получает, даже если поле вдруг пришло.
+    expect(
+      normalizeDonation(
+        {
+          id: 10,
+          message: 'спасибо',
+          audio_url: 'https://cdn/voice.mp3',
+          amount: 1,
+          currency: 'RUB',
+        },
+        userId,
+      ).audioUrl,
+    ).toBeNull();
+  });
+
   it('делает externalId строкой — на нём держится дедупликация', () => {
     expect(normalizeDonation({ id: 42, amount: 1, currency: 'RUB' }, userId).externalId).toBe('42');
   });

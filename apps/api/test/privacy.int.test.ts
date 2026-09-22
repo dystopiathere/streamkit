@@ -207,6 +207,10 @@ describe('Приватность и удаление аккаунта (feature)'
 
   it('обезличивает профиль, но сохраняет историю событий', async () => {
     await request(server()).post('/api/events/test').set(auth()).expect(201);
+    // Голосовой донат: ссылка на запись — такие же данные донатера, как имя.
+    await harness.prisma.alertEvent.updateMany({
+      data: { audioUrl: 'https://cdn.donationalerts.ru/voice/1.mp3' },
+    });
     await deleteAccount();
 
     const user = await harness.prisma.user.findFirstOrThrow();
@@ -218,6 +222,7 @@ describe('Приватность и удаление аккаунта (feature)'
     expect(events).toHaveLength(1);
     expect(events[0]?.username).toBe('Аноним');
     expect(events[0]?.message).toBe('');
+    expect(events[0]?.audioUrl).toBeNull();
   });
 
   it('выгрузка данных не содержит ни хэшей, ни шифротекстов', async () => {

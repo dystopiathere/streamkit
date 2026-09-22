@@ -15,8 +15,9 @@ import { describe, expect, it } from 'vitest';
  * - исключения API (`new XxxException(...)`, `super(...)` у своих исключений)
  *   и константы, которые в них передаются;
  * - исключения клиента API в `app-kit` (`new ApiError(...)`);
- * - строки схем в contracts, кроме значений `.default(...)`: это данные
- *   виджета, а не сообщение.
+ * - строки схем в contracts, кроме значений `.default(...)` и констант
+ *   `DEFAULT_*` (подписи секторов рулетки по умолчанию): это данные виджета,
+ *   а не сообщение.
  *
  * Админка, её схемы и скрипты для консоли ВМ — только на русском и не входят.
  */
@@ -91,7 +92,8 @@ function schemaMessages(root: string): Set<string> {
     const code = readFileSync(file, 'utf8')
       .split('\n')
       .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
-      .join('\n');
+      .join('\n')
+      .replace(/const DEFAULT_[A-Z0-9_]+(?::[^=]+)?\s*=\s*\[[\s\S]*?\];/g, '');
     for (const match of code.matchAll(/(\.default\(\s*)?'((?:[^'\\\n]|\\.)*)'/g)) {
       const value = match[2] ?? '';
       if (!match[1] && CYRILLIC.test(value)) messages.add(value);

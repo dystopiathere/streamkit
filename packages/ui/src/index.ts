@@ -15,15 +15,19 @@ export {
 export { ChatBox, type ChatBoxProps } from './ChatBox';
 export { PlatformIcon } from './PlatformIcon';
 export { GoalBar, type GoalBarProps } from './GoalBar';
+export { LatestEventDisplay, type LatestEventDisplayProps } from './LatestEventDisplay';
 export {
   ParticipantLayout,
   type ParticipantLayoutProps,
   type ParticipantTile,
 } from './ParticipantLayout';
 export { isVideoUrl, Media } from './media';
+export { probeAudioSeconds } from './voice';
+export { RouletteWheel, type RouletteWheelProps } from './RouletteWheel';
 export { isPositioned, slotCss, WidgetBackgroundLayer, WidgetFrame } from './slots';
 export { canvasScale, WidgetStage } from './stage';
 export { textStyleToCss } from './text-style';
 export { TimerDisplay, type TimerDisplayProps } from './TimerDisplay';
 export { TopDonorsList, type TopDonorsListProps } from './TopDonorsList';
 export { useAlertQueue, type QueuedAlert } from './useAlertQueue';
+export { useRouletteQueue } from './useRouletteQueue';

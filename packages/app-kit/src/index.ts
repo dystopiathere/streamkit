@@ -42,6 +42,8 @@ export {
   DetailList,
   EmptyState,
   LoadMore,
+  Pagination,
+  pageWindow,
   StatusPill,
   type StatusTone,
 } from './data';

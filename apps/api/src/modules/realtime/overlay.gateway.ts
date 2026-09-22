@@ -219,6 +219,13 @@ export class OverlayGateway
           break;
         }
 
+        case 'roulette-spin': {
+          this.server.local
+            .to(widgetRoom(message.widgetId))
+            .emit(SOCKET_EVENTS.rouletteSpin, { widgetId: message.widgetId, spin: message.spin });
+          break;
+        }
+
         case 'widget-state': {
           this.server.local
             .to(widgetRoom(message.widgetId))

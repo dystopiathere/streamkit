@@ -78,6 +78,7 @@ export function toContractEvent(row: PrismaAlertEvent): AlertEvent {
     externalId: row.externalId,
     username: row.username,
     message: row.message,
+    audioUrl: row.audioUrl,
     amount:
       row.amountMinor !== null && row.currency !== null
         ? { amountMinor: row.amountMinor, currency: row.currency as never }

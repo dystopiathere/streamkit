@@ -6,6 +6,7 @@ import type {
   ChatMessage,
   OverlayRevokeReason,
   Platform,
+  RouletteSpin,
   WidgetConfig,
   WidgetState,
 } from '@streamkit/contracts';
@@ -23,6 +24,8 @@ export type BusMessage =
       isEnabled: boolean;
     } & WidgetConfig)
   | { kind: 'widget-state'; widgetId: string; state: WidgetState }
+  // Прокрут рулетки — событие, а не состояние: см. `rouletteSpinMessageSchema`.
+  | { kind: 'roulette-spin'; widgetId: string; spin: RouletteSpin }
   // Чат адресуется КАНАЛОМ, а не пользователем: комната доставки общая на
   // канал, и раскладывать сообщение по виджетам на каждой реплике не нужно.
   | { kind: 'chat'; message: ChatMessage }

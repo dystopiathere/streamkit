@@ -254,6 +254,13 @@ export class WidgetsService {
       return this.state.compute(widget);
     }
 
+    // Прокрут кнопкой — розыгрыш без доната: имени и суммы у него нет.
+    if (command.kind === 'roulette') {
+      if (command.action === 'clear') return this.state.clearRouletteHistory(widget);
+      await this.state.spinRoulette(widget, { source: 'manual', username: null, amount: null });
+      return this.state.compute(widget);
+    }
+
     return this.state.applyTimerAction(widget, command.action, command.seconds ?? 0);
   }
 
