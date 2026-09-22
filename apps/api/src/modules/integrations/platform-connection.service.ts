@@ -96,7 +96,7 @@ export class PlatformConnectionService {
     // которую мы всё равно не подключим, значит завести мёртвые учётные данные.
     // Повторное подключение той же площадки разрешено всегда: это единственный
     // способ починить протухший доступ.
-    await this.requirePlatformSlot(state.userId, platform);
+    const limit = await this.requirePlatformSlot(state.userId, platform);
 
     const provider = this.registry.require(platform);
     const tokens = await provider.exchangeCode(code);
@@ -117,7 +117,11 @@ export class PlatformConnectionService {
         login: identity.login,
         displayName: identity.displayName,
         avatarUrl: identity.avatarUrl,
-        isEnabled: true,
+        // Включение — только там, где площадок без ограничения. На тарифе с
+        // одной площадкой повторное подключение выключенной включало её рядом
+        // с активной, и лимит обходился переподключением; какая из площадок
+        // работает, там выбирает переключатель (`setEnabled`), а не вход.
+        ...(limit === null ? { isEnabled: true } : {}),
         // Повторное подключение — это и есть починка протухшего доступа.
         syncState: 'OK',
         syncError: null,
@@ -145,20 +149,23 @@ export class PlatformConnectionService {
    * Уже подключённая площадка место не занимает: повторное подключение — это
    * починка протухшего доступа, и запрещать её значило бы запереть стримера
    * без возможности вернуть свой же канал.
+   *
+   * @returns лимит площадок тарифа; null — без ограничения.
    */
-  private async requirePlatformSlot(userId: string, platform: Platform): Promise<void> {
+  private async requirePlatformSlot(userId: string, platform: Platform): Promise<number | null> {
     const { platforms: limit } = await this.billing.planFeatures(userId);
-    if (limit === null) return;
+    if (limit === null) return null;
 
     const connected = await this.prisma.channel.findMany({
       where: { userId },
       select: { platform: true },
     });
     const prisma = toPrismaPlatform(platform);
-    if (connected.some((channel) => channel.platform === prisma)) return;
+    if (connected.some((channel) => channel.platform === prisma)) return limit;
     if (connected.length >= limit) {
       throw new ForbiddenException('Тариф не позволяет подключить ещё одну площадку');
     }
+    return limit;
   }
 
   /**

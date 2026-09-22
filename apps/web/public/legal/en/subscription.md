@@ -1,6 +1,6 @@
 # Paid Plans Offer
 
-Version No. 4 of 22.09.2026
+Version No. 5 of 22.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/subscription?lang=ru); if the
@@ -96,10 +96,18 @@ made without such an email.
 and no earlier than three days after the email.
 
 5.4. If the charge fails, the Operator retries it no more than once a day, with
-no more than three attempts. During this time, access to private rooms is kept
-for up to three days after the end of the period. After the last failed attempt,
-or after a bank decline that makes a retry impossible, auto-renewal is turned
-off.
+no more than three attempts. During this time, the plan stays active for up to
+three days after the end of the period. After the last failed attempt, or after
+a bank decline that makes a retry impossible, auto-renewal is turned off.
+
+5.4.1. While the charge has not gone through, the Customer may pay for the next
+period with another payment method in the Plan section. The new method replaces
+the saved one, and further charges are made with it. The period starts when the
+payment is made; days after the end of the previous period are not counted
+towards it. While a charge to the previous method is being processed, paying
+with another method is unavailable, and while a payment with another method is
+in progress, the previous method is not charged: one period is never paid for
+twice.
 
 5.5. Auto-renewal can be turned off at any time with one button in the Plan
 section, or by withdrawing consent in the Privacy section. After it is turned

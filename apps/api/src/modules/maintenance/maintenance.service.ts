@@ -1,12 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { applyPlanToConfig, configSchemaFor, PLAN_FEATURES } from '@streamkit/contracts';
+import {
+  applyPlanToConfig,
+  configSchemaFor,
+  GRACE_DAYS,
+  PLAN_FEATURES,
+} from '@streamkit/contracts';
 import { Client } from 'pg';
 import { AuditService } from '../../common/audit/audit.service';
 import { type BusMessage, RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AppConfig } from '../../config/app-config.service';
 import { TokenService } from '../auth/token.service';
-import { effectivePlan } from '../billing/billing-periods';
+import { DAY_MS, effectivePlan } from '../billing/billing-periods';
 import { toContractWidgetType } from '../widgets/widget.mappers';
 
 /** Таблицы событий Umami 3 с колонкой created_at. Сессии — отдельно, см. ниже. */
@@ -23,6 +28,9 @@ const SITE_STATS_EVENT_TABLES = [
  * Регулярная уборка. Запускается в worker-процессе, а не в API: фоновая
  * нагрузка не должна конкурировать за пул соединений с живыми запросами.
  */
+/** Сколько ночей уборки может пропустить рассылка базового оформления. */
+const REFRESH_STYLING_SLACK_DAYS = 7;
+
 @Injectable()
 export class MaintenanceService {
   private readonly logger = new Logger(MaintenanceService.name);
@@ -280,6 +288,11 @@ export class MaintenanceService {
    *
    * Берутся только владельцы с ИСТЁКШЕЙ подпиской, а не все, у кого тарифа нет:
    * у остальных оверлеи и так получили базовый конфиг, и рассылать им нечего.
+   * И только истёкшей недавно: тариф кончается в конце периода или льготных
+   * дней, а дальше любая открытая сцена уже подключалась с базовым конфигом.
+   * Без нижней границы каждый, у кого «Про» кончился хоть год назад, получал бы
+   * рассылку каждую ночь — и перерисовку оверлея посреди эфира вместе с ней.
+   * Запас в неделю поверх льготных дней переживает несколько пропущенных ночей.
    *
    * @returns сколько виджетов переопубликовано.
    */
@@ -288,7 +301,12 @@ export class MaintenanceService {
 
     const users = await this.prisma.user.findMany({
       where: {
-        subscription: { currentPeriodEnd: { lt: now } },
+        subscription: {
+          currentPeriodEnd: {
+            lt: now,
+            gt: new Date(now.getTime() - (GRACE_DAYS + REFRESH_STYLING_SLACK_DAYS) * DAY_MS),
+          },
+        },
         widgets: { some: {} },
       },
       select: {

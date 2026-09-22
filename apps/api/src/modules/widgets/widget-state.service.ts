@@ -148,15 +148,20 @@ export class WidgetStateService {
     private readonly lock: RedisLock,
   ) {}
 
-  /** Снимок состояния для оверлея. null — у типа состояния нет (алерты). */
-  async compute(widget: PrismaWidget): Promise<WidgetState | null> {
+  /**
+   * Снимок состояния для оверлея. null — у типа состояния нет (алерты).
+   *
+   * `currency` — уже посчитанная основная валюта владельца: реакция на донат
+   * считает её один раз на все виджеты, а не по разу на каждый.
+   */
+  async compute(widget: PrismaWidget, currency?: Currency): Promise<WidgetState | null> {
     switch (widget.type) {
       case 'GOAL':
-        return this.goalState(widget);
+        return this.goalState(widget, currency);
       case 'TIMER':
-        return this.timerState(widget);
+        return this.timerState(widget, currency);
       case 'TOP_DONORS':
-        return this.topDonorsState(widget);
+        return this.topDonorsState(widget, currency);
       default:
         return null;
     }
@@ -212,26 +217,35 @@ export class WidgetStateService {
     const widgets = await this.prisma.widget.findMany({
       where: { userId, isEnabled: true, type: { in: ['GOAL', 'TIMER', 'TOP_DONORS'] } },
     });
+    if (widgets.length === 0) return;
 
+    // Основная валюта считается по всей истории донатов — один раз на событие,
+    // а не на каждый виджет: цель, таймер и топ одного стримера делили бы три
+    // одинаковых прохода по всем его событиям на каждый донат.
+    const currency = await this.primaryCurrency(userId);
     for (const widget of widgets) {
-      await this.reactTo(widget, event).catch((error: unknown) =>
+      await this.reactTo(widget, event, currency).catch((error: unknown) =>
         this.logger.warn({ err: error, widgetId: widget.id }, 'Не удалось разослать состояние'),
       );
     }
   }
 
-  private async reactTo(widget: PrismaWidget, event: AlertEvent): Promise<void> {
+  private async reactTo(
+    widget: PrismaWidget,
+    event: AlertEvent,
+    currency: Currency,
+  ): Promise<void> {
     // Таймеру донат не просто меняет картинку, а двигает момент окончания —
     // это запись, а не пересчёт. Остальным типам достаточно посчитать заново.
     if (widget.type === 'TIMER') {
-      await this.addDonationTime(widget, event);
+      await this.addDonationTime(widget, event, currency);
       return;
     }
-    await this.publish(widget);
+    await this.publish(widget, currency);
   }
 
-  async publish(widget: PrismaWidget): Promise<void> {
-    const state = await this.compute(widget);
+  async publish(widget: PrismaWidget, currency?: Currency): Promise<void> {
+    const state = await this.compute(widget, currency);
     if (!state) return;
     await this.bus.publish({ kind: 'widget-state', widgetId: widget.id, state });
   }
@@ -246,11 +260,11 @@ export class WidgetStateService {
     await this.publish(widget);
   }
 
-  private async goalState(widget: PrismaWidget): Promise<WidgetState> {
+  private async goalState(widget: PrismaWidget, known?: Currency): Promise<WidgetState> {
     const config = goalWidgetConfigSchema.parse(widget.config);
     const stored = storedGoalSchema.parse((await this.read(widget.id)) ?? {});
 
-    const currency = await this.primaryCurrency(widget.userId);
+    const currency = known ?? (await this.primaryCurrency(widget.userId));
     const raised = await this.raisedMinor(widget.userId, config, currency);
     return {
       kind: 'goal',
@@ -296,7 +310,7 @@ export class WidgetStateService {
   /* Таймер                                                             */
   /* ---------------------------------------------------------------- */
 
-  private async timerState(widget: PrismaWidget): Promise<WidgetState> {
+  private async timerState(widget: PrismaWidget, currency?: Currency): Promise<WidgetState> {
     const stored = storedTimerSchema.parse((await this.read(widget.id)) ?? {});
     const config = timerWidgetConfigSchema.parse(widget.config);
 
@@ -312,7 +326,7 @@ export class WidgetStateService {
       // Часы машины с OBS расходятся с серверными на что угодно. Без этой
       // отметки оверлей не может вычислить поправку и врёт ровно на разницу.
       serverNow: new Date().toISOString(),
-      currency: await this.primaryCurrency(widget.userId),
+      currency: currency ?? (await this.primaryCurrency(widget.userId)),
     };
   }
 
@@ -326,6 +340,7 @@ export class WidgetStateService {
     widget: PrismaWidget,
     action: TimerAction,
     seconds = 0,
+    currency?: Currency,
   ): Promise<WidgetState | null> {
     const config = timerWidgetConfigSchema.parse(widget.config);
 
@@ -350,7 +365,7 @@ export class WidgetStateService {
       });
       await this.write(widget.id, next);
 
-      const state = await this.compute(widget);
+      const state = await this.compute(widget, currency);
       if (state) await this.bus.publish({ kind: 'widget-state', widgetId: widget.id, state });
       return state;
     });
@@ -363,37 +378,40 @@ export class WidgetStateService {
    * основной валюте донатов (курс мы не считаем — см. цель) и не тестовым. Тестовый
    * алерт из дашборда не должен двигать реальный марафон.
    */
-  private async addDonationTime(widget: PrismaWidget, event: AlertEvent): Promise<void> {
+  private async addDonationTime(
+    widget: PrismaWidget,
+    event: AlertEvent,
+    currency: Currency,
+  ): Promise<void> {
     const config = timerWidgetConfigSchema.parse(widget.config);
 
     const eligible =
       !event.isTest &&
       event.amount !== null &&
       config.countTypes.includes(event.type) &&
-      // Валюта — последним условием: запрос к БД только для подходящих событий.
-      event.amount.currency === (await this.primaryCurrency(widget.userId));
+      event.amount.currency === currency;
     if (!eligible) {
       // Состояние всё равно рассылаем: конфиг мог поменяться, а оверлей мог
       // переподключиться и не знать текущего остатка.
-      await this.publish(widget);
+      await this.publish(widget, currency);
       return;
     }
 
     const seconds = donationSeconds(event.amount?.amountMinor ?? 0, config.secondsPerUnit);
     if (seconds <= 0) {
-      await this.publish(widget);
+      await this.publish(widget, currency);
       return;
     }
-    await this.applyTimerAction(widget, 'add', seconds);
+    await this.applyTimerAction(widget, 'add', seconds, currency);
   }
 
   /* ---------------------------------------------------------------- */
   /* Топ донатеров                                                      */
   /* ---------------------------------------------------------------- */
 
-  private async topDonorsState(widget: PrismaWidget): Promise<WidgetState> {
+  private async topDonorsState(widget: PrismaWidget, known?: Currency): Promise<WidgetState> {
     const config = topDonorsWidgetConfigSchema.parse(widget.config);
-    const currency = await this.primaryCurrency(widget.userId);
+    const currency = known ?? (await this.primaryCurrency(widget.userId));
     return {
       kind: 'top-donors',
       currency,

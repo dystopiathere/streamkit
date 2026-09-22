@@ -80,9 +80,21 @@ export function BillingPage(): React.JSX.Element {
       ) : null}
       {subscription.data?.billingConfigured ? (
         subscription.data.plan === 'free' ? (
-          <Checkout expired={subscription.data.status === 'expired'} />
+          <Checkout mode={subscription.data.status === 'expired' ? 'expired' : 'new'} />
         ) : (
-          <CurrentPlan subscription={subscription.data} />
+          <>
+            <CurrentPlan subscription={subscription.data} />
+            {/* Списание не прошло: другой картой платят тем же оформлением, и
+                она заменяет сохранённую. Сменить карту без оплаты периода
+                нельзя — это отдельный путь у ЮKassa. */}
+            {subscription.data.status === 'grace' ? (
+              <Checkout
+                mode="replaceCard"
+                initialPlan={subscription.data.nextPlan ?? subscription.data.plan}
+                initialPeriod={subscription.data.period ?? 'month'}
+              />
+            ) : null}
+          </>
         )
       ) : null}
 
@@ -234,11 +246,26 @@ function CurrentPlan({ subscription }: { subscription: SubscriptionView }): Reac
   );
 }
 
-function Checkout({ expired }: { expired: boolean }): React.JSX.Element {
+/**
+ * Оформление тарифа.
+ *
+ * `replaceCard` — оплата следующего периода другой картой в льготные дни,
+ * когда списание по сохранённой не прошло. Это то же оформление: сервер до
+ * оплаты подписку не меняет, а успешный платёж сохраняет новую карту.
+ */
+function Checkout({
+  mode,
+  initialPlan = 'pro',
+  initialPeriod = 'month',
+}: {
+  mode: 'new' | 'expired' | 'replaceCard';
+  initialPlan?: PaidPlan;
+  initialPeriod?: BillingPeriod;
+}): React.JSX.Element {
   const { t } = useTranslation();
   const checkout = useCheckout();
-  const [plan, setPlan] = useState<PaidPlan>('pro');
-  const [period, setPeriod] = useState<BillingPeriod>('month');
+  const [plan, setPlan] = useState<PaidPlan>(initialPlan);
+  const [period, setPeriod] = useState<BillingPeriod>(initialPeriod);
   const [accepted, setAccepted] = useState(false);
 
   const handlePay = async (): Promise<void> => {
@@ -255,9 +282,15 @@ function Checkout({ expired }: { expired: boolean }): React.JSX.Element {
   return (
     <Card className="space-y-5">
       <div className="space-y-1">
-        <h2 className="font-medium">{t('billing.choosePlan')}</h2>
+        <h2 className="font-medium">
+          {mode === 'replaceCard' ? t('billing.replaceCard.title') : t('billing.choosePlan')}
+        </h2>
         <p className="text-sm text-muted">
-          {expired ? t('billing.status.expired') : t('billing.freeIncludes')}
+          {mode === 'replaceCard'
+            ? t('billing.replaceCard.hint')
+            : mode === 'expired'
+              ? t('billing.status.expired')
+              : t('billing.freeIncludes')}
         </p>
       </div>
 

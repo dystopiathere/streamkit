@@ -65,6 +65,11 @@ interface Session {
   busy: boolean;
   /** Об отброшенных схемой сообщениях сказано в журнал — раз на поток, не на каждое. */
   rejectionLogged: boolean;
+  /**
+   * Последняя причина ожидания, о которой сказано в журнал. Поиск эфира идёт
+   * раз в две минуты, и писать каждый — шум; пишем, когда причина сменилась.
+   */
+  loggedReason: string | null;
 }
 
 /**
@@ -122,9 +127,12 @@ export class YouTubeChatSource implements ChatSource {
       authRetried: false,
       busy: false,
       rejectionLogged: false,
+      loggedReason: null,
     };
     this.sessions.set(channel, session);
     this.joined.add(channel);
+    // Id канала стримера, не зрителя: его и так видно в «Аналитике».
+    this.logger.log({ channel }, 'Чат YouTube нужен, ищем эфир');
     // Сразу, а не на следующем такте: стример открыл окно и ждёт чат.
     void this.advance(session);
   }
@@ -136,6 +144,7 @@ export class YouTubeChatSource implements ChatSource {
     this.joined.delete(channel);
     this.limiter.forget(channel);
     this.closeCall(session);
+    this.logger.log({ channel }, 'Чат YouTube больше не нужен');
   }
 
   async stop(): Promise<void> {
@@ -188,13 +197,23 @@ export class YouTubeChatSource implements ChatSource {
     if (!owner || owner.syncState === 'AUTH_EXPIRED') {
       // Канал отключили или доступ отозван: сверка уберёт его из состава, а
       // до тех пор окно покажет, что нужно переподключение.
-      this.wait(session, owner ? 'auth' : 'waiting', Date.now() + DISCOVERY_INTERVAL_MS);
+      this.wait(
+        session,
+        owner ? 'auth' : 'waiting',
+        Date.now() + DISCOVERY_INTERVAL_MS,
+        owner ? 'доступ к каналу отозван' : 'канал не подключён',
+      );
       return;
     }
     session.userId = owner.userId;
 
     if (!(await this.quota.reserve(YOUTUBE_CHAT_QUOTA, 1))) {
-      this.wait(session, 'quota', nextQuotaReset(new Date()).getTime());
+      this.wait(
+        session,
+        'quota',
+        nextQuotaReset(new Date()).getTime(),
+        'суточный бюджет квоты чата исчерпан',
+      );
       return;
     }
     const token = await this.tokens.getAccessToken(owner.userId, 'youtube');
@@ -209,12 +228,24 @@ export class YouTubeChatSource implements ChatSource {
     const liveChatId = response.items?.find((item) => item.snippet?.liveChatId)?.snippet
       ?.liveChatId;
     if (!liveChatId) {
-      this.wait(session, 'waiting', Date.now() + DISCOVERY_INTERVAL_MS);
+      // Два разных случая: эфира нет вовсе — или эфир идёт, но чата у него нет
+      // (выключен в YouTube Studio или трансляцию завёл сервис рестрима без
+      // чата). Метрики видят эфир и во втором случае, и без этой разницы
+      // «эфир есть, а чата нет» было не разобрать.
+      const broadcasts = response.items?.length ?? 0;
+      this.wait(
+        session,
+        'waiting',
+        Date.now() + DISCOVERY_INTERVAL_MS,
+        broadcasts === 0 ? 'идущего эфира нет' : 'у идущего эфира нет чата (liveChatId)',
+        { broadcasts },
+      );
       return;
     }
     session.liveChatId = liveChatId;
     session.pageToken = null;
     session.since = Date.now() - HISTORY_GRACE_MS;
+    session.loggedReason = null;
     // Каждый шаг пути чата — в журнал. Раньше источник молчал на всех штатных
     // ветках, и «чат не пришёл» на проде нельзя было разобрать: не нашли эфир,
     // не открыли поток или открыли, но сообщения отбросились.
@@ -224,11 +255,21 @@ export class YouTubeChatSource implements ChatSource {
   private async openStream(session: Session): Promise<void> {
     if (!session.userId || !session.liveChatId) return;
     if (!(await this.quota.reserve(YOUTUBE_CHAT_QUOTA, this.config.youtubeChatStreamCost))) {
-      this.wait(session, 'quota', nextQuotaReset(new Date()).getTime());
+      this.wait(
+        session,
+        'quota',
+        nextQuotaReset(new Date()).getTime(),
+        'суточный бюджет квоты чата исчерпан',
+      );
       return;
     }
 
     const token = await this.tokens.getAccessToken(session.userId, 'youtube');
+    // Пока резервировалась квота и обновлялся токен, канал могли отпустить (или
+    // отпустить и взять заново — уже другой сессией). Открытый сейчас поток
+    // никто бы не закрыл: `leave` и `stop` видят только живые сессии, и он жёг
+    // бы квоту до конца эфира, а при повторном входе чат шёл бы в двух копиях.
+    if (this.sessions.get(session.channel) !== session) return;
     const metadata = new grpc.Metadata();
     metadata.set('authorization', `Bearer ${token}`);
 
@@ -296,7 +337,12 @@ export class YouTubeChatSource implements ChatSource {
       // Лимит проекта: чат и метрики стоят до полуночи по тихоокеанскому времени.
       void this.quota.exhaust(YOUTUBE_CHAT_QUOTA).catch(() => undefined);
       session.liveChatId = null;
-      this.wait(session, 'quota', nextQuotaReset(new Date()).getTime());
+      this.wait(
+        session,
+        'quota',
+        nextQuotaReset(new Date()).getTime(),
+        'Google сообщил об исчерпании квоты',
+      );
       return;
     }
 
@@ -361,9 +407,23 @@ export class YouTubeChatSource implements ChatSource {
     this.wait(session, 'waiting', Date.now() + DISCOVERY_INTERVAL_MS);
   }
 
-  private wait(session: Session, state: ChatState, until: number): void {
+  /**
+   * Отложить следующую попытку. С причиной — ещё и сказать о ней в журнал, но
+   * только когда она сменилась: поиск повторяется каждые две минуты.
+   */
+  private wait(
+    session: Session,
+    state: ChatState,
+    until: number,
+    reason?: string,
+    details: Record<string, unknown> = {},
+  ): void {
     session.state = state;
     session.nextAttemptAt = until;
+    if (reason && reason !== session.loggedReason) {
+      session.loggedReason = reason;
+      this.logger.log({ channel: session.channel, ...details }, `Чат YouTube ждёт: ${reason}`);
+    }
   }
 
   private async handleFailure(session: Session, error: unknown): Promise<void> {
@@ -373,6 +433,7 @@ export class YouTubeChatSource implements ChatSource {
         session,
         'quota',
         error.isDaily ? nextQuotaReset(new Date()).getTime() : Date.now() + DISCOVERY_INTERVAL_MS,
+        error.isDaily ? 'Google сообщил об исчерпании квоты' : 'Google ограничил частоту запросов',
       );
       return;
     }

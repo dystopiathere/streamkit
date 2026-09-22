@@ -8,6 +8,7 @@ import { RedisLock } from '../../common/redis/lock.service';
 import { DonationAlertsApi } from './donationalerts.api';
 import type { OAuthTokens } from './platform-provider';
 import { PlatformRegistry } from './platform-registry.service';
+import { toPrismaPlatform } from './platform.mappers';
 
 /**
  * За сколько до истечения обновляем токен заранее.
@@ -161,13 +162,23 @@ export class PlatformTokenService {
    * снять в настройках аккаунта площадки.
    *
    * Донат-сервисам отзывать нечем: у DonationAlerts такого метода в API нет.
+   *
+   * Отзыв снимает разрешение приложения у аккаунта площадки ЦЕЛИКОМ, со всеми
+   * его токенами, а не один токен. Если тот же канал подключён ещё и к другому
+   * аккаунту у нас, отзыв выключил бы чат и метрики и у него — поэтому в этом
+   * случае удаляем только свои копии токенов.
    */
   async revoke(userId: string, platform: CredentialProvider): Promise<void> {
-    const provider =
-      platform === 'donationalerts' || platform === 'donatepay'
-        ? undefined
-        : this.registry.find(platform);
+    if (platform === 'donationalerts' || platform === 'donatepay') return;
+    const provider = this.registry.find(platform);
     if (!provider) return;
+    if (await this.sharedWithOtherAccount(userId, platform)) {
+      this.logger.log(
+        { userId, platform },
+        'Канал подключён и к другому аккаунту, доступ не отзываем',
+      );
+      return;
+    }
     const credential = await this.prisma.integrationCredential.findUnique({
       where: { userId_provider: { userId, provider: platform } },
     });
@@ -183,6 +194,23 @@ export class PlatformTokenService {
     } catch (error) {
       this.logger.warn({ err: error, userId, platform }, 'Площадка не отозвала доступ');
     }
+  }
+
+  /** Подключён ли канал этого пользователя на площадке ещё к какому-то аккаунту. */
+  private async sharedWithOtherAccount(userId: string, platform: Platform): Promise<boolean> {
+    const own = await this.prisma.channel.findUnique({
+      where: { userId_platform: { userId, platform: toPrismaPlatform(platform) } },
+      select: { externalId: true },
+    });
+    if (!own) return false;
+    const others = await this.prisma.channel.count({
+      where: {
+        platform: toPrismaPlatform(platform),
+        externalId: own.externalId,
+        userId: { not: userId },
+      },
+    });
+    return others > 0;
   }
 
   async remove(userId: string, platform: CredentialProvider): Promise<void> {

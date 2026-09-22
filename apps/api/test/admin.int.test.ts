@@ -730,7 +730,7 @@ describe('Админка (feature)', () => {
       const response = await request(server())
         .post(`/api/admin/users/${target.userId}/subscription/revoke-gift`)
         .set(auth(admin.adminToken))
-        .send({ days: 14, reason: 'выдано по ошибке' })
+        .send({ days: 30, reason: 'выдано по ошибке' })
         .expect(201);
 
       // Срок вернулся туда, где был до подарка: подписки у стримера не было,
@@ -740,6 +740,9 @@ describe('Админка (feature)', () => {
         where: { action: 'admin.subscription.gift_revoked' },
       });
       expect(log).toMatchObject({ userId: target.userId, actorId: admin.userId });
+      // Просили тридцать, подарено было четырнадцать — в журнале снятое, а не
+      // запрошенное.
+      expect(log.metadata).toMatchObject({ days: 14, requestedDays: 30 });
     });
 
     it('обнуление истории донатов из админки удаляет события и пишет причину', async () => {

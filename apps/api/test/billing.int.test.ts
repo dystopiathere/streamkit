@@ -14,13 +14,15 @@ import {
   type RoomParticipant,
 } from '@streamkit/contracts';
 import request from 'supertest';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PlatformAuthError } from '../src/common/http/platform-errors';
 import { MAILER, type MailMessage, type Mailer } from '../src/common/mail/mailer';
 import { BillingService } from '../src/modules/billing/billing.service';
 import { MaintenanceModule } from '../src/modules/maintenance/maintenance.module';
 import { MaintenanceService } from '../src/modules/maintenance/maintenance.service';
 import { OAuthStateService } from '../src/modules/integrations/oauth-state.service';
+import type { PlatformProvider } from '../src/modules/integrations/platform-provider';
+import { PlatformRegistry } from '../src/modules/integrations/platform-registry.service';
 import {
   type ChargeSavedRequest,
   type CreatePaymentRequest,
@@ -574,6 +576,14 @@ describe('Подписка на платформу (feature)', () => {
     // а цена — одно сообщение шины в сутки на виджет.
     expect(await maintenance.refreshStyling()).toBe(1);
 
+    // Кончившийся давно — тоже: его сцены уже подключались с базовым конфигом,
+    // и ночная рассылка лишь перерисовывала бы их посреди эфира.
+    await harness.prisma.subscription.update({
+      where: { userId: owner.userId },
+      data: { currentPeriodEnd: new Date(Date.now() - 60 * DAY_MS) },
+    });
+    expect(await maintenance.refreshStyling()).toBe(0);
+
     // У оплаченного тарифа рассылать нечего.
     await harness.prisma.subscription.update({
       where: { userId: owner.userId },
@@ -677,6 +687,40 @@ describe('Подписка на платформу (feature)', () => {
       { id: youtube.id, isEnabled: false },
     ]);
 
+    // Повторное подключение выключенной площадки чинит доступ, но не включает
+    // её рядом с активной: иначе лимит обходился бы переподключением.
+    const registry = harness.app.get(PlatformRegistry);
+    const reconnect = vi.spyOn(registry, 'require').mockReturnValue({
+      exchangeCode: async () => ({
+        accessToken: 'yt-access',
+        refreshToken: 'yt-refresh',
+        scopes: [],
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      }),
+      fetchIdentity: async () => ({
+        externalId: 'UC' + 'y'.repeat(22),
+        login: '@streamer',
+        displayName: 'Стример на YouTube',
+        avatarUrl: null,
+      }),
+    } as unknown as PlatformProvider);
+    try {
+      const again = await states.issue(owner.userId, 'youtube');
+      const back = await request(server())
+        .get(`/api/integrations/youtube/callback?code=code&state=${again}`)
+        .set('Cookie', `sk_oauth_state=${again}`)
+        .expect(302);
+      expect(back.headers.location).not.toContain('plan-limit');
+    } finally {
+      reconnect.mockRestore();
+    }
+    expect(
+      await harness.prisma.channel.findUniqueOrThrow({
+        where: { id: youtube.id },
+        select: { isEnabled: true },
+      }),
+    ).toEqual({ isEnabled: false });
+
     // Стример выбирает, какая из двух работает: включение одной выключает другую.
     await request(server())
       .patch(`/api/channels/${youtube.id}`)
@@ -779,6 +823,117 @@ describe('Подписка на платформу (feature)', () => {
       .set(auth(owner.token))
       .expect(200);
     expect(view.body).toMatchObject({ status: 'grace', roomsAccess: true });
+  });
+
+  /** Период кончился вчера, списание по сохранённой карте не прошло и ждёт повтора. */
+  async function inGrace(): Promise<{ token: string; userId: string }> {
+    const owner = await streamer();
+    await subscribed(owner.token);
+    const end = new Date(Date.now() - DAY_MS);
+    await harness.prisma.subscription.update({
+      where: { userId: owner.userId },
+      data: {
+        currentPeriodEnd: end,
+        renewalFailures: 1,
+        // Повтор уже положен: письмо ушло, пауза после отказа прошла.
+        nextRenewalAttemptAt: new Date(Date.now() - 60 * 1000),
+        renewalNoticeFor: end,
+        renewalNoticeSentAt: new Date(Date.now() - 5 * DAY_MS),
+      },
+    });
+    return owner;
+  }
+
+  it('в льготные дни можно оплатить другой картой — она заменяет сохранённую', async () => {
+    const owner = await inGrace();
+
+    const { payment } = await checkout(owner.token, 'year', 'multistream');
+
+    // До оплаты подписка не меняется: тариф льготных дней действует, и выбор в
+    // неоплаченной форме не должен ни открывать, ни закрывать доступ.
+    const before = await harness.prisma.subscription.findUniqueOrThrow({
+      where: { userId: owner.userId },
+    });
+    expect(before).toMatchObject({
+      plan: 'PRO',
+      period: 'MONTH',
+      renewalAmountMinor: PLAN_PRICES.pro.month.amountMinor,
+    });
+    // Пока стример на странице ЮKassa, повтор по старой карте не списывает:
+    // иначе период был бы оплачен дважды.
+    await billing.renewDue();
+    expect(gateway.charged).toHaveLength(0);
+
+    gateway.pay(payment.providerPaymentId!, {
+      paymentMethod: { id: 'pm-new-1111', saved: true, title: 'Карта *1111' },
+    });
+    await notify(payment.providerPaymentId!).expect(200);
+
+    const after = await harness.prisma.subscription.findUniqueOrThrow({
+      where: { userId: owner.userId },
+    });
+    expect(after).toMatchObject({
+      plan: 'MULTISTREAM',
+      nextPlan: null,
+      period: 'YEAR',
+      renewalAmountMinor: PLAN_PRICES.multistream.year.amountMinor,
+      paymentMethodTitle: 'Карта *1111',
+      autoRenew: true,
+      renewalFailures: 0,
+      nextRenewalAttemptAt: null,
+    });
+    // Период — с момента оплаты: льготные дни в новый период не засчитываются.
+    expect(after.currentPeriodEnd!.getTime()).toBeGreaterThan(Date.now() + 360 * DAY_MS);
+
+    // Следующие продления — новой картой.
+    await harness.prisma.subscription.update({
+      where: { userId: owner.userId },
+      data: {
+        currentPeriodEnd: new Date(Date.now() + 12 * 60 * 60 * 1000),
+        renewalNoticeFor: new Date(Date.now() + 12 * 60 * 60 * 1000),
+        renewalNoticeSentAt: new Date(Date.now() - 4 * DAY_MS),
+      },
+    });
+    await billing.renewDue();
+    expect(gateway.charged.map((charge) => charge.paymentMethodId)).toEqual(['pm-new-1111']);
+  });
+
+  it('оплата другой картой не начинается, пока идёт списание по старой', async () => {
+    const owner = await inGrace();
+    const subscription = await harness.prisma.subscription.findUniqueOrThrow({
+      where: { userId: owner.userId },
+    });
+    await harness.prisma.payment.create({
+      data: {
+        userId: owner.userId,
+        subscriptionId: subscription.id,
+        kind: 'RENEWAL',
+        plan: subscription.plan,
+        period: subscription.period,
+        amountMinor: subscription.renewalAmountMinor,
+        currency: subscription.renewalCurrency,
+        renewalFor: subscription.currentPeriodEnd,
+        attempt: 2,
+      },
+    });
+
+    const response = await request(server())
+      .post('/api/billing/checkout')
+      .set(auth(owner.token))
+      .send({ plan: 'pro', period: 'month', acceptOffer: true })
+      .expect(409);
+    expect(response.body.message).toContain('ещё обрабатывается');
+    expect(gateway.created).toHaveLength(1);
+  });
+
+  it('действующей подписке вторая оплата не нужна — 409', async () => {
+    const owner = await streamer();
+    await subscribed(owner.token);
+    await request(server())
+      .post('/api/billing/checkout')
+      .set(auth(owner.token))
+      .send({ plan: 'pro', period: 'month', acceptOffer: true })
+      .expect(409);
   });
 
   /* ---------------------------------------------------------------- */
@@ -1127,6 +1282,61 @@ describe('Подписка на платформу (feature)', () => {
         where: { userId: owner.userId, action: 'billing.payment_method.removed' },
       }),
     ).toBe(1);
+  });
+
+  it('продление, подтверждённое после отвязки, не возвращает отвязанную карту', async () => {
+    // Продление списано и ждёт подтверждения, стример в это время отвязал
+    // карту. ЮKassa подтверждает платёж с `saved: true` — это её же
+    // сохранённый способ, — и запись его заново вернула бы карту, а с ней и
+    // возможность включить автопродление без новой оплаты.
+    const owner = await streamer();
+    await subscribed(owner.token);
+    const subscription = await harness.prisma.subscription.findUniqueOrThrow({
+      where: { userId: owner.userId },
+    });
+    const renewal = await harness.prisma.payment.create({
+      data: {
+        userId: owner.userId,
+        subscriptionId: subscription.id,
+        kind: 'RENEWAL',
+        plan: subscription.plan,
+        period: subscription.period,
+        amountMinor: subscription.renewalAmountMinor,
+        currency: subscription.renewalCurrency,
+        renewalFor: subscription.currentPeriodEnd,
+        attempt: 1,
+        providerPaymentId: 'yk-renewal-in-flight',
+      },
+    });
+    gateway.payments.set('yk-renewal-in-flight', {
+      id: 'yk-renewal-in-flight',
+      status: 'succeeded',
+      amountMinor: renewal.amountMinor,
+      currency: renewal.currency,
+      paymentId: renewal.id,
+      paymentMethod: { id: 'pm-saved', saved: true, title: 'Карта *4444' },
+      cancellationReason: null,
+      confirmationUrl: null,
+    });
+
+    await request(server())
+      .delete('/api/billing/payment-method')
+      .set(auth(owner.token))
+      .expect(200);
+    expect(await billing.handleNotification('yk-renewal-in-flight')).toBe('processed');
+
+    const row = await harness.prisma.subscription.findUniqueOrThrow({
+      where: { userId: owner.userId },
+    });
+    // Оплаченный период продлён — деньги списаны, — а карта осталась отвязанной.
+    expect(row.currentPeriodEnd!.getTime()).toBeGreaterThan(
+      subscription.currentPeriodEnd!.getTime(),
+    );
+    expect(row).toMatchObject({
+      paymentMethodEncrypted: null,
+      paymentMethodTitle: null,
+      autoRenew: false,
+    });
   });
 
   it('отвязка без подписки — 404', async () => {

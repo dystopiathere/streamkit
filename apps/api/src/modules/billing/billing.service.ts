@@ -122,6 +122,7 @@ export class BillingService {
   async subscription(userId: string, now = new Date()): Promise<SubscriptionView> {
     const row = await this.prisma.subscription.findUnique({ where: { userId } });
     const status = subscriptionStatus(row, now);
+    const features = await this.planFeatures(userId, now);
     return {
       status,
       plan: effectivePlan(row, now),
@@ -129,7 +130,7 @@ export class BillingService {
       // у истёкшей подписки «продлится Про» — обещание, которого нет. Пустой
       // `nextPlan` значит «сменить не просили», то есть продлится текущий.
       nextPlan: row && status !== 'expired' ? toContractPlan(row.nextPlan ?? row.plan) : null,
-      features: await this.planFeatures(userId, now),
+      features,
       period: row ? toContractPeriod(row.period) : null,
       currentPeriodEnd: row?.currentPeriodEnd?.toISOString() ?? null,
       autoRenew: row?.autoRenew ?? false,
@@ -138,7 +139,7 @@ export class BillingService {
         : null,
       paymentMethodTitle: row?.paymentMethodTitle ?? null,
       giftedDays: row?.giftedDays ?? 0,
-      roomsAccess: await this.roomsAccess(userId, now),
+      roomsAccess: features.rooms,
       billingConfigured: this.configured,
     };
   }
@@ -234,12 +235,57 @@ export class BillingService {
     // оплатой: так у подписки один источник продлений и один способ оплаты.
     // Смена тарифа действующей подписки — тоже не оплата, а выбор тарифа
     // следующего периода (`update`): доплат и пересчёта остатка у нас нет.
-    if (effectivePlan(existing, now) !== 'free') {
+    //
+    // Исключение — льготные дни: списание по сохранённой карте не прошло, и
+    // оплата другой картой — единственный способ её заменить, не теряя доступ.
+    // Период к этому моменту уже кончился, поэтому это не доплата поверх
+    // оплаченного, а та же оплата следующего периода, что и продление.
+    const grace = subscriptionStatus(existing, now) === 'grace';
+    if (effectivePlan(existing, now) !== 'free' && !grace) {
       throw new ConflictException('Подписка уже действует');
     }
 
     const price = PLAN_PRICES[plan][period];
     const payment = await this.prisma.$transaction(async (tx) => {
+      if (grace && existing) {
+        // Под блокировкой строки подписки — той же, что берёт продление: иначе
+        // повтор списания по старой карте и эта оплата прошли бы оба, и
+        // стример заплатил бы за один период дважды.
+        await tx.$queryRaw`SELECT id FROM "Subscription" WHERE id = ${existing.id}::uuid FOR UPDATE`;
+        const renewing = await tx.payment.count({
+          where: { subscriptionId: existing.id, kind: 'RENEWAL', status: 'PENDING' },
+        });
+        if (renewing > 0) {
+          throw new ConflictException(
+            'Списание по сохранённой карте ещё обрабатывается — попробуйте через несколько минут',
+          );
+        }
+        await tx.consent.create({
+          data: {
+            userId,
+            document: 'SUBSCRIPTION_OFFER',
+            documentVersion: LEGAL_DOCUMENTS.SUBSCRIPTION_OFFER.version,
+            ipHash: context.ipHash ?? null,
+            userAgent: context.userAgent ?? null,
+          },
+        });
+        // Подписка до оплаты НЕ меняется: в льготные дни её тариф действует, и
+        // выбор «Про» в неоплаченной форме открыл бы «Про» бесплатно, а новая
+        // цена ушла бы в повтор списания по старой карте без письма о ней.
+        // Тариф, период и цену продления применяет успешный платёж.
+        return tx.payment.create({
+          data: {
+            userId,
+            subscriptionId: existing.id,
+            kind: 'INITIAL',
+            plan: toPrismaPlan(plan),
+            period: toPrismaPeriod(period),
+            amountMinor: price.amountMinor,
+            currency: price.currency,
+          },
+        });
+      }
+
       // Тариф и цена продления фиксируются здесь же: по ним будут списываться
       // следующие периоды, пока стример сам их не сменит.
       const renewal = {
@@ -685,7 +731,7 @@ export class BillingService {
     context: AuditContext = {},
     now = new Date(),
   ): Promise<SubscriptionView> {
-    await this.prisma.$transaction(async (tx) => {
+    const revoked = await this.prisma.$transaction(async (tx) => {
       const [locked] = await tx.$queryRaw<
         Array<{ id: string; currentPeriodEnd: Date | null; giftedDays: number }>
       >`
@@ -713,11 +759,14 @@ export class BillingService {
           renewalNoticeSentAt: null,
         },
       });
+      return revoked;
     });
 
+    // В журнал — сколько снято на самом деле: запрос мог быть больше
+    // подаренного, и «снято 30 дней» при снятых 10 вводило бы в заблуждение.
     await this.audit.record('admin.subscription.gift_revoked', userId, {
       ...context,
-      metadata: { ...context.metadata, days },
+      metadata: { ...context.metadata, days: revoked, requestedDays: days },
     });
     return this.subscription(userId, now);
   }
@@ -873,29 +922,37 @@ export class BillingService {
   }
 
   private async renew(subscription: Subscription): Promise<void> {
-    const pending = await this.prisma.payment.findFirst({
-      where: { subscriptionId: subscription.id, kind: 'RENEWAL', status: 'PENDING' },
-    });
-    // Незакрытое продление уже есть — его доведёт уведомление или дочистка.
-    if (pending) return;
-
-    let row: Payment;
+    let row: Payment | null;
     try {
-      row = await this.prisma.payment.create({
-        data: {
-          userId: subscription.userId,
-          subscriptionId: subscription.id,
-          kind: 'RENEWAL',
-          // Платим за СЛЕДУЮЩИЙ период, значит и за выбранный на него тариф:
-          // смена применяется этим списанием. Письмо считало сумму по нему же.
-          plan: subscription.nextPlan ?? subscription.plan,
-          period: subscription.period,
-          // Цена подписки, а не текущий прайс: её и называло письмо о списании.
-          amountMinor: subscription.renewalAmountMinor,
-          currency: subscription.renewalCurrency,
-          renewalFor: subscription.currentPeriodEnd,
-          attempt: subscription.renewalFailures + 1,
-        },
+      row = await this.prisma.$transaction(async (tx) => {
+        // Та же блокировка, что у оплаты другой картой в льготные дни: между
+        // проверкой «незакрытых платежей нет» и созданием списания не должна
+        // успеть появиться оплата того же периода.
+        await tx.$queryRaw`SELECT id FROM "Subscription" WHERE id = ${subscription.id}::uuid FOR UPDATE`;
+        // Незакрытое продление уже есть — его доведёт уведомление или дочистка.
+        // Незакрытая оплата — стример платит другой картой прямо сейчас: списать
+        // старой значило бы взять деньги за период дважды. Не заплатит — ЮKassa
+        // отменит платёж, и повтор пойдёт по расписанию.
+        const pending = await tx.payment.count({
+          where: { subscriptionId: subscription.id, status: 'PENDING' },
+        });
+        if (pending > 0) return null;
+        return tx.payment.create({
+          data: {
+            userId: subscription.userId,
+            subscriptionId: subscription.id,
+            kind: 'RENEWAL',
+            // Платим за СЛЕДУЮЩИЙ период, значит и за выбранный на него тариф:
+            // смена применяется этим списанием. Письмо считало сумму по нему же.
+            plan: subscription.nextPlan ?? subscription.plan,
+            period: subscription.period,
+            // Цена подписки, а не текущий прайс: её и называло письмо о списании.
+            amountMinor: subscription.renewalAmountMinor,
+            currency: subscription.renewalCurrency,
+            renewalFor: subscription.currentPeriodEnd,
+            attempt: subscription.renewalFailures + 1,
+          },
+        });
       });
     } catch (error) {
       // Ту же попытку уже создала другая реплика воркера: блокировка истекла,
@@ -903,7 +960,7 @@ export class BillingService {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return;
       throw error;
     }
-    await this.chargeRenewal(row);
+    if (row) await this.chargeRenewal(row);
   }
 
   /**
@@ -1050,7 +1107,22 @@ export class BillingService {
           // совпасть с деньгами, даже если выбор успели сменить после списания.
           plan: row.plan,
           nextPlan: null,
-          ...(method?.saved
+          // Первая оплата задаёт и то, что будет продлеваться: тариф, период и
+          // цену. Обычно их записало оформление, но оплата другой картой в
+          // льготные дни подписку до денег не трогает — применяется здесь.
+          ...(row.kind === 'INITIAL'
+            ? {
+                period: row.period,
+                renewalAmountMinor: row.amountMinor,
+                renewalCurrency: row.currency,
+              }
+            : {}),
+          // Способ оплаты запоминается только первым платежом. Продление
+          // списано уже сохранённым способом, и ЮKassa возвращает его с
+          // `saved: true` — записывать его заново значило бы вернуть карту,
+          // которую стример отвязал, пока продление ждало подтверждения
+          // (оферта, 5.6), а с ней и возможность снова включить автопродление.
+          ...(row.kind === 'INITIAL' && method?.saved
             ? {
                 paymentMethodEncrypted: this.crypto.encrypt(method.id),
                 paymentMethodTitle: method.title.slice(0, 120),

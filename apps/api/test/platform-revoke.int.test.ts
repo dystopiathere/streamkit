@@ -138,6 +138,34 @@ describe('Отзыв доступа к площадке (feature)', () => {
     expect(await harness.prisma.integrationCredential.count()).toBe(0);
   });
 
+  it('канал, подключённый и к другому аккаунту, при отвязке не отзывается', async () => {
+    // Отзыв снимает разрешение у аккаунта Google целиком: второй аккаунт у нас,
+    // подключивший тот же канал, остался бы без чата и метрик.
+    const channelId = await connectYouTube();
+    const other = await request(harness.app.getHttpServer())
+      .post('/api/auth/register')
+      .send(registrationPayload())
+      .expect(201);
+    await harness.prisma.channel.create({
+      data: {
+        userId: other.body.user.id as string,
+        platform: 'YOUTUBE',
+        externalId: 'UC' + 'r'.repeat(22),
+        login: '@streamer',
+        displayName: 'Стример',
+      },
+    });
+
+    await request(harness.app.getHttpServer())
+      .delete(`/api/channels/${channelId}`)
+      .set({ Authorization: `Bearer ${accessToken}` })
+      .expect(204);
+
+    expect(google.revoked).toEqual([]);
+    // Свои копии токенов всё равно удалены.
+    expect(await harness.prisma.integrationCredential.count({ where: { userId } })).toBe(0);
+  });
+
   it('удаление аккаунта тоже отзывает доступ к YouTube', async () => {
     await connectYouTube();
 

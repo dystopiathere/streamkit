@@ -665,7 +665,7 @@
     "status": {
       "renews": "Active until {{date}}, then renews automatically.",
       "endsOn": "Active until {{date}}. Auto-renewal is off.",
-      "grace": "The period ended on {{date}}, but the renewal charge failed. Rooms stay open for a few more days while we retry.",
+      "grace": "The period ended on {{date}}, but the renewal charge failed. Your plan stays active for a few more days while we retry.",
       "expired": "Your subscription has ended. Subscribe again to get your rooms back."
     },
     "paymentMethod": "Payment method: {{title}}",
@@ -711,7 +711,11 @@
     "removeMethod": "Remove",
     "removeMethodNamed": "Remove payment method {{title}}",
     "removeMethodConfirm": "Remove the payment method? Auto-renewal will be turned off, and access stays until {{date}}. Turning auto-renewal back on will require a new payment.",
-    "removeMethodDone": "Payment method removed, auto-renewal turned off"
+    "removeMethodDone": "Payment method removed, auto-renewal turned off",
+    "replaceCard": {
+      "title": "Pay with another card",
+      "hint": "Pay for the next period with another card — it replaces the saved one, and renewals will use it. The new period starts when you pay."
+    }
   },
   "public": {
     "nav": {
