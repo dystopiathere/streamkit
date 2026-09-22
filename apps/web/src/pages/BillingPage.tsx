@@ -415,7 +415,7 @@ function PaymentHistory(): React.JSX.Element | null {
   return (
     <Card className="space-y-3">
       <h2 className="font-medium">{t('billing.history.title')}</h2>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto overflow-y-hidden">
         <table className="w-full text-sm">
           <caption className="sr-only">{t('billing.history.title')}</caption>
           <thead className="text-left text-xs text-muted">

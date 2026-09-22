@@ -145,7 +145,7 @@ function ScrollableTable({ children }: { children?: React.ReactNode }): React.JS
     // Прокручиваемая область должна быть достижима с клавиатуры: иначе правый
     // край таблицы на телефоне не прочитать без мыши и пальца.
     <div
-      className="my-4 overflow-x-auto rounded-lg border border-border"
+      className="my-4 overflow-x-auto overflow-y-hidden rounded-lg border border-border"
       tabIndex={0}
       role="region"
       aria-label={t('legal.table')}

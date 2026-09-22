@@ -335,11 +335,15 @@ export function WidgetConfigForm({
       : form.formState.errors
   ) as Record<string, unknown> | undefined;
 
+  // Взялись за вид — сразу к нему: список триггеров вид не показывает.
   const editTrigger = (id: string | null): void => {
     onAlertTriggerChange?.(id);
-    // Взялись за вид — сразу к нему: список триггеров вид не показывает.
-    if (id) onSectionChange('show');
+    onSectionChange('show');
   };
+
+  // Из вида триггера — обратно к списку, откуда в него зашли. Только переход:
+  // выбранный триггер остаётся выбранным, и список отмечает его словами. Сброс
+  // выбора «заодно» был бы действием, которого кнопка не называет.
 
   return (
     <div className="overflow-hidden rounded-card border border-border bg-surface">
@@ -349,7 +353,7 @@ export function WidgetConfigForm({
 
       {/* Чей вид правят разделы — словом над вкладками: одинаковые поля у
           сценария и триггера иначе неотличимы, и правка ушла бы не туда. */}
-      {trigger ? (
+      {trigger && current.id !== 'triggers' ? (
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface-hover/50 px-5 py-3 sm:px-6">
           <p className="text-sm">
             <span className="text-muted">{t('widgets.triggers.editingBanner')} </span>
@@ -357,8 +361,8 @@ export function WidgetConfigForm({
               {triggerIndex + 1}. {trigger.name.trim() || conditionSummary(t, trigger.condition)}
             </span>
           </p>
-          <Button variant="ghost" onClick={() => onAlertTriggerChange?.(null)}>
-            {t('widgets.triggers.backToBase')}
+          <Button variant="ghost" onClick={() => onSectionChange('triggers')}>
+            {t('widgets.triggers.backToList')}
           </Button>
         </div>
       ) : null}
@@ -527,7 +531,10 @@ function SectionTabs({
     <div
       role="tablist"
       aria-label={t('widgets.tab.label')}
-      className="flex gap-1 overflow-x-auto border-b border-border px-3 sm:px-4"
+      // Прокрутка только вбок: `overflow-x` в одиночку делает вторую ось
+      // `auto`, и появившаяся снизу полоса тут же отнимала высоту у ленты —
+      // рядом вырастала вертикальная полоса, которой нечего прокручивать.
+      className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-border px-3 sm:px-4"
     >
       {sections.map((item) => {
         const active = item.id === current;

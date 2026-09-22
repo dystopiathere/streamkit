@@ -406,11 +406,10 @@
       "currency": "Currency",
       "shadowed": "A {{amount}} donation is caught by the trigger above — “{{name}}”. Move this one up or narrow its condition.",
       "edit": "Edit look",
-      "editing": "Editing",
       "test": "Test with {{amount}}",
       "testNamed": "Test trigger “{{name}}” in OBS",
       "fallback": "Base look",
-      "fallbackHint": "When no trigger matches.",
+      "fallbackHint": "This is how a donation looks when no trigger matches. “Edit look” opens its sections — Display, Text, Image and sound, Layout, and Font and background.",
       "add": "Add trigger",
       "count": "{{used}} of {{max}}",
       "summary": {
@@ -422,8 +421,9 @@
         "between": "{{amount}} to {{to}}"
       },
       "editingBanner": "Trigger look:",
-      "backToBase": "Back to base look",
-      "previewMark": "trigger"
+      "previewMark": "trigger",
+      "current": "being edited",
+      "backToList": "Back to triggers"
     },
     "roulette": {
       "newSector": "Sector {{number}}",

@@ -198,14 +198,11 @@ export function AlertTriggers({
                 </p>
               ) : null}
 
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="secondary"
-                  aria-pressed={active}
-                  onClick={() => onEdit(active ? null : trigger.id)}
-                >
-                  {active ? t('widgets.triggers.editing') : t('widgets.triggers.edit')}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="secondary" onClick={() => onEdit(trigger.id)}>
+                  {t('widgets.triggers.edit')}
                 </Button>
+                {active ? <CurrentMark /> : null}
                 <Button
                   variant="ghost"
                   onClick={() => void test(trigger)}
@@ -229,11 +226,14 @@ export function AlertTriggers({
         >
           <div className="min-w-0">
             <p className="text-sm font-medium">{t('widgets.triggers.fallback')}</p>
-            <p className="text-xs text-muted">{t('widgets.triggers.fallbackHint')}</p>
+            <p className="max-w-prose text-xs text-muted">{t('widgets.triggers.fallbackHint')}</p>
           </div>
-          <Button variant="secondary" aria-pressed={editing === null} onClick={() => onEdit(null)}>
-            {editing === null ? t('widgets.triggers.editing') : t('widgets.triggers.edit')}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" onClick={() => onEdit(null)}>
+              {t('widgets.triggers.edit')}
+            </Button>
+            {editing === null ? <CurrentMark /> : null}
+          </div>
         </li>
       </ol>
 
@@ -247,6 +247,22 @@ export function AlertTriggers({
         </span>
       </div>
     </div>
+  );
+}
+
+/**
+ * Отметка «правится сейчас» — состояние, а не кнопка.
+ *
+ * Раньше это была подпись на самой кнопке, и кнопка называла не действие, а
+ * положение дел: «Настраивается» нечего нажимать. Теперь кнопка всегда
+ * открывает вид, а отметка говорит, чей вид открыт.
+ */
+function CurrentMark(): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <span className="rounded-full border border-border-strong px-2 py-0.5 text-xs text-muted">
+      {t('widgets.triggers.current')}
+    </span>
   );
 }
 
