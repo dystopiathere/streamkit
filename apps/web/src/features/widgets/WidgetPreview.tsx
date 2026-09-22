@@ -26,6 +26,9 @@ import {
   TimerDisplay,
   TopDonorsList,
 } from '@streamkit/ui';
+import { type CSSProperties, type ReactNode, useLayoutEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { cn } from '@streamkit/app-kit';
 import { usePlanFeatures } from '@/features/billing/PlanPaywall';
 import { currentLanguage } from '@/lib/locale';
 
@@ -53,12 +56,155 @@ export function WidgetPreview({
   alertScenario?: AlertEventType;
 }): React.JSX.Element {
   return (
-    // Клетчатый фон вместо сплошного: у оверлея прозрачный фон, и на
-    // однотонной подложке невозможно оценить читаемость обводки.
-    <div className="checkerboard flex h-64 items-center justify-center overflow-hidden rounded-lg">
+    <FitToFrame>
       <Surface type={type} config={config} state={state} alertScenario={alertScenario} />
+    </FitToFrame>
+  );
+}
+
+/**
+ * Кадр предпросмотра: 16:9, как сцена OBS, и содержимое в нём целиком.
+ *
+ * Если виджет в кадр не помещается, предпросмотр показывает его как в
+ * браузер-сорсе покрупнее: кадр виджета растёт в `1 / масштаб` раз и
+ * уменьшается обратно на масштаб. Снаружи кадр по-прежнему во весь
+ * предпросмотр — фон «Заполнить» закрывает его целиком, проценты позиций те
+ * же, — а крупные элементы помещаются. Раньше уменьшался сам кадр: вокруг
+ * оставались пустые поля, и фон выглядел обрезанным. В углу написан масштаб:
+ * «так выглядит, но мельче», а не «так выглядит». Клетчатый фон — потому что
+ * у оверлея фон прозрачный.
+ */
+function FitToFrame({ children }: { children: ReactNode }): React.JSX.Element {
+  const { t } = useTranslation();
+  const frame = useRef<HTMLDivElement>(null);
+  const layer = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  // Замер после каждого рендера (правка формы двигает и растит элементы), по
+  // окончании анимации появления (в её середине размеры не настоящие) и при
+  // смене размера окна. Масштаб каждый раз ищется заново от 100 %: сцена,
+  // которая снова помещается, возвращается к полному размеру.
+  useLayoutEffect(() => {
+    const box = frame.current;
+    const content = layer.current;
+    if (!box || !content) return;
+    let frameId = 0;
+    const measure = (): void => {
+      cancelAnimationFrame(frameId);
+      frameId = requestAnimationFrame(() => {
+        const next = searchScale((candidate) => {
+          applyLayer(content, candidate);
+          return overflows(box, content);
+        });
+        applyLayer(content, next);
+        setScale(next);
+      });
+    };
+    measure();
+    content.addEventListener('animationend', measure);
+    const observer =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => measure());
+    observer?.observe(box);
+    return () => {
+      cancelAnimationFrame(frameId);
+      content.removeEventListener('animationend', measure);
+      observer?.disconnect();
+    };
+  });
+
+  return (
+    <div
+      ref={frame}
+      data-testid="widget-preview"
+      className="checkerboard relative aspect-video w-full overflow-hidden rounded-lg"
+    >
+      <div
+        ref={layer}
+        className="absolute flex items-center justify-center"
+        style={layerStyle(scale)}
+      >
+        {children}
+      </div>
+      {scale < 1 ? (
+        <span className="absolute right-2 bottom-2 rounded bg-bg/85 px-1.5 py-0.5 text-xs text-muted tabular-nums">
+          {t('widgets.previewScaled', { percent: Math.round(scale * 100) })}
+        </span>
+      ) : null}
     </div>
   );
+}
+
+/** Допуск на дробные пиксели: край во весь кадр не должен считаться вылезшим. */
+const SLACK_PX = 1;
+/** Мельче не уменьшаем: при такой нехватке места виджет в кадре уже не разглядеть. */
+const MIN_SCALE = 0.2;
+
+/**
+ * Слой содержимого при масштабе: кадр виджета больше предпросмотра в
+ * `1 / scale` раз, по центру, и уменьшен обратно — снаружи ровно во весь
+ * предпросмотр.
+ */
+function layerStyle(scale: number): CSSProperties {
+  const size = 100 / scale;
+  const offset = (100 - size) / 2;
+  return {
+    left: `${offset}%`,
+    top: `${offset}%`,
+    width: `${size}%`,
+    height: `${size}%`,
+    transform: scale < 1 ? `scale(${scale})` : undefined,
+  };
+}
+
+function applyLayer(layer: HTMLElement, scale: number): void {
+  const style = layerStyle(scale);
+  layer.style.left = String(style.left);
+  layer.style.top = String(style.top);
+  layer.style.width = String(style.width);
+  layer.style.height = String(style.height);
+  layer.style.transform = scale < 1 ? `scale(${scale})` : '';
+}
+
+/**
+ * Самый крупный масштаб, при котором ничего не вылезает. Двоичным поиском:
+ * при масштабе меньше кадр виджета больше, и то, что влезло, влезет и дальше.
+ */
+export function searchScale(overflowsAt: (scale: number) => boolean): number {
+  if (!overflowsAt(1)) return 1;
+  let fits = MIN_SCALE;
+  let tooBig = 1;
+  for (let step = 0; step < 8; step += 1) {
+    const middle = (fits + tooBig) / 2;
+    if (overflowsAt(middle)) tooBig = middle;
+    else fits = middle;
+  }
+  return Math.floor(fits * 100) / 100;
+}
+
+/**
+ * Вылезает ли что-то за кадр предпросмотра.
+ *
+ * Меряются корень виджета, элементы кадра (`data-slot`) и плитки гостей, а не
+ * все узлы подряд: строки чата за нижним краем своего блока обрезаны самим
+ * блоком, и учёт каждой уменьшал бы предпросмотр без причины.
+ */
+export function overflows(box: HTMLElement, content: HTMLElement): boolean {
+  const frame = box.getBoundingClientRect();
+  if (frame.width === 0 || frame.height === 0) return false;
+  const nodes = [
+    ...Array.from(content.children),
+    ...Array.from(content.querySelectorAll('[data-slot], [data-testid="participant-tile"]')),
+  ];
+  return nodes.some((node) => {
+    const rect = node.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return false;
+    return (
+      rect.left < frame.left - SLACK_PX ||
+      rect.top < frame.top - SLACK_PX ||
+      rect.right > frame.right + SLACK_PX ||
+      rect.bottom > frame.bottom + SLACK_PX
+    );
+  });
 }
 
 /**
@@ -214,8 +360,10 @@ function Surface({
       // Плитки-заглушки: гости появятся только в эфире, а настраивать раскладку
       // нужно заранее. Рендерер тот же, что в оверлее, — видео подменено фоном.
       const guests = config as unknown as GuestsWidgetConfig;
+      // Свободная раскладка — без полей: рамки мест считаются от всего кадра, как
+      // в OBS, и поле сдвинуло бы их относительно ручек раскладки в редакторе.
       return (
-        <div className="h-full w-full p-4">
+        <div className={cn('h-full w-full', guests.layout !== 'free' && 'p-4')}>
           <ParticipantLayout config={guests} tiles={sample.guests} />
         </div>
       );

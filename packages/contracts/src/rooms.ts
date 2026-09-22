@@ -180,7 +180,11 @@ export type RoomParticipant = z.infer<typeof roomParticipantSchema>;
 /* Раскладка                                                           */
 /* ------------------------------------------------------------------ */
 
-export const GUEST_LAYOUTS = ['grid', 'row', 'column'] as const;
+/**
+ * Раскладки гостей: три автоматические и свободная (`free`), где у каждого места
+ * своя рамка в кадре (`seats` в конфиге виджета).
+ */
+export const GUEST_LAYOUTS = ['grid', 'row', 'column', 'free'] as const;
 export type GuestLayout = (typeof GUEST_LAYOUTS)[number];
 
 export interface LayoutGrid {
@@ -203,6 +207,8 @@ export interface LayoutGrid {
  * только OBS, а сетке он не нужен: плитки растягиваются сами.
  */
 export function layoutTiles(count: number, layout: GuestLayout): LayoutGrid {
+  // Свободную раскладку сетка не считает — рамки мест заданы в конфиге. Здесь
+  // она ведёт себя как сетка: так вызов с ней ничего не ломает.
   if (count <= 0) return { columns: 2, rows: 1, tiles: [] };
 
   const perRow = layout === 'row' ? count : layout === 'column' ? 1 : Math.ceil(Math.sqrt(count));

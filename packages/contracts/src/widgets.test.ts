@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   ALERT_ANIMATIONS,
   ALERT_SLOTS,
+  type AlertSound,
+  alertSoundPlan,
+  alertSoundSchema,
   alertWidgetConfigSchema,
   applyPlanToConfig,
   BASIC_ALERT_ANIMATIONS,
@@ -24,6 +27,7 @@ import {
   WIDGET_TYPES,
   widgetConfigSchema,
 } from './widgets.js';
+import { isVideoUrl } from './common.js';
 import { ALERT_EVENT_TYPES, type AlertEvent, type AlertEventType } from './events.js';
 
 function event(
@@ -411,5 +415,51 @@ describe('продвинутое оформление', () => {
     }
     // Продвинутых тоже есть — иначе тариф нечем наполнить.
     expect(ALERT_ANIMATIONS.length).toBeGreaterThan(BASIC_ALERT_ANIMATIONS.length);
+  });
+});
+
+describe('звук оповещения', () => {
+  const scenario = (sound: Partial<AlertSound>, imageUrl: string | null = null) => ({
+    imageUrl,
+    sound: { enabled: true, source: 'file' as const, url: null, volume: 0.5, ...sound },
+  });
+
+  it('звук из видео — только пока картинка сценария действительно видео', () => {
+    expect(alertSoundPlan(scenario({ source: 'video' }, 'https://cdn.example/alert.webm'))).toEqual(
+      { kind: 'video', volume: 0.5 },
+    );
+    // Картинку заменили на PNG — звук снова из файла, а без файла звука нет.
+    expect(
+      alertSoundPlan(
+        scenario(
+          { source: 'video', url: 'https://cdn.example/ding.mp3' },
+          'https://cdn.example/a.png',
+        ),
+      ),
+    ).toEqual({ kind: 'file', url: 'https://cdn.example/ding.mp3', volume: 0.5 });
+    expect(alertSoundPlan(scenario({ source: 'video' }, 'https://cdn.example/a.png'))).toEqual({
+      kind: 'none',
+    });
+  });
+
+  it('выключенный звук молчит при любом источнике', () => {
+    expect(
+      alertSoundPlan(scenario({ enabled: false, source: 'video' }, 'https://cdn.example/a.webm')),
+    ).toEqual({ kind: 'none' });
+  });
+
+  it('старые сценарии без источника звучат из файла', () => {
+    expect(alertSoundSchema.parse({ enabled: true, url: 'https://cdn.example/d.mp3' }).source).toBe(
+      'file',
+    );
+  });
+
+  it('WebM узнаётся по пути ссылки', () => {
+    expect(isVideoUrl('https://cdn.example/alert.webm')).toBe(true);
+    expect(isVideoUrl('https://cdn.example/alert.WEBM?v=2#t')).toBe(true);
+    expect(isVideoUrl('https://cdn.example/alert.gif')).toBe(false);
+    expect(isVideoUrl('https://cdn.example/webm/alert.png')).toBe(false);
+    expect(isVideoUrl('https://alert.webm')).toBe(false);
+    expect(isVideoUrl('alert.webm')).toBe(false);
   });
 });

@@ -4,6 +4,7 @@ import {
   formatMoney,
   goalProgress,
 } from '@streamkit/contracts';
+import { Media } from './media';
 import { isPositioned, slotCss, WidgetFrame } from './slots';
 import { textStyleToCss } from './text-style';
 
@@ -75,11 +76,14 @@ export function GoalBar({ config, state }: GoalBarProps): React.JSX.Element {
         }}
       >
         {config.trackImageUrl ? (
-          <img
+          <Media
             src={config.trackImageUrl}
-            alt=""
-            referrerPolicy="no-referrer"
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+            }}
           />
         ) : null}
 
@@ -100,11 +104,9 @@ export function GoalBar({ config, state }: GoalBarProps): React.JSX.Element {
           }}
         >
           {config.barImageUrl ? (
-            <img
+            <Media
               src={config.barImageUrl}
-              alt=""
-              referrerPolicy="no-referrer"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
             />
           ) : null}
         </div>

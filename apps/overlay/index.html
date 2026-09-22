@@ -3,12 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Публичная страница по токену: индексировать её нельзя ни при каких условиях -->
     <meta name="robots" content="noindex, nofollow" />
+    <meta name="referrer" content="no-referrer" />
     <title>StreamKit Overlay</title>
     <style>
-      /* Прозрачный фон обязателен: браузер-сорс OBS накладывает страницу
-         поверх игры, и любой непрозрачный цвет закроет картинку. */
       html,
       body,
       #root {
@@ -18,7 +16,6 @@
         height: 100%;
         background: transparent;
         overflow: hidden;
-        /* Оверлей ничего не принимает от пользователя */
         user-select: none;
         pointer-events: none;
       }

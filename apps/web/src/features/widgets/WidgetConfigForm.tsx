@@ -1,6 +1,7 @@
 import {
   ALERT_ANIMATIONS,
   ALERT_EVENT_TYPES,
+  ALERT_SOUND_SOURCES,
   ALERT_TEMPLATE_VARS,
   BASIC_ALERT_ANIMATIONS,
   type AlertEventType,
@@ -8,6 +9,7 @@ import {
   CURRENCIES,
   type WidgetState,
   GUEST_LAYOUTS,
+  isVideoUrl,
   MAX_GUESTS_PER_ROOM,
   TOP_DONORS_PERIODS,
   type WidgetType,
@@ -23,6 +25,8 @@ import { useRooms } from '@/features/rooms/queries';
 import { ApiError } from '@/lib/api';
 import { useSendTestAlert } from './queries';
 import { LayoutSection, StyleSection } from './AdvancedStyling';
+import { GuestSeatsCanvas } from './GuestSeatsCanvas';
+import { WidgetSurface } from './WidgetPreview';
 import {
   CheckboxField,
   CheckboxGroupField,
@@ -174,15 +178,14 @@ export function sectionsFor(type: WidgetType): readonly SectionDef[] {
         {
           id: 'main',
           label: 'widgets.tab.room',
-          fields: [
-            'roomId',
-            'layout',
-            'maxTiles',
-            'gap',
-            'cornerRadius',
-            'showNames',
-            'showWithoutVideo',
-          ],
+          fields: ['roomId', 'cornerRadius', 'showNames', 'showWithoutVideo'],
+        },
+        // Раскладка гостей — без пометки «Про»: без тарифа комнаты не работают
+        // вовсе, и помечать внутри них «платное» было бы пустым словом.
+        {
+          id: 'layout',
+          label: 'widgets.tab.layout',
+          fields: ['layout', 'maxTiles', 'gap', 'seats'],
         },
         { id: 'look', label: 'widgets.tab.text', fields: ['text'] },
         // У гостей из продвинутого — только шрифт имён: фона и раскладки нет.
@@ -321,6 +324,7 @@ function SectionBody({
   currency: string;
   state: WidgetState | null;
 }): React.JSX.Element | null {
+  if (section === 'layout' && type === 'guests') return <GuestsLayout form={form} />;
   if (section === 'layout')
     return (
       <LayoutSection form={form} type={type} prefix={prefix} scenario={scenario} state={state} />
@@ -651,8 +655,16 @@ function AlertSection({
     label: t(`widgets.animation.${value}`),
   }));
 
+  const imageUrl = form.watch(at('imageUrl')) as string | null;
+  // Выбор источника звука — только когда картинка сценария — видео WebM: у
+  // картинки звуковой дорожки нет, и выбирать там не из чего.
+  const videoImage = Boolean(imageUrl && isVideoUrl(imageUrl));
+  const fromVideo = videoImage && form.watch(at('sound.source')) === 'video';
+
   const listen = (): void => {
-    const url = form.getValues(at('sound.url')) as string | null;
+    // «Прослушать» звук из видео — той же дорожкой того же файла: плеер аудио
+    // играет звук из WebM и без картинки.
+    const url = fromVideo ? imageUrl : (form.getValues(at('sound.url')) as string | null);
     if (!url) return;
     const audio = new Audio(url);
     audio.volume = Math.min(1, Math.max(0, Number(form.getValues(at('sound.volume'))) || 0));
@@ -698,13 +710,47 @@ function AlertSection({
             name={at('sound.enabled')}
             label={t('widgets.field.soundEnabled')}
           />
+          {videoImage ? (
+            <fieldset className="space-y-2">
+              <legend className="mb-1 text-sm font-medium">{t('widgets.field.soundSource')}</legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {ALERT_SOUND_SOURCES.map((source) => (
+                  <label
+                    key={source}
+                    className="flex items-start gap-2 rounded-lg border border-border-strong p-3 text-sm has-[:checked]:border-fg has-[:checked]:bg-surface-hover has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent"
+                  >
+                    <input
+                      type="radio"
+                      value={source}
+                      className="mt-0.5 h-4 w-4 shrink-0"
+                      {...form.register(at('sound.source'))}
+                    />
+                    <span>
+                      <span className="block font-medium">
+                        {t(`widgets.soundSource.${source}.title`)}
+                      </span>
+                      <span className="block text-xs text-muted">
+                        {t(`widgets.soundSource.${source}.hint`)}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
           <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
-            <TextField
-              form={form}
-              name={at('sound.url')}
-              label={t('widgets.field.soundUrl')}
-              nullable
-            />
+            {/* Поле файла прячется, а не выключается: значение в нём остаётся и
+                вернётся, если стример снова выберет отдельный файл. */}
+            {fromVideo ? (
+              <p className="text-sm text-muted">{t('widgets.hint.soundFromVideo')}</p>
+            ) : (
+              <TextField
+                form={form}
+                name={at('sound.url')}
+                label={t('widgets.field.soundUrl')}
+                nullable
+              />
+            )}
             <Button type="button" variant="secondary" onClick={listen}>
               {t('widgets.scenario.listen')}
             </Button>
@@ -1110,30 +1156,6 @@ function GuestsMain({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.E
         <p className="text-sm text-muted">{t('common.loading')}</p>
       )}
       <div className="grid gap-x-6 gap-y-5 border-t border-border pt-5 sm:grid-cols-2">
-        <SelectField
-          form={form}
-          name="layout"
-          label={t('widgets.field.guestsLayout')}
-          options={GUEST_LAYOUTS.map((value) => ({
-            value,
-            label: t(`widgets.guestsLayout.${value}`),
-          }))}
-        />
-        <RangeField
-          form={form}
-          name="maxTiles"
-          label={t('widgets.field.maxTiles')}
-          min={1}
-          max={MAX_GUESTS_PER_ROOM}
-        />
-        <RangeField
-          form={form}
-          name="gap"
-          label={t('widgets.field.tileGap')}
-          min={0}
-          max={48}
-          unit="px"
-        />
         <RangeField
           form={form}
           name="cornerRadius"
@@ -1151,6 +1173,62 @@ function GuestsMain({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.E
           label={t('widgets.field.showWithoutVideo')}
         />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Раскладка гостей: автоматическая (сетка, ряд, столбик) или свободная, где у
+ * каждого места своя рамка в кадре.
+ */
+function GuestsLayout({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.Element {
+  const { t } = useTranslation();
+  const free = form.watch('layout') === 'free';
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+        <SelectField
+          form={form}
+          name="layout"
+          label={t('widgets.field.guestsLayout')}
+          options={GUEST_LAYOUTS.map((value) => ({
+            value,
+            label: t(`widgets.guestsLayout.${value}`),
+          }))}
+        />
+        <RangeField
+          form={form}
+          name="maxTiles"
+          label={t('widgets.field.maxTiles')}
+          min={1}
+          max={MAX_GUESTS_PER_ROOM}
+        />
+        {/* Зазор — только у автоматических раскладок: в свободной места стоят
+            там, где их поставили, и расстояние между ними задаёт сам стример. */}
+        {free ? null : (
+          <RangeField
+            form={form}
+            name="gap"
+            label={t('widgets.field.tileGap')}
+            min={0}
+            max={48}
+            unit="px"
+          />
+        )}
+      </div>
+      {free ? (
+        <GuestSeatsCanvas
+          form={form}
+          underlay={
+            <WidgetSurface
+              type="guests"
+              config={form.watch() as Record<string, unknown>}
+              state={null}
+              alertScenario="donation"
+            />
+          }
+        />
+      ) : null}
     </div>
   );
 }

@@ -146,7 +146,8 @@
       "trackImage": "Track image",
       "x": "Horizontal",
       "y": "Vertical",
-      "size": "Size"
+      "size": "Size",
+      "soundSource": "Sound source"
     },
     "templateHint": "Available variables: {{vars}}",
     "tokens": {
@@ -189,12 +190,13 @@
       "roomDeleted": "This widget's room was deleted — it will show nothing in OBS. Pick another room and save.",
       "gapMs": "One queue for all scenarios: alerts follow each other with this pause.",
       "minCount": "0 — show all.",
-      "imageUrl": "An https link to an image or GIF. Empty — no image.",
+      "imageUrl": "An https link to an image, GIF or WebM video. Empty means no image.",
       "layout": "Click an element to select it and drag it. With the keyboard: Tab selects, arrows move by 1%, with Shift by 10%. Dashed lines are safe areas: keep anything important inside the inner frame.",
       "barImage": "The image is cropped to the progress, not stretched.",
       "currencyFromDonations": "Currency: {{currency}} — most of your donations arrive in it. There is nothing to pick, and donations in other currencies are not counted here.",
       "backgroundOpacity": "0% — the background is invisible, 100% — solid.",
-      "neverFades": "never fades"
+      "neverFades": "never fades",
+      "soundFromVideo": "The sound comes from the alert’s video."
     },
     "state": {
       "raised": "Raised",
@@ -209,7 +211,8 @@
     "guestsLayout": {
       "grid": "Grid",
       "row": "Row",
-      "column": "Column"
+      "column": "Column",
+      "free": "Free"
     },
     "roomNotSelected": "— not selected —",
     "defaultTitle": {
@@ -305,6 +308,24 @@
     },
     "unit": {
       "seconds": "s"
+    },
+    "seats": {
+      "title": "Guest spots in the frame",
+      "hint": "The first guest to join takes spot 1, the second takes spot 2. Drag a spot by its middle and resize it by the corner; with the keyboard use the arrows, Alt with arrows resizes. Tiles are always 16:9.",
+      "seat": "Spot {{number}}",
+      "label": "{{seat}}: center {{x}}% · {{y}}%, width {{width}}%",
+      "width": "Width"
+    },
+    "previewScaled": "Scale {{percent}}%",
+    "soundSource": {
+      "file": {
+        "title": "Separate file",
+        "hint": "Sound from its own link; the video plays muted."
+      },
+      "video": {
+        "title": "Sound from the video",
+        "hint": "The video’s own audio track, in sync with the picture. The video loops until the alert ends and stops with it."
+      }
     }
   },
   "sources": {

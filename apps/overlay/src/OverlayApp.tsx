@@ -1,12 +1,13 @@
 import {
   type AlertEvent,
-  type AlertScenarioConfig,
+  type AlertSoundPlan,
   type AlertWidgetConfig,
   type ChatChannelRef,
   type ChatMessage,
   type ConfigUpdatedMessage,
   type OverlayBootstrap,
   type WidgetState,
+  alertSoundPlan,
   chatChannelKey,
   defaultWidgetConfig,
   shouldShowAlert,
@@ -65,8 +66,12 @@ export function OverlayApp(): React.JSX.Element | null {
   const alertConfig = widget?.type === 'alerts' ? widget.config : DEFAULT_ALERT_CONFIG;
   const { current, enqueue } = useAlertQueue(alertConfig);
   const scenario = current ? alertConfig.scenarios[current.event.type] : null;
-  // Звук живёт, пока алерт на экране, и обрывается вместе с ним.
-  useAlertSound(current?.event.id ?? null, scenario?.sound ?? null);
+  // Звук живёт, пока идёт показ, и обрывается с его концом — с началом ухода,
+  // а не после анимации: звук длиннее показа стример не заказывал.
+  useAlertSound(
+    current && !current.isLeaving ? current.event.id : null,
+    scenario ? alertSoundPlan(scenario) : null,
+  );
 
   const handleAlert = useCallback(
     (event: AlertEvent) => {
@@ -154,7 +159,12 @@ export function OverlayApp(): React.JSX.Element | null {
                   : undefined,
               }}
             >
-              <AlertCard event={current.event} config={scenario} animate={!current.isLeaving} />
+              <AlertCard
+                event={current.event}
+                config={scenario}
+                animate={!current.isLeaving}
+                playSound={!current.isLeaving}
+              />
             </div>
           ) : null}
         </>
@@ -201,15 +211,16 @@ export function OverlayApp(): React.JSX.Element | null {
 }
 
 /**
- * Звук оповещения — один раз на показ, по сценарию типа события.
+ * Звук оповещения из отдельного файла — один раз на показ, по сценарию типа
+ * события. Звук из видео играет само видео в `AlertCard`, здесь его нет.
  *
  * Без взаимодействия пользователя браузер звук не играет, но браузер-сорс OBS
  * автовоспроизведение разрешает — ради него звук и есть. Отказ (открыли
  * ссылку в обычной вкладке) не ошибка: алерт показывается и без звука.
  */
-function useAlertSound(eventId: string | null, sound: AlertScenarioConfig['sound'] | null): void {
-  const url = sound?.enabled ? sound.url : null;
-  const volume = sound?.volume ?? 0;
+function useAlertSound(eventId: string | null, plan: AlertSoundPlan | null): void {
+  const url = plan?.kind === 'file' ? plan.url : null;
+  const volume = plan?.kind === 'file' ? plan.volume : 0;
   useEffect(() => {
     if (!eventId || !url) return;
     const audio = new Audio(url);

@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, cn } from '@streamkit/app-kit';
 import { PlanPaywall, usePlanAccess } from '@/features/billing/PlanPaywall';
 import { NullableColorField, RangeField, SelectField, TextField } from './fields';
+import { FrameGuides } from './FrameGuides';
 import { WidgetSurface } from './WidgetPreview';
 
 /**
@@ -378,60 +379,7 @@ function LayoutCanvas({
         ref={frame}
         className="checkerboard relative aspect-video w-full touch-none overflow-hidden rounded-lg border border-border-strong select-none"
       >
-        {/* Разметка испытательной таблицы, и она рабочая: пунктир — безопасные
-            зоны (всё важное держат внутри внутренней, край кадра OBS и плеер
-            площадки съедают поля), крест и круг — центр кадра. */}
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 160 90"
-          preserveAspectRatio="none"
-          className="pointer-events-none absolute inset-0 h-full w-full"
-        >
-          <rect
-            x="8"
-            y="4.5"
-            width="144"
-            height="81"
-            fill="none"
-            stroke="var(--color-border-strong)"
-            strokeWidth="0.35"
-            strokeDasharray="2 1.5"
-            vectorEffect="non-scaling-stroke"
-          />
-          <rect
-            x="16"
-            y="9"
-            width="128"
-            height="72"
-            fill="none"
-            stroke="var(--color-border-strong)"
-            strokeWidth="0.35"
-            strokeDasharray="0.6 1.4"
-            vectorEffect="non-scaling-stroke"
-          />
-          <line
-            x1="80"
-            y1="0"
-            x2="80"
-            y2="90"
-            stroke="var(--color-border)"
-            strokeWidth="1"
-            vectorEffect="non-scaling-stroke"
-          />
-          <line
-            x1="0"
-            y1="45"
-            x2="160"
-            y2="45"
-            stroke="var(--color-border)"
-            strokeWidth="1"
-            vectorEffect="non-scaling-stroke"
-          />
-        </svg>
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute top-1/2 left-1/2 aspect-square h-[62%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-border"
-        />
+        <FrameGuides />
         {underlay ? (
           // Виджет — под ручками и без ввода: щелчок достаётся ручке, а не
           // кнопкам и ссылкам внутри рендерера.

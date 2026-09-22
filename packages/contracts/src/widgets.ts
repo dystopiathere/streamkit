@@ -4,6 +4,7 @@ import {
   hexColorSchema,
   httpsUrlSchema,
   isoDateSchema,
+  isVideoUrl,
   MINOR_UNITS_PER_MAJOR,
   uuidSchema,
 } from './common.js';
@@ -178,12 +179,45 @@ export const EMPTY_BACKGROUND: WidgetBackground = {
   cornerRadius: 0,
 };
 
+/**
+ * Откуда звук оповещения: отдельный файл (`url`) или звуковая дорожка видео
+ * WebM из картинки сценария. Второе действует, только пока картинка — видео:
+ * заменили её на PNG — звук снова берётся из файла.
+ */
+export const ALERT_SOUND_SOURCES = ['file', 'video'] as const;
+export type AlertSoundSource = (typeof ALERT_SOUND_SOURCES)[number];
+
 export const alertSoundSchema = z.object({
   enabled: z.boolean().default(false),
+  source: z.enum(ALERT_SOUND_SOURCES).default('file'),
   url: httpsUrlSchema.nullable().default(null),
   volume: z.number().min(0).max(1).default(0.6),
 });
 export type AlertSound = z.infer<typeof alertSoundSchema>;
+
+/**
+ * Что и как звучит на оповещении — одно решение для оверлея и редактора.
+ *
+ * `video` — звук играет само видео картинки: так звук и картинка совпадают
+ * по времени, а отдельная дорожка того же файла разъезжалась бы с ним на
+ * десятки миллисекунд.
+ */
+export type AlertSoundPlan =
+  | { kind: 'none' }
+  | { kind: 'file'; url: string; volume: number }
+  | { kind: 'video'; volume: number };
+
+export function alertSoundPlan(scenario: {
+  imageUrl: string | null;
+  sound: AlertSound;
+}): AlertSoundPlan {
+  const { sound } = scenario;
+  if (!sound.enabled) return { kind: 'none' };
+  if (sound.source === 'video' && scenario.imageUrl && isVideoUrl(scenario.imageUrl)) {
+    return { kind: 'video', volume: sound.volume };
+  }
+  return sound.url ? { kind: 'file', url: sound.url, volume: sound.volume } : { kind: 'none' };
+}
 
 /**
  * Сценарий оповещения — всё, что видит и слышит зритель на событии одного типа.
@@ -503,9 +537,61 @@ export type ChatWidgetConfig = z.infer<typeof chatWidgetConfigSchema>;
  * Пустая строка — виджет создан, но комнату ещё не выбрали, как пустой канал у
  * чата: создаётся он кнопкой «Новый виджет» с пустым конфигом.
  */
+/**
+ * Место гостя в свободной раскладке: середина плитки и её ширина в процентах
+ * кадра.
+ *
+ * Высоты нет намеренно: плитка всегда 16:9 — таково видео с камеры, и
+ * растянутая по-своему плитка обрезала бы лицо или сплющила его. `x` и `y` —
+ * СЕРЕДИНА, как у элементов кадра остальных виджетов: перетаскивая, стример
+ * целится серединой. Проценты, а не пиксели: размер браузер-сорса задаёт OBS.
+ */
+export const guestSeatSchema = z.object({
+  x: z.number().min(0).max(100),
+  y: z.number().min(0).max(100),
+  width: z.number().min(5).max(100),
+});
+export type GuestSeat = z.infer<typeof guestSeatSchema>;
+
+/** Соотношение сторон плитки гостя: как у видео с камеры. */
+export const GUEST_TILE_ASPECT = 16 / 9;
+
+/**
+ * Места по умолчанию: сначала углы, потом середины верхнего и нижнего края.
+ *
+ * Центр кадра — под игру, поэтому первые гости встают по углам, а не рядом в
+ * середине. Ширина 22 % — в кадре 16:9 это и 22 % высоты, все плитки внутри
+ * поля кадра.
+ */
+export const DEFAULT_GUEST_SEATS: readonly GuestSeat[] = [
+  { x: 13, y: 14 },
+  { x: 87, y: 14 },
+  { x: 13, y: 86 },
+  { x: 87, y: 86 },
+  { x: 38, y: 14 },
+  { x: 62, y: 14 },
+  { x: 38, y: 86 },
+  { x: 62, y: 86 },
+].map((center) => ({ ...center, width: 22 }));
+
+/** Рамка места: из конфига, а для места, которого там нет, — по умолчанию. */
+export function guestSeat(seats: readonly GuestSeat[], index: number): GuestSeat {
+  return seats[index] ?? DEFAULT_GUEST_SEATS[index % DEFAULT_GUEST_SEATS.length]!;
+}
+
 export const guestsWidgetConfigSchema = z.object({
   roomId: z.union([uuidSchema, z.literal('')]).default(''),
   layout: z.enum(GUEST_LAYOUTS).default('grid'),
+  /**
+   * Рамки мест для свободной раскладки: 1-й гость по порядку входа — в первой,
+   * и так далее. Хранятся и при автоматической раскладке: переключились на
+   * сетку и обратно — расстановка на месте. Функцией, а не массивом: иначе все
+   * конфиги делили бы один объект по умолчанию.
+   */
+  seats: z
+    .array(guestSeatSchema)
+    .max(MAX_GUESTS_PER_ROOM)
+    .default(() => DEFAULT_GUEST_SEATS.map((seat) => ({ ...seat }))),
   /** Сколько плиток максимум. Остальные гости в кадр не попадут, но слышны будут. */
   maxTiles: z.number().int().min(1).max(MAX_GUESTS_PER_ROOM).default(4),
   showNames: z.boolean().default(true),

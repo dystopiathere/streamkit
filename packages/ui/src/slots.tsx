@@ -1,5 +1,6 @@
 import type { WidgetBackground, WidgetSlot } from '@streamkit/contracts';
 import type { CSSProperties, ReactNode } from 'react';
+import { isVideoUrl, Media } from './media';
 
 /**
  * Продвинутое оформление в кадре: позиции элементов и фоновый слой.
@@ -60,6 +61,7 @@ export function WidgetBackgroundLayer({
   background: WidgetBackground | undefined;
 }): React.JSX.Element | null {
   if (!background || (!background.color && !background.imageUrl)) return null;
+  const video = background.imageUrl ? isVideoUrl(background.imageUrl) : false;
 
   const style: CSSProperties = {
     position: 'absolute',
@@ -73,24 +75,23 @@ export function WidgetBackgroundLayer({
 
   return (
     <div data-testid="widget-background" style={style}>
-      {background.imageUrl ? (
-        <img
+      {background.imageUrl && (video || background.fit !== 'tile') ? (
+        <Media
           src={background.imageUrl}
-          alt=""
-          // Чужой хост не должен узнавать, на какой странице показана картинка:
-          // адрес оверлея несёт токен, а Referer его бы выдал.
-          referrerPolicy="no-referrer"
           style={{
+            // Абсолютно во весь слой: размер картинки не зависит ни от потока
+            // внутри слоя, ни от её собственных пропорций.
+            position: 'absolute',
+            inset: 0,
             width: '100%',
             height: '100%',
-            // «Плиткой» размножается сама картинка, поэтому здесь это не img, а
-            // фон-повтор: img растянуть в плитку нечем.
+            display: 'block',
+            // Видео плиткой не размножить — оно заполняет слой, как «Заполнить».
             objectFit: background.fit === 'contain' ? 'contain' : 'cover',
-            display: background.fit === 'tile' ? 'none' : 'block',
           }}
         />
       ) : null}
-      {background.imageUrl && background.fit === 'tile' ? (
+      {background.imageUrl && !video && background.fit === 'tile' ? (
         <div
           style={{
             position: 'absolute',

@@ -1,7 +1,7 @@
 import { guestsWidgetConfigSchema } from '@streamkit/contracts';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { type ParticipantTile, ParticipantLayout } from './ParticipantLayout';
+import { fitTile, type ParticipantTile, ParticipantLayout } from './ParticipantLayout';
 
 const config = (overrides: Record<string, unknown> = {}) =>
   guestsWidgetConfigSchema.parse(overrides);
@@ -57,5 +57,59 @@ describe('ParticipantLayout', () => {
     );
     expect(screen.queryByText('Вася')).toBeNull();
     expect(screen.getByText('Петя')).toBeDefined();
+  });
+
+  it('свободная раскладка ставит гостя в его место — от середины, плиткой 16:9', () => {
+    render(
+      <ParticipantLayout
+        config={config({
+          layout: 'free',
+          seats: [
+            { x: 20, y: 30, width: 25 },
+            { x: 80, y: 70, width: 30 },
+          ],
+        })}
+        tiles={[tile('Вася'), tile('Петя')]}
+      />,
+    );
+    const [first, second] = screen.getAllByTestId('participant-tile') as HTMLElement[];
+    expect(first!.style.left).toBe('20%');
+    expect(first!.style.top).toBe('30%');
+    expect(first!.style.width).toBe('25%');
+    expect(first!.style.aspectRatio).not.toBe('');
+    expect(first!.style.transform).toBe('translate(-50%, -50%)');
+    expect(second!.style.left).toBe('80%');
+  });
+
+  it('гостю без своего места достаётся место по умолчанию', () => {
+    // Мест в конфиге меньше, чем гостей: третий не должен пропасть из кадра.
+    render(
+      <ParticipantLayout
+        config={config({ layout: 'free', seats: [{ x: 50, y: 50, width: 20 }] })}
+        tiles={[tile('1'), tile('2')]}
+      />,
+    );
+    expect(screen.getAllByTestId('participant-tile')).toHaveLength(2);
+  });
+});
+
+/**
+ * Плитка — самая крупная 16:9, что помещается в ячейку. Раньше плитка
+ * растягивалась на ячейку, и в узком кадре гость становился вертикальной полосой.
+ */
+describe('fitTile', () => {
+  it('в широком кадре упирается в высоту, в узком — в ширину, и всегда 16:9', () => {
+    const wide = fitTile({ width: 1600, height: 400 }, 2, 1, 0);
+    expect(wide.height).toBeCloseTo(400);
+    expect(wide.width / wide.height).toBeCloseTo(16 / 9);
+
+    const narrow = fitTile({ width: 400, height: 900 }, 3, 1, 0);
+    expect(narrow.width).toBeCloseTo(400 / 3);
+    expect(narrow.width / narrow.height).toBeCloseTo(16 / 9);
+  });
+
+  it('зазоры вычитаются из места под плитки', () => {
+    const tile = fitTile({ width: 1000, height: 1000 }, 2, 2, 20);
+    expect(tile.width).toBeCloseTo(490);
   });
 });

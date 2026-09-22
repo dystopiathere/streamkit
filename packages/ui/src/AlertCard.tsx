@@ -1,10 +1,12 @@
 import {
   type AlertEvent,
   type AlertScenarioConfig,
+  alertSoundPlan,
   formatMoney,
   renderTemplate,
 } from '@streamkit/contracts';
 import type { CSSProperties } from 'react';
+import { Media } from './media';
 import { slotCss, WidgetFrame } from './slots';
 
 export interface AlertCardProps {
@@ -13,6 +15,13 @@ export interface AlertCardProps {
   config: AlertScenarioConfig;
   /** Отключает анимацию входа — нужно в превью редактора, где карточка статична. */
   animate?: boolean;
+  /**
+   * Играть звук из видео картинки, если сценарий его выбрал. Только в
+   * оверлее и только пока оповещение не уходит: предпросмотр в редакторе при
+   * каждой правке формы звучать не должен, а звук после конца показа — это
+   * звук, который стример не заказывал.
+   */
+  playSound?: boolean;
 }
 
 /** Переменные, которые выделяются цветом акцента: на них смотрит зритель. */
@@ -63,7 +72,13 @@ const LAYOUT_STYLES: Record<AlertScenarioConfig['layout'], CSSProperties> = {
  * здесь не используются: overlay обязан оставаться лёгким и не зависеть от того,
  * какие классы подключило приложение-хост.
  */
-export function AlertCard({ event, config, animate = true }: AlertCardProps): React.JSX.Element {
+export function AlertCard({
+  event,
+  config,
+  animate = true,
+  playSound = false,
+}: AlertCardProps): React.JSX.Element {
+  const sound = alertSoundPlan(config);
   const amount = event.amount ? formatMoney(event.amount) : '';
   const vars = {
     username: event.username,
@@ -107,11 +122,10 @@ export function AlertCard({ event, config, animate = true }: AlertCardProps): Re
       }}
     >
       {config.imageUrl ? (
-        <img
-          data-slot="image"
+        <Media
+          slot="image"
           src={config.imageUrl}
-          alt=""
-          referrerPolicy="no-referrer"
+          sound={playSound && sound.kind === 'video' ? { volume: sound.volume } : null}
           style={{
             maxWidth: 320,
             maxHeight: 240,
