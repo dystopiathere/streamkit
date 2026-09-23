@@ -1,6 +1,6 @@
 # StreamKit Privacy Policy
 
-Version No. 12 of 24.09.2026
+Version No. 13 of 23.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/privacy?lang=ru); if the two
@@ -9,7 +9,7 @@ differ, the Russian version prevails.
 ## 1. Who processes the data
 
 The personal data operator is {{SELLER_NAME}}, a professional income tax payer
-(self-employed), Taxpayer ID (INN) {{SELLER_INN}}. Send questions about the
+(self-employed), Taxpayer ID (INN) {{SELLER_INN}} (the “Operator”). Send questions about the
 processing of personal data to {{SELLER_EMAIL}}.
 
 This Policy applies to the StreamKit service at https://stream-kit.ru.
@@ -22,7 +22,12 @@ secret, if it is enabled.
 
 **Operation of the service:**
 
-- widget settings and room names;
+- widget settings and room names. Settings may contain third parties' data — the
+  list of giveaway participants in roulette sectors, nicknames of viewers hidden
+  in the chat widget, the label of a guest invitation: the user types them in
+  themselves, and the user is their operator (section 4);
+- roulette spin history: the last twenty spins with the donor's name, the amount
+  and the sector drawn. Cleared together with the event history;
 - session details and the security log: IP address hash, User-Agent string,
   time of sign-in and of significant actions;
 - the consent log: which document, which version, and when it was accepted or
@@ -43,13 +48,19 @@ the profile, without which donations cannot be connected — we discard it
 immediately without storing it. What exactly we receive from Google and how we
 use it is described in section 5.
 
-**Payment for the Pro plan:** amount and billing period, payment and refund
+**Payment for the paid plans:** the chosen plan, amount and billing period, payment and refund
 history, the encrypted identifier of the saved payment method and its label such
 as “Card \*4444”. Card details are entered on the YooKassa page and are not
 passed to us.
 
 **Service emails:** the account email address and display name — for emails
 about an upcoming automatic charge.
+
+**The Operator's employees** (admin panel): the same account data — email
+address, display name, password hash and the encrypted secret of the second
+factor, which is mandatory for them — plus the authorship of every action in the
+security log. The legal ground is the employment or service relationship with the
+Operator and the Operator's legitimate interest in access control.
 
 **Private room guests** (no sign-up): the guest's consent log — invite link,
 version of the terms, time, IP address hash and User-Agent. We process the
@@ -71,7 +82,7 @@ User-Agent. Details are in the Cookie Policy.
 |---|---|
 | Providing the service: widgets, events, analytics, rooms | Performance of the contract (Terms of Service) |
 | Sign-up, sign-in, account protection | Performance of the contract |
-| Plan payment, automatic renewal, refunds | Performance of the contract (Pro plan offer) |
+| Plan payment, automatic renewal, refunds | Performance of the contract (paid plans offer) |
 | Emails about an upcoming charge | Performance of the contract |
 | Security logs, incident investigation | The Operator's legitimate interest |
 | Proof of consents given | Requirement of Federal Law No. 152-FZ |
@@ -87,9 +98,10 @@ works with on stream. **The operator of this data is the user**, and we process
 it on the user's behalf under section 13 of the Terms of Service (Part 3 of
 Article 6 of Federal Law No. 152-FZ):
 
-- **event participants** from services connected by the user (donations;
-  follows, subscriptions, gifted subscriptions, Bits, raids and Channel Points
-  rewards on Twitch): name or nickname, message text, amount and currency or a
+- **event participants** from the services and platforms connected by the user
+  (donations; follows, subscriptions, gifted subscriptions, Bits, raids and
+  Channel Points rewards on Twitch; memberships, member milestones, gifted
+  memberships, Super Chats and Super Stickers on YouTube): name or nickname, message text, amount and currency or a
   quantity (Bits, raid viewers, months subscribed, number of gifts), time. For a
   voice donation we receive a link to the recording instead of text: the
   recording stays with the service the donation was made through, we neither
@@ -98,7 +110,15 @@ Article 6 of Federal Law No. 152-FZ):
 - **Twitch and YouTube chat viewers** on the channels the user has connected to
   the service: username or name, for YouTube the author's channel ID, and message
   text. Pass through the service
-  in real time and are **not stored**;
+  in real time and are **not stored**. The exception is YouTube events:
+  memberships and paid support arrive as lines of the same chat, but they are
+  events and are stored in the user's event history just like donations;
+- **names, nicknames and labels the user types in themselves**: giveaway
+  participants in roulette sectors, viewers hidden in the chat widget settings,
+  the label of a guest invitation. Kept in the widget and invitation settings
+  until the user changes them, and deleted together with the account;
+- **roulette spin history**: the donor's name, the amount and the sector drawn —
+  the last twenty spins;
 - **private room guests**: name, image and voice. Transmitted in real time and
   **not recorded**. The decision to show a guest on stream is made by the user,
   who also obtains the guest's consent to it.
@@ -120,16 +140,22 @@ Google permission — `youtube.readonly`, viewing YouTube data. Through the
 YouTube Data API we receive the channel ID, handle, name and image, the number
 of subscribers and total views, and whether a stream is live, when it started,
 its title and the number of its concurrent viewers. During a stream, while the user
-has a chat widget or the stream window open, we receive that stream's chat
+has a chat widget, the stream window or an alert widget with YouTube events
+enabled open, we receive that stream's chat
 messages through the YouTube Live Streaming API: the author's name and channel ID,
-badges (owner, moderator, member) and text. We do not request the email address, name or
+badges (owner, moderator, member) and text. The same stream carries channel
+events: new memberships and member milestones, gifted memberships, Super Chats
+and Super Stickers — with the author's name, the amount and their message. We do not request the email address, name or
 any other Google account data. The service never publishes, changes or deletes
 anything on the channel.
 
 5.2. This data is used only to show the user the analytics, live status and chat
 of their own channel in their dashboard, and chat messages also in the chat widget
 that the user themselves adds to their stream. Chat messages pass through the
-service in real time and are not stored. We do not use it for advertising, do not sell it, do not use
+service in real time and are not stored. Channel events (memberships and paid
+support) are stored in the user's event history — like events from the other
+services they connected, under section 4 — and shown as an alert on their stream.
+The user can clear that history at any time. We do not use it for advertising, do not sell it, do not use
 it to train artificial intelligence models, and do not transfer it to third
 parties — except for hosting of the service (section 7) and cases expressly
 provided for by law.
@@ -196,6 +222,9 @@ We do not sell personal data. Data is shared only with:
 | Consent log of visitors without an account | 3 years from the date of consent |
 | Guest image, sound and name | Not stored |
 | Twitch and YouTube chat messages | Not stored |
+| YouTube membership and paid support events | Same as donation events |
+| Roulette spin history | Last 20, until the event history is cleared |
+| Names and labels typed in by the user | Until the setting changes or the account is deleted |
 
 ## 9. Your rights
 
@@ -214,8 +243,10 @@ in clause 4.3.
 
 Deletion is confirmed with the password. The email address and display name are
 anonymized, the password and the second factor are deleted, sessions are ended,
-widget links are revoked, platform connections with their tokens and metrics are
-deleted, rooms and invites are deleted, auto-renewal is turned off, and the
+widget links are revoked, the widgets themselves and the connected donation
+sources are deleted together with everything typed into them (roulette sectors,
+hidden viewers, spin history), platform connections with their tokens and metrics
+are deleted, rooms and invites are deleted, auto-renewal is turned off, and the
 saved payment method is erased. Donors' names and messages are anonymized, and links to voice donations are
 deleted.
 Event amounts and dates and the payment history are kept in anonymized form for

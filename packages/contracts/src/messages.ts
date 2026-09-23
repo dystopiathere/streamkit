@@ -59,6 +59,8 @@ export const MESSAGES_EN: Readonly<Record<string, string>> = {
   'Верхняя граница должна быть не меньше нижней':
     'The upper bound must not be lower than the lower one',
   'Назовите сектор': 'Name the sector',
+  'В колесе не больше 24 секторов: для длинных списков есть вертикальная лента':
+    'A wheel holds at most 24 sectors: long lists go in the vertical reel',
   'Недопустимый размер страницы': 'Unsupported page size',
   'Для добавления времени нужно указать секунды': 'Specify the seconds to add',
   'Этот сервис сейчас недоступен': 'This service is unavailable right now',

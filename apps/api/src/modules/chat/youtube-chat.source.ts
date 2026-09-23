@@ -1,6 +1,6 @@
 import * as grpc from '@grpc/grpc-js';
 import { Injectable, Logger } from '@nestjs/common';
-import type { ChatMessage, ChatState } from '@streamkit/contracts';
+import type { ChatMessage, ChatState, IncomingAlertEvent } from '@streamkit/contracts';
 import { HttpClient } from '../../common/http/http-client.service';
 import { PlatformAuthError, PlatformQuotaError } from '../../common/http/platform-errors';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -15,6 +15,7 @@ import {
   youtubeToChatMessage,
 } from './youtube-chat';
 import type { YouTubeChatResponse } from './youtube-chat.proto';
+import { normalizeYouTubeChatEvent } from './youtube-events';
 
 /**
  * Как часто искать начавшийся эфир, пока чат нужен, а эфира нет.
@@ -94,6 +95,7 @@ export class YouTubeChatSource implements ChatSource {
   private readonly joined = new Set<string>();
   private client: YouTubeChatClient | null = null;
   private sink: ((message: ChatMessage) => void) | null = null;
+  private events: ((event: IncomingAlertEvent) => void) | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -107,8 +109,12 @@ export class YouTubeChatSource implements ChatSource {
     return this.joined;
   }
 
-  async start(sink: (message: ChatMessage) => void): Promise<void> {
+  async start(
+    sink: (message: ChatMessage) => void,
+    events?: (event: IncomingAlertEvent) => void,
+  ): Promise<void> {
     this.sink = sink;
+    this.events = events ?? null;
   }
 
   async join(channel: string): Promise<void> {
@@ -155,6 +161,7 @@ export class YouTubeChatSource implements ChatSource {
     this.client?.close();
     this.client = null;
     this.sink = null;
+    this.events = null;
   }
 
   /** Такт воркера: найти эфиры, дождавшиеся своей попытки, и переоткрыть потоки. */
@@ -307,6 +314,15 @@ export class YouTubeChatSource implements ChatSource {
         this.endBroadcast(session);
         return;
       }
+      // Спонсорство и платная поддержка идут тем же потоком, что и чат, но
+      // это не строки чата, а события: они уходят другой дорогой и НЕ
+      // подрезаются ограничителем потока — потерять донат хуже, чем показать
+      // его с задержкой.
+      if (session.userId) {
+        const event = normalizeYouTubeChatEvent(item, session.userId);
+        if (event && Date.parse(event.occurredAt ?? '') >= session.since) this.events?.(event);
+      }
+
       // В журнал — только пути полей, не значения: ники и текст зрителей —
       // данные, которые стример поручил нам только показать.
       const message = youtubeToChatMessage(item, session.channel, (paths) => {

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  type Currency,
   currencySchema,
   hexColorSchema,
   httpsUrlSchema,
@@ -184,6 +185,31 @@ export const DEFAULT_WIDGET_CANVAS: WidgetCanvas = { width: 800, height: 600 };
 /** Поле окна в конфиге: у всех типов одно и то же. */
 const canvasField = () =>
   widgetCanvasSchema.nullable().default(() => ({ ...DEFAULT_WIDGET_CANVAS }));
+
+/**
+ * Суммы по валютам в минорных единицах: порог показа, цена прокрута.
+ *
+ * Ноль и отсутствие ключа значат одно и то же («порога нет», «в этой валюте не
+ * крутим»), поэтому ноль на разборе выбрасывается, а не хранится. Без этого у
+ * одной и той же настройки два написания, и редактор считает форму изменённой
+ * после того, как сумму стёрли обратно: поле шлёт ноль, а в сохранённом конфиге
+ * ключа просто нет. Сравнивать «что уйдёт на сервер» можно только с одним
+ * написанием.
+ */
+function currencyAmounts() {
+  return z
+    .partialRecord(currencySchema, z.number().int().nonnegative().optional())
+    .transform((amounts): Partial<Record<Currency, number>> => {
+      const result: Partial<Record<Currency, number>> = {};
+      for (const [currency, amount] of Object.entries(amounts) as [
+        Currency,
+        number | undefined,
+      ][]) {
+        if (typeof amount === 'number' && amount > 0) result[currency] = amount;
+      }
+      return result;
+    });
+}
 
 /** Частые размеры браузер-сорса — подсказка в редакторе, не ограничение. */
 export const CANVAS_PRESETS: readonly WidgetCanvas[] = [
@@ -420,9 +446,7 @@ function alertScenarioSchema(
        * донаты в этой валюте показываются все. Значение `undefined` схема
        * принимает: так форма присылает валюту, поле которой не трогали.
        */
-      minAmounts: z
-        .partialRecord(currencySchema, z.number().int().nonnegative().optional())
-        .default({}),
+      minAmounts: currencyAmounts().default({}),
       /** События с меньшим количеством не показываются (0 — показывать все). */
       minCount: z.number().int().nonnegative().max(1_000_000).default(0),
       ...alertAppearanceShape(titleTemplate, messageTemplate),
@@ -564,6 +588,16 @@ export const alertWidgetConfigSchema = z.object({
   /** Пауза между алертами, чтобы они не слипались. */
   gapMs: z.number().int().min(0).max(10000).default(500),
   voice: alertVoiceSchema.prefault({}),
+  /**
+   * Брать ли события с YouTube: спонсорства и платную поддержку.
+   *
+   * Отдельная настройка, а не «включено всегда», потому что у YouTube нет
+   * подписки на события: они приходят строками в потоке чата эфира, а его
+   * открытие стоит квоты, общей на весь сервис. Пока оверлей этого виджета
+   * закрыт, поток не открывается, и события не придут — этим YouTube и
+   * отличается от Twitch, где события идут сами.
+   */
+  youtubeEvents: z.boolean().default(false),
   scenarios: alertScenariosSchema.prefault({}),
 });
 export type AlertWidgetConfig = z.infer<typeof alertWidgetConfigSchema>;
@@ -952,7 +986,27 @@ export const rouletteSectorSchema = z.object({
 export type RouletteSector = z.infer<typeof rouletteSectorSchema>;
 
 export const MIN_ROULETTE_SECTORS = 2;
+
+/**
+ * Как рулетка выглядит в кадре.
+ *
+ * `wheel` — колесо; секторов не больше `MAX_ROULETTE_SECTORS`, дальше подписи
+ * на нём не читаются ни с какой стороны. `vertical` — вертикальная лента,
+ * которая проматывается мимо метки: подписи в ней горизонтальные, поэтому их
+ * помещается вчетверо больше (`MAX_VERTICAL_SECTORS`). Лента входит в
+ * продвинутое оформление, то есть в «Про».
+ */
+export const ROULETTE_MODES = ['wheel', 'vertical'] as const;
+export const rouletteModeSchema = z.enum(ROULETTE_MODES);
+export type RouletteMode = (typeof ROULETTE_MODES)[number];
+
 export const MAX_ROULETTE_SECTORS = 24;
+export const MAX_VERTICAL_SECTORS = 100;
+
+/** Сколько секторов помещается в этом виде рулетки. */
+export function maxRouletteSectors(mode: RouletteMode): number {
+  return mode === 'vertical' ? MAX_VERTICAL_SECTORS : MAX_ROULETTE_SECTORS;
+}
 
 const DEFAULT_ROULETTE_LABELS = [
   'Спеть песню',
@@ -980,44 +1034,52 @@ export function defaultRouletteSectors(): RouletteSector[] {
  * доводит колесо до присланного сектора. Иначе у двух сцен OBS с одной ссылкой
  * и у предпросмотра выпадало бы разное, а стример не знал бы, что выпало.
  */
-export const rouletteWidgetConfigSchema = z.object({
-  canvas: canvasField(),
-  title: z.string().max(80).default('Рулетка'),
-  sectors: z
-    .array(rouletteSectorSchema)
-    .min(MIN_ROULETTE_SECTORS)
-    .max(MAX_ROULETTE_SECTORS)
-    .default(defaultRouletteSectors),
-  /** Крутят ли колесо донаты. Выключено — только кнопкой из дашборда. */
-  donationSpins: z.boolean().default(true),
-  /**
-   * Цена прокрута по валютам, в минорных единицах. Донат от этой суммы — один
-   * прокрут, сколько бы он ни превышал цену: очередь из десятка прокрутов от
-   * одного крупного доната забила бы эфир на минуты.
-   *
-   * Валюта без цены (или с нулём) колесо НЕ крутит — наоборот порогу показа
-   * оповещений, где пустое поле значит «показывать все». Там пустое безопасно (лишний алерт),
-   * здесь — нет: пустая цена крутила бы колесо на донат в одну копейку.
-   */
-  spinPrice: z
-    .partialRecord(currencySchema, z.number().int().nonnegative().optional())
-    .default({ RUB: 30_000 }),
-  /** Сколько крутится колесо до остановки. */
-  spinDurationMs: z.number().int().min(3000).max(20000).default(7000),
-  /** Сколько итог держится на экране после остановки. */
-  resultMs: z.number().int().min(1000).max(30000).default(6000),
-  /** Колесо только на время прокрута: между прокрутами кадр свободен. */
-  hideWhenIdle: z.boolean().default(false),
-  /** Имя донатера в итоге. У прокрута кнопкой имени нет. */
-  showDonor: z.boolean().default(true),
-  /** Диаметр колеса в пикселях окна виджета. */
-  wheelSize: z.number().int().min(160).max(2000).default(420),
-  /** Цвет обода, зазоров между секторами и ступицы. */
-  rimColor: hexColorSchema.default('#100F0D'),
-  slots: slotsSchema(ROULETTE_SLOTS).prefault({}),
-  background: widgetBackgroundSchema.prefault({}),
-  text: textStyleSchema.prefault({ fontSize: 28 }),
-});
+export const rouletteWidgetConfigSchema = z
+  .object({
+    canvas: canvasField(),
+    title: z.string().max(80).default('Рулетка'),
+    /** Колесо или вертикальная лента. Лента — продвинутое оформление, «Про». */
+    mode: rouletteModeSchema.default('wheel'),
+    sectors: z
+      .array(rouletteSectorSchema)
+      .min(MIN_ROULETTE_SECTORS)
+      .max(MAX_VERTICAL_SECTORS)
+      .default(defaultRouletteSectors),
+    /** Крутят ли колесо донаты. Выключено — только кнопкой из дашборда. */
+    donationSpins: z.boolean().default(true),
+    /**
+     * Цена прокрута по валютам, в минорных единицах. Донат от этой суммы — один
+     * прокрут, сколько бы он ни превышал цену: очередь из десятка прокрутов от
+     * одного крупного доната забила бы эфир на минуты.
+     *
+     * Валюта без цены (или с нулём) колесо НЕ крутит — наоборот порогу показа
+     * оповещений, где пустое поле значит «показывать все». Там пустое безопасно (лишний алерт),
+     * здесь — нет: пустая цена крутила бы колесо на донат в одну копейку.
+     */
+    spinPrice: currencyAmounts().default({ RUB: 30_000 }),
+    /** Сколько крутится колесо до остановки. */
+    spinDurationMs: z.number().int().min(3000).max(20000).default(7000),
+    /** Сколько итог держится на экране после остановки. */
+    resultMs: z.number().int().min(1000).max(30000).default(6000),
+    /** Колесо только на время прокрута: между прокрутами кадр свободен. */
+    hideWhenIdle: z.boolean().default(false),
+    /** Имя донатера в итоге. У прокрута кнопкой имени нет. */
+    showDonor: z.boolean().default(true),
+    /** Диаметр колеса (а у ленты — её высота) в пикселях окна виджета. */
+    wheelSize: z.number().int().min(160).max(2000).default(420),
+    /** Цвет обода, зазоров между секторами и ступицы. */
+    rimColor: hexColorSchema.default('#100F0D'),
+    slots: slotsSchema(ROULETTE_SLOTS).prefault({}),
+    background: widgetBackgroundSchema.prefault({}),
+    text: textStyleSchema.prefault({ fontSize: 28 }),
+  })
+  // Сколько секторов поместится, решает вид рулетки, а не массив: на колесе
+  // двадцать пятая подпись не читается, а в ленте подписи горизонтальные.
+  // Проверка на объекте, потому что предел зависит от соседнего поля.
+  .refine((config) => config.sectors.length <= maxRouletteSectors(config.mode), {
+    path: ['sectors'],
+    error: 'В колесе не больше 24 секторов: для длинных списков есть вертикальная лента',
+  });
 export type RouletteWidgetConfig = z.infer<typeof rouletteWidgetConfigSchema>;
 
 /**
@@ -1183,6 +1245,18 @@ export function applyPlanToConfig<T extends Record<string, unknown>>(
     }
     if ((key === 'animationIn' || key === 'animationOut') && typeof value === 'string') {
       result[key] = basicAnimation(value);
+      continue;
+    }
+    // Вертикальная лента рулетки и её длинный список — тоже продвинутое
+    // оформление. Сектора режутся здесь, а не просто перестаёт рисоваться
+    // лента: сервер выбирает сектор по тому же приведённому конфигу, и в кадр
+    // не должен прийти номер, которого на колесе нет.
+    if (key === 'mode' && value === 'vertical') {
+      result[key] = 'wheel';
+      continue;
+    }
+    if (key === 'sectors' && Array.isArray(value) && value.length > MAX_ROULETTE_SECTORS) {
+      result[key] = value.slice(0, MAX_ROULETTE_SECTORS);
       continue;
     }
     // Триггеры сценария — такой же полный вид оповещения, как сам сценарий.

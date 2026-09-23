@@ -25,18 +25,28 @@ import {
   type Language,
 } from '@streamkit/contracts';
 import {
+  ALERT_ENTER_DURATION_MS,
+  ALERT_EXIT_DURATION_MS,
   AlertAnimationStyles,
   AlertCard,
+  exitAnimationName,
   ChatBox,
   GoalBar,
   LatestEventDisplay,
   ParticipantLayout,
-  RouletteWheel,
+  RouletteDisplay,
   TimerDisplay,
   TopDonorsList,
   WidgetStage,
 } from '@streamkit/ui';
-import { type CSSProperties, type ReactNode, useLayoutEffect, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@streamkit/app-kit';
 import { usePlanFeatures } from '@/features/billing/PlanPaywall';
@@ -327,6 +337,78 @@ export function WidgetSurface(props: {
   return <Surface {...props} />;
 }
 
+/**
+ * Оповещение в предпросмотре и его анимация.
+ *
+ * Обычно карточка стоит неподвижно: предпросмотр перерисовывается на каждое
+ * нажатие клавиши в поле шаблона, и анимация при каждом из них превратила бы его
+ * в мигалку. Но выбрать анимацию, ни разу её не увидев, нельзя — поэтому смена
+ * самой анимации проигрывает её один раз, ту, которая выбрана.
+ *
+ * Уход показывается от видимой карточки и возвращает её обратно: иначе
+ * предпросмотр остался бы пустым, а выбирают анимацию именно глядя на него.
+ * Тому, кто попросил систему не двигать интерфейс, тема дашборда сводит
+ * длительность к нулю — карточка просто моргнёт.
+ */
+function AlertSurface({
+  event,
+  scenario,
+}: {
+  event: SampleEvent;
+  scenario: AlertScenarioConfig;
+}): React.JSX.Element {
+  const [play, setPlay] = useState<{ id: number; kind: 'in' | 'out' } | null>(null);
+  const seen = useRef<{ in: string; out: string } | null>(null);
+
+  useEffect(() => {
+    const previous = seen.current;
+    seen.current = { in: scenario.animationIn, out: scenario.animationOut };
+    // Первый кадр — не смена настройки: открытие редактора ничего не проигрывает.
+    if (!previous) return;
+    const kind =
+      previous.in !== scenario.animationIn
+        ? 'in'
+        : previous.out !== scenario.animationOut
+          ? 'out'
+          : null;
+    if (kind) setPlay((current) => ({ id: (current?.id ?? 0) + 1, kind }));
+  }, [scenario.animationIn, scenario.animationOut]);
+
+  // Показ снимается по времени самой анимации, а не по событию `animationend`:
+  // уход оставляет карточку невидимой (`both`), и ждать события, которое может
+  // не прийти — например, когда вкладку свернули, — значит оставить пустой кадр.
+  useEffect(() => {
+    if (!play) return;
+    const timer = setTimeout(
+      () => setPlay(null),
+      play.kind === 'in' ? ALERT_ENTER_DURATION_MS : ALERT_EXIT_DURATION_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [play]);
+
+  return (
+    <>
+      <AlertAnimationStyles />
+      {/* Ключ меняется на каждый показ: без него повторный выбор той же
+          анимации не перезапустил бы её — для браузера это та же анимация на том
+          же элементе. */}
+      <div
+        key={play?.id ?? 'still'}
+        style={{
+          width: '100%',
+          height: '100%',
+          animation:
+            play?.kind === 'out'
+              ? `${exitAnimationName(scenario.animationOut)} ${ALERT_EXIT_DURATION_MS}ms ease-in both`
+              : undefined,
+        }}
+      >
+        <AlertCard event={event} config={scenario} animate={play?.kind === 'in'} />
+      </div>
+    </>
+  );
+}
+
 function Surface({
   type,
   config: raw,
@@ -367,12 +449,7 @@ function Surface({
       const event = trigger
         ? { ...sample.events[alertScenario], amount: triggerSampleAmount(trigger) }
         : sample.events[alertScenario];
-      return (
-        <>
-          <AlertAnimationStyles />
-          <AlertCard event={event} config={scenario} animate={false} />
-        </>
-      );
+      return <AlertSurface event={event} scenario={scenario} />;
     }
 
     case 'latest': {
@@ -399,7 +476,7 @@ function Surface({
 
     case 'roulette':
       return (
-        <RouletteWheel
+        <RouletteDisplay
           config={config as unknown as RouletteWidgetConfig}
           spin={rouletteSpin}
           onFinished={onRouletteFinished}

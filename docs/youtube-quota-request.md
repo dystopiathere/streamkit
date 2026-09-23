@@ -29,7 +29,10 @@ Extension Form»). Заполняется по-английски; ниже — 
 > live) and the YouTube Live Streaming API (`liveChatMessages.streamList`) to
 > show the live chat of their own current broadcast in their dashboard and in a
 > chat overlay that the streamer adds to their own stream. Chat messages are not
-> stored; they pass through the service in real time.
+> stored; they pass through the service in real time. The same stream also
+> carries membership and Super Chat events of the streamer's own channel: those
+> are shown as on-stream alerts and kept in the streamer's own event history
+> until they delete it.
 
 **Which API methods do you call and how often**
 
@@ -40,8 +43,10 @@ Extension Form»). Заполняется по-английски; ниже — 
 >   overlay or the stream window open and no broadcast is live yet.
 > - `videos.list` (liveStreamingDetails): only while a broadcast is live.
 > - `liveChatMessages.streamList`: one server-streaming connection per live
->   broadcast, only while the streamer has the chat overlay or the stream window
->   open; resumed with `pageToken` after a disconnect.
+>   broadcast, only while the streamer has the chat overlay, the alert overlay
+>   with YouTube events enabled, or the stream window open; resumed with
+>   `pageToken` after a disconnect. The same stream carries membership and Super
+>   Chat events, which the streamer's own alert overlay shows on their stream.
 > We never call `search.list`.
 
 **Quota calculation** (пересчитать после измерения цены потока)
@@ -52,6 +57,7 @@ Extension Form»). Заполняется по-английски; ниже — 
 | Метрики в эфире: 3 ед. × 60 в час × 4 ч | 720 |
 | Поиск эфира перед стартом: 1 ед. × 30 в час × 1 ч | 30 |
 | Поток чата: `YOUTUBE_CHAT_STREAM_COST` × открытий за 4 ч (оценка — 24) | 120 |
+| Тот же поток ради событий (спонсоры, суперчаты) — открытий не прибавляет, если чат уже открыт | 0 |
 | **Итого** | **≈ 1 110** |
 
 > We expect around 1,000 active streamers within the next 6 months, which is

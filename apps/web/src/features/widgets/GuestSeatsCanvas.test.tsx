@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { useForm, useWatch, type FieldValues } from 'react-hook-form';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { fit, GuestSeatsCanvas } from './GuestSeatsCanvas';
+import { GRID_STEP } from './grid';
 import i18n from '@/lib/i18n';
 
 beforeAll(async () => {
@@ -45,6 +46,20 @@ describe('места гостей в свободной раскладке', () 
 
     fireEvent.keyDown(seat, { key: 'ArrowDown', altKey: true });
     expect(screen.getByTestId('seat-width').textContent).toBe(String(start.width + 1));
+  });
+
+  it('Shift со стрелкой ведёт место по сетке', () => {
+    render(<Editor />);
+    const seat = screen.getByRole('button', { name: /^Место 1/ });
+    const start = DEFAULT_GUEST_SEATS[0]!;
+
+    fireEvent.keyDown(seat, { key: 'ArrowRight', shiftKey: true });
+    const x = Number(screen.getByTestId('seat-x').textContent);
+    // Место встало на линию сетки правее исходного положения, а не «на десять
+    // процентов» от него: по линиям места и выравнивают друг с другом.
+    expect(x % GRID_STEP).toBe(0);
+    expect(x).toBeGreaterThan(start.x);
+    expect(x - start.x).toBeLessThanOrEqual(GRID_STEP);
   });
 
   it('рамка не уезжает за край кадра: плитку, обрезанную в OBS, видно только в эфире', () => {

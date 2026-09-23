@@ -1,16 +1,20 @@
 import {
   isTrackReference,
   RoomAudioRenderer,
+  type TrackReference,
+  useLocalParticipant,
   useLocalParticipantPermissions,
+  useParticipantAttributes,
   useTracks,
   VideoTrack,
 } from '@livekit/components-react';
-import { parseParticipantIdentity } from '@streamkit/contracts';
+import { isMirrored, mirrorAttribute, parseParticipantIdentity } from '@streamkit/contracts';
 import { type Participant, Track } from 'livekit-client';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@streamkit/app-kit';
 import { MicrophoneSettings } from './MicrophoneSettings';
+import { useMirrorCamera, writeMirrorCamera } from './mirror';
 import { useCamera } from './useCamera';
 import { useMicrophone } from './useMicrophone';
 
@@ -48,6 +52,17 @@ export function RoomStage({
   });
   const camera = useCamera({ onJoin: cameraOnJoin, deviceId: cameraDeviceId });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const mirror = useMirrorCamera();
+  const { localParticipant } = useLocalParticipant();
+
+  // Свой выбор зеркала — атрибутом участника: его видят и остальные, и кадр
+  // OBS. Ставится и при входе, а не только на переключение: гость с прошлым
+  // выбором иначе выглядел бы для всех незеркальным.
+  useEffect(() => {
+    void localParticipant.setAttributes(mirrorAttribute(mirror)).catch(() => {
+      // Права на свои атрибуты нет (старый токен) — зеркало останется личным.
+    });
+  }, [localParticipant, mirror]);
 
   // Право на микрофон приходит с сервера и меняется на лету, когда стример
   // выключает гостю микрофон. Кнопку при этом не просто красим: без права
@@ -86,14 +101,8 @@ export function RoomStage({
               className="overflow-hidden rounded-lg border border-border bg-bg"
             >
               <div className="relative aspect-video bg-black">
-                {hasVideo ? (
-                  <VideoTrack
-                    trackRef={ref}
-                    className="h-full w-full object-cover"
-                    // Своё изображение зеркалим, как в любом созвоне: иначе
-                    // движение руки вправо на экране уходит влево, и это сбивает.
-                    style={participant.isLocal ? { transform: 'scaleX(-1)' } : undefined}
-                  />
+                {hasVideo && isTrackReference(ref) ? (
+                  <CameraVideo trackRef={ref} />
                 ) : (
                   <div
                     aria-hidden="true"
@@ -148,6 +157,11 @@ export function RoomStage({
         >
           {t('rooms.stage.camera')}: {camera.enabled ? t('rooms.stage.on') : t('rooms.stage.off')}
         </Button>
+        {/* Зеркало — про свою камеру и только про неё: развернуть чужую нельзя
+            ни стримеру, ни гостю. */}
+        <Button variant={mirror ? 'secondary' : 'ghost'} onClick={() => writeMirrorCamera(!mirror)}>
+          {t('rooms.stage.mirror')}: {mirror ? t('rooms.stage.on') : t('rooms.stage.off')}
+        </Button>
         <Button
           variant="ghost"
           aria-expanded={settingsOpen}
@@ -167,6 +181,8 @@ export function RoomStage({
         </div>
       ) : null}
 
+      <p className="text-xs text-muted">{t('rooms.stage.mirrorHint')}</p>
+
       {microphone.failed ? (
         <p role="alert" className="text-sm text-danger">
           {t('rooms.stage.microphoneFailed')}
@@ -183,5 +199,23 @@ export function RoomStage({
           слышен с задержкой. */}
       <RoomAudioRenderer />
     </div>
+  );
+}
+
+/**
+ * Видео участника — зеркальное, если он сам так решил.
+ *
+ * Отдельный компонент, потому что атрибуты читаются по участнику: хук нельзя
+ * позвать внутри `map`. Зеркало берётся из атрибута и у себя тоже — чтобы своя
+ * плитка показывала ровно то, что видят остальные и кадр OBS.
+ */
+function CameraVideo({ trackRef }: { trackRef: TrackReference }): React.JSX.Element {
+  const { attributes } = useParticipantAttributes({ participant: trackRef.participant });
+  return (
+    <VideoTrack
+      trackRef={trackRef}
+      className="h-full w-full object-cover"
+      style={isMirrored(attributes) ? { transform: 'scaleX(-1)' } : undefined}
+    />
   );
 }

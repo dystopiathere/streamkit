@@ -2,6 +2,7 @@ import { Injectable, Logger, Module } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { HttpClient } from '../../common/http/http-client.service';
 import { QuotaService } from '../analytics/quota.service';
+import { EventsModule } from '../events/events.module';
 import { IntegrationsModule } from '../integrations/integrations.module';
 import { CHAT_TICK_MS, ChatManager } from './chat-manager.service';
 import { TwitchChatSource } from './twitch-chat.source';
@@ -47,7 +48,9 @@ export class ChatScheduler {
 @Module({
   // Токены YouTube — из интеграций: чат читается токеном владельца канала.
   // Счётчик квоты — тот же, что у метрик: лимит Google общий на проект.
-  imports: [IntegrationsModule],
+  // События — из ленты событий: спонсорства и суперчаты YouTube приходят
+  // строками потока чата, и записывает их тот же сервис, что вебхук.
+  imports: [IntegrationsModule, EventsModule],
   providers: [
     TwitchChatSource,
     YouTubeChatSource,

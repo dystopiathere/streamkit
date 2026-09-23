@@ -1,15 +1,17 @@
 # Consent to Personal Data Processing
 
-Version No. 4 of 19.09.2026
+Version No. 5 of 23.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/personal-data?lang=ru); if the
 two differ, the Russian version prevails.
 
+The personal data operator is {{SELLER_NAME}}, a professional income tax payer
+(self-employed), Taxpayer ID (INN) {{SELLER_INN}} (the “Operator”).
+
 By signing up for the StreamKit service (https://stream-kit.ru), I freely, of my
-own will and in my own interest, give consent to {{SELLER_NAME}}, a professional
-income tax payer (self-employed), Taxpayer ID (INN) {{SELLER_INN}} (the
-“Operator”), to process my personal data on the terms below.
+own will and in my own interest, give the Operator consent to process my personal
+data on the terms below.
 
 ## 1. List of personal data
 
@@ -18,10 +20,11 @@ income tax payer (self-employed), Taxpayer ID (INN) {{SELLER_INN}} (the
 - password hash and the encrypted two-factor authentication secret;
 - IP address hash and browser details (User-Agent), date and time of sign-in and
   of significant actions;
-- widget settings, room names and my account's event history;
+- widget settings, room names, and my account's event history and roulette spin
+  history;
 - access tokens, identifiers, names and metrics of channels on platforms that I
   connect myself;
-- Pro plan payment details: amounts, periods, payment and refund history, the
+- paid plan payment details: the chosen plan, amounts, periods, payment and refund history, the
   encrypted identifier of the saved payment method and its label.
 
 ## 2. Purposes of processing
@@ -29,7 +32,7 @@ income tax payer (self-employed), Taxpayer ID (INN) {{SELLER_INN}} (the
 - sign-up and authentication in the service;
 - providing the service's features: widgets, alerts, event history, analytics
   of connected platforms, private rooms;
-- payment for the Pro plan, automatic renewal and refunds;
+- payment for the paid plans, automatic renewal and refunds;
 - sending service emails, including about an upcoming automatic charge;
 - ensuring account security and investigating incidents;
 - compliance with the laws of the Russian Federation.

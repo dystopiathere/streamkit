@@ -5,11 +5,13 @@ import {
   chatMessageSchema,
   type ChatPlatform,
   type ChatState,
+  type IncomingAlertEvent,
 } from '@streamkit/contracts';
 import { RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { RedisLock } from '../../common/redis/lock.service';
 import { PresenceService } from '../../common/redis/presence.service';
+import { EventsService } from '../events/events.service';
 import { chatChannels } from './chat-channel';
 import type { ChatSource } from './chat-source';
 import { TwitchChatSource } from './twitch-chat.source';
@@ -51,6 +53,8 @@ export const CHAT_TICK_MS = 10_000;
 export class ChatManager implements OnApplicationShutdown {
   private readonly logger = new Logger(ChatManager.name);
   private ownership: string | null = null;
+  /** Чьи виджеты оповещений просили события YouTube — сверка состава её обновляет. */
+  private eventUsers = new Set<string>();
   private started = false;
   private readonly sources: ChatSource[];
 
@@ -61,6 +65,7 @@ export class ChatManager implements OnApplicationShutdown {
     private readonly bus: RealtimeBus,
     private readonly lock: RedisLock,
     private readonly presence: PresenceService,
+    private readonly events: EventsService,
   ) {
     this.sources = [twitch, youtube];
   }
@@ -74,7 +79,10 @@ export class ChatManager implements OnApplicationShutdown {
 
     if (!this.started) {
       for (const source of this.sources) {
-        await source.start((message) => void this.publish(message));
+        await source.start(
+          (message) => void this.publish(message),
+          (event) => void this.record(event),
+        );
       }
       this.started = true;
     }
@@ -136,10 +144,18 @@ export class ChatManager implements OnApplicationShutdown {
   }
 
   private async wantedChannels(): Promise<Map<ChatPlatform, Set<string>>> {
+    // Оповещения — рядом с чатом в одном запросе: у YouTube события приходят
+    // тем же потоком, и виджет оповещений с включёнными событиями YouTube
+    // держит этот поток так же, как виджет чата.
     const widgets = await this.prisma.widget.findMany({
-      where: { type: 'CHAT', isEnabled: true, tokens: { some: { revokedAt: null } } },
+      where: {
+        type: { in: ['CHAT', 'ALERTS'] },
+        isEnabled: true,
+        tokens: { some: { revokedAt: null } },
+      },
       select: {
         userId: true,
+        type: true,
         config: true,
         tokens: { where: { revokedAt: null }, select: { id: true } },
       },
@@ -160,7 +176,18 @@ export class ChatManager implements OnApplicationShutdown {
     // выключены в настройках виджета: чат YouTube, который виджет не покажет,
     // незачем читать за квоту проекта.
     const connected = await chatChannels(this.prisma, [...new Set(shown.map((w) => w.userId))]);
+    const events = new Set<string>();
     for (const widget of shown) {
+      if (widget.type === 'ALERTS') {
+        // Оповещения держат поток только ради событий и только у YouTube:
+        // события Twitch приходят своей дорогой, и чат ради них не нужен.
+        if ((widget.config as { youtubeEvents?: boolean }).youtubeEvents !== true) continue;
+        events.add(widget.userId);
+        for (const chat of connected.get(widget.userId) ?? []) {
+          if (chat.platform === 'youtube' && !chat.authExpired) add(chat);
+        }
+        continue;
+      }
       const platforms = (widget.config as { platforms?: Partial<Record<ChatPlatform, boolean>> })
         .platforms;
       for (const chat of connected.get(widget.userId) ?? []) {
@@ -168,6 +195,9 @@ export class ChatManager implements OnApplicationShutdown {
         add(chat);
       }
     }
+    // Кому события нужны, известно только здесь: поток мог быть открыт ради
+    // чужого виджета чата, и тогда события с него не наши.
+    this.eventUsers = events;
     for (const ref of await this.presence.watchedChats()) add(ref);
     return wanted;
   }
@@ -183,6 +213,22 @@ export class ChatManager implements OnApplicationShutdown {
     await this.presence
       .setChatStates(states)
       .catch((error: unknown) => this.logger.warn({ err: error }, 'Состояние чата не записано'));
+  }
+
+  /**
+   * Событие из потока чата YouTube — в общую ленту событий.
+   *
+   * Тот же путь, что у вебхука и донат-коннекторов, с той же дедупликацией по
+   * `externalId`: поток переоткрывается с последней страницы, и те же строки
+   * приходят второй раз.
+   */
+  private async record(event: IncomingAlertEvent): Promise<void> {
+    if (!this.eventUsers.has(event.userId)) return;
+    await this.events
+      .ingest(event)
+      .catch((error: unknown) =>
+        this.logger.error({ err: error, provider: event.provider }, 'Событие YouTube не принято'),
+      );
   }
 
   private async publish(message: ChatMessage): Promise<void> {

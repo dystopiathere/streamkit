@@ -82,42 +82,34 @@ describe('триггеры доната', () => {
     // «Настроить вид» переключает разделы на триггер и подписывает это словом.
     fireEvent.click(screen.getAllByRole('button', { name: 'Настроить вид' })[0]!);
     expect(screen.getByText(/Вид триггера:/)).toBeTruthy();
+    // Списка триггеров среди вкладок нет: пока правят триггер, вкладки — его.
+    expect(screen.queryByRole('tab', { name: 'Триггеры' })).toBeNull();
     fireEvent.click(screen.getByRole('tab', { name: 'Текст' }));
     fireEvent.change(screen.getByLabelText('Заголовок'), { target: { value: 'от тысячи' } });
 
     expect(screen.getByTestId('trigger-titles').textContent).toBe('от тысячи');
     expect(screen.getByTestId('base-title').textContent).toBe('основной');
 
-    // «К списку триггеров» возвращает туда, откуда зашли, а не оставляет на
-    // «Показе»: те же поля молча правили бы другой объект.
-    fireEvent.click(screen.getByRole('button', { name: 'К списку триггеров' }));
+    // «К списку триггеров» и выводит к списку, и выходит из триггера: пока он
+    // выбран, те же поля правили бы его, а не основной вид.
+    fireEvent.click(screen.getByRole('button', { name: /К списку триггеров/ }));
     expect(screen.getByRole('list', { name: 'Триггеры по приоритету' })).toBeTruthy();
+    expect(screen.queryByText(/Вид триггера:/)).toBeNull();
 
-    // Основной вид правится своей кнопкой, и она называет действие, а не
-    // положение дел; чей вид открыт — отдельной отметкой.
-    fireEvent.click(screen.getAllByRole('button', { name: 'Настроить вид' }).at(-1)!);
+    // И теперь те же разделы правят основной вид.
     fireEvent.click(screen.getByRole('tab', { name: 'Текст' }));
     fireEvent.change(screen.getByLabelText('Заголовок'), { target: { value: 'обычный' } });
     expect(screen.getByTestId('base-title').textContent).toBe('обычный');
     expect(screen.getByTestId('trigger-titles').textContent).toBe('от тысячи');
   });
 
-  it('отмечает, чей вид правится, и не даёт нажать это как кнопку', () => {
+  it('в списке нет карточки основного вида: выход из триггера и есть возврат к нему', () => {
     renderEditor([trigger('first', 'gte', 100_000)]);
     const items = within(screen.getByRole('list', { name: 'Триггеры по приоритету' })).getAllByRole(
       'listitem',
     );
-    // По умолчанию правится основной вид — он последний в списке.
-    expect(items.at(-1)!.textContent).toMatch(/правится сейчас/);
-    expect(screen.queryByRole('button', { name: 'правится сейчас' })).toBeNull();
-
-    fireEvent.click(screen.getAllByRole('button', { name: 'Настроить вид' })[0]!);
-    fireEvent.click(screen.getByRole('button', { name: 'К списку триггеров' }));
-    const after = within(screen.getByRole('list', { name: 'Триггеры по приоритету' })).getAllByRole(
-      'listitem',
-    );
-    expect(after[0]!.textContent).toMatch(/правится сейчас/);
-    expect(after.at(-1)!.textContent).not.toMatch(/правится сейчас/);
+    expect(items).toHaveLength(1);
+    expect(screen.queryByText('Основной вид')).toBeNull();
   });
 
   it('стёртая сумма не роняет страницу: NaN сам себе не равен', () => {
@@ -145,6 +137,15 @@ describe('триггеры доната', () => {
     );
     expect(items[0]!.textContent).not.toMatch(/поймает триггер выше/);
     expect(items[1]!.textContent).toMatch(/поймает триггер выше — «от 500/);
+  });
+
+  it('настройка всего виджета не повторяется в разделах сценария', () => {
+    // «События YouTube» — настройка виджета, а не сценария: в разделах она
+    // стояла бы в каждом сценарии и читалась бы как настройка доната.
+    renderEditor();
+    expect(screen.queryByLabelText(/События YouTube/)).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Показ' }));
+    expect(screen.queryByLabelText(/События YouTube/)).toBeNull();
   });
 
   it('вкладка триггеров — только у доната', () => {

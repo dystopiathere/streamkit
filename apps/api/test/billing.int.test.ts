@@ -9,6 +9,7 @@ process.env.SELLER_EMAIL = 'support@example.ru';
 import {
   guestIdentity,
   MAX_RENEWAL_ATTEMPTS,
+  MAX_ROULETTE_SECTORS,
   PLAN_FEATURES,
   PLAN_PRICES,
   type RoomParticipant,
@@ -551,6 +552,48 @@ describe('Подписка на платформу (feature)', () => {
     await subscribed(owner.token, 'pro');
     const full = await widgets.resolveOverlayToken(raw);
     expect(full?.widget.config).toMatchObject(advanced);
+  });
+
+  it('без «Про» рулетка едет колесом, и сервер крутит тот же урезанный список', async () => {
+    const owner = await streamer();
+    const sectors = Array.from({ length: 30 }, (_, index) => ({
+      id: `s${index}`,
+      label: `Зритель ${index + 1}`,
+      weight: 1,
+      color: '#A3850F',
+    }));
+    const created = await request(server())
+      .post('/api/widgets')
+      .set(auth(owner.token))
+      .send({ name: 'Розыгрыш', type: 'roulette', config: { mode: 'vertical', sectors } })
+      .expect(201);
+    const widgetId = created.body.id as string;
+
+    // В кадр идёт колесо и первые двадцать четыре позиции.
+    const widgets = harness.app.get(WidgetsService);
+    const link = await widgets.createOverlayToken(owner.userId, widgetId, null);
+    const raw = new URL(link.url).searchParams.get('token')!;
+    const basic = await widgets.resolveOverlayToken(raw);
+    const shown = basic?.widget.config as { mode: string; sectors: unknown[] };
+    expect(shown.mode).toBe('wheel');
+    expect(shown.sectors).toHaveLength(MAX_ROULETTE_SECTORS);
+
+    // И сервер выбирает сектор по этому же списку: номер за его пределами
+    // оверлей доводить было бы некуда.
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const spin = await request(server())
+        .patch(`/api/widgets/${widgetId}/state`)
+        .set(auth(owner.token))
+        .send({ kind: 'roulette', action: 'spin' })
+        .expect(200);
+      expect(spin.body.spins[0].sectorIndex).toBeLessThan(MAX_ROULETTE_SECTORS);
+    }
+
+    // С «Про» крутится весь список: настройки виджета не менялись.
+    await subscribed(owner.token, 'pro');
+    const full = await widgets.resolveOverlayToken(raw);
+    expect((full?.widget.config as { mode: string }).mode).toBe('vertical');
+    expect((full?.widget.config as { sectors: unknown[] }).sectors).toHaveLength(30);
   });
 
   it('после окончания «Про» уборка рассылает оверлеям базовое оформление', async () => {

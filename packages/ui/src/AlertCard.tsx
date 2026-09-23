@@ -5,6 +5,7 @@ import {
   renderTemplate,
 } from '@streamkit/contracts';
 import type { CSSProperties } from 'react';
+import { ALERT_ENTER_DURATION_MS } from './alert-animations';
 import { Media } from './media';
 import { slotCss, WidgetFrame } from './slots';
 import { renderHighlighted, templateVars } from './template';
@@ -75,7 +76,9 @@ export function AlertCard({
         flexDirection: 'column',
         gap: 12,
         padding: 24,
-        animation: animate ? `sk-${config.animationIn} 400ms ease-out both` : undefined,
+        animation: animate
+          ? `sk-${config.animationIn} ${ALERT_ENTER_DURATION_MS}ms ease-out both`
+          : undefined,
         ...LAYOUT_STYLES[config.layout],
       }}
     >

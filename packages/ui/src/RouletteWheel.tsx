@@ -1,11 +1,18 @@
 import {
-  formatMoney,
   type RouletteSpin,
   type RouletteWidgetConfig,
   rouletteGeometry,
 } from '@streamkit/contracts';
-import { type CSSProperties, useEffect, useRef, useState } from 'react';
-import { isPositioned, slotCss, WidgetFrame } from './slots';
+import { useRef, useState } from 'react';
+import { RouletteFrame } from './roulette-frame';
+import {
+  EASE_OUT,
+  ENTER_MS,
+  labelColor,
+  SPIN_EASING,
+  useSpinPhases,
+  WIND_UP_SHARE,
+} from './roulette-spin';
 import { textStyleToCss } from './text-style';
 
 export interface RouletteWheelProps {
@@ -16,24 +23,8 @@ export interface RouletteWheelProps {
   onFinished?: (spinId: string) => void;
 }
 
-type Phase = 'idle' | 'spinning' | 'result' | 'leaving';
-
-/**
- * Замедление колеса: сильный толчок и долгий выбег.
- *
- * Первая контрольная точка круто вверх — колесо сразу набирает скорость после
- * замаха, вторая прижата к единице — последние обороты тянутся, и зритель
- * успевает гадать, на каком секторе встанет. Стандартный `ease-out` тормозит
- * равномерно и выглядит как анимация, а не как колесо.
- */
-const SPIN_EASING = 'cubic-bezier(0.12, 0.66, 0.08, 1)';
-/** Замах назад перед прокрутом: доля длительности и угол. */
-const WIND_UP_SHARE = 0.05;
+/** Замах назад перед прокрутом: угол. */
 const WIND_UP_DEGREES = 8;
-/** Вход и уход колеса, если оно прячется между прокрутами, и уход итога. */
-const ENTER_MS = 320;
-const LEAVE_MS = 200;
-const EASE_OUT = 'cubic-bezier(0.23, 1, 0.32, 1)';
 
 /** Кольцо в координатах SVG: колесо — круг радиуса 100 вокруг начала. */
 const RIM_RADIUS = 97;
@@ -52,23 +43,6 @@ function sectorAt(geometry: { start: number; end: number }[], rotation: number):
   const angle = (((360 - rotation) % 360) + 360) % 360;
   const index = geometry.findIndex((sector) => angle >= sector.start && angle < sector.end);
   return index === -1 ? geometry.length - 1 : index;
-}
-
-/**
- * Цвет подписи сектора — тёмный или светлый, какой контрастнее.
- *
- * Стример задаёт цвет сектора сам, а белая подпись на жёлтом секторе не
- * читается даже с обводкой. Относительная яркость по WCAG.
- */
-function labelColor(hex: string): string {
-  const channel = (offset: number): number => {
-    const value = parseInt(hex.slice(offset, offset + 2), 16) / 255;
-    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-  };
-  const luminance = 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
-  const onDark = 1.05 / (luminance + 0.05);
-  const onLight = (luminance + 0.05) / 0.055;
-  return onLight >= onDark ? '#100F0D' : '#FFFFFF';
 }
 
 function restingAngle(sectors: RouletteWidgetConfig['sectors']): number {
@@ -126,80 +100,44 @@ export function RouletteWheel({ config, spin, onFinished }: RouletteWheelProps):
   // В покое указатель смотрит в середину первого сектора, а не на штифт между
   // двумя: стрелка на границе в первом же кадре выглядит спорной.
   const [rest, setRest] = useState(() => restingAngle(config.sectors));
-  const [phase, setPhase] = useState<Phase>('idle');
-  const [shown, setShown] = useState<RouletteSpin | null>(null);
   const rotor = useRef<HTMLDivElement>(null);
   const flag = useRef<SVGSVGElement>(null);
   const restRef = useRef(rest);
 
   const sectors = config.sectors;
   const geometry = rouletteGeometry(sectors);
-  const spinId = spin?.id ?? null;
 
-  // Всё, что эффекту прокрута нужно из пропсов, — через ref: иначе правка
-  // конфига посреди прокрута перезапускала бы эффект, и колесо дёргалось бы
-  // назад к началу. Прокрут идёт по конфигу, с которым начался.
-  const latest = useRef({ spin, geometry, config, onFinished });
-  useEffect(() => {
-    latest.current = { spin, geometry, config, onFinished };
-  });
+  const { phase, shown } = useSpinPhases(
+    spin,
+    config,
+    (current, finish, reduced) => {
+      const element = rotor.current;
+      if (!element) return;
 
-  useEffect(() => {
-    if (!spinId) return;
-    const { spin: current, geometry: shape, config: settings } = latest.current;
-    const element = rotor.current;
-    if (!current || !element) return;
+      // Сектор ищется по id: стример мог переставить сектора, пока прокрут шёл
+      // по шине. Не нашёлся (удалили) — по номеру, в пределах колеса.
+      const found = sectors.findIndex((sector) => sector.id === current.sectorId);
+      const index = found === -1 ? Math.min(current.sectorIndex, geometry.length - 1) : found;
+      const target = geometry[index]!;
+      const pointAt = target.start + current.offset * (target.end - target.start);
 
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    let frame = 0;
-    let animation: Animation | null = null;
+      const from = restRef.current;
+      const desired = (360 - pointAt + 360) % 360;
+      const delta = (((desired - from) % 360) + 360) % 360;
+      const to = from + current.turns * 360 + delta;
 
-    // Сектор ищется по id: стример мог переставить сектора, пока прокрут шёл
-    // по шине. Не нашёлся (удалили) — по номеру, в пределах колеса.
-    const found = settings.sectors.findIndex((sector) => sector.id === current.sectorId);
-    const index = found === -1 ? Math.min(current.sectorIndex, shape.length - 1) : found;
-    const target = shape[index]!;
-    const pointAt = target.start + current.offset * (target.end - target.start);
+      const land = (): void => {
+        restRef.current = to;
+        setRest(to);
+        finish();
+      };
 
-    const from = restRef.current;
-    const desired = (360 - pointAt + 360) % 360;
-    const delta = (((desired - from) % 360) + 360) % 360;
-    const to = from + current.turns * 360 + delta;
+      if (reduced || typeof element.animate !== 'function') {
+        land();
+        return;
+      }
 
-    const finish = (): void => {
-      restRef.current = to;
-      setRest(to);
-      setPhase('result');
-      timers.push(
-        setTimeout(() => {
-          setPhase('leaving');
-          timers.push(
-            setTimeout(() => {
-              setPhase('idle');
-              latest.current.onFinished?.(current.id);
-            }, LEAVE_MS),
-          );
-        }, settings.resultMs),
-      );
-    };
-
-    timers.push(
-      setTimeout(() => {
-        setShown(current);
-        setPhase('spinning');
-      }, 0),
-    );
-
-    const reduced =
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    if (reduced || typeof element.animate !== 'function') {
-      // Без вращения: колесо встаёт на итог сразу, а итог появляется так же,
-      // как после прокрута, — смысл события не теряется вместе с движением.
-      timers.push(setTimeout(finish, 0));
-    } else {
-      animation = element.animate(
+      const animation = element.animate(
         [
           { transform: `rotate(${from}deg)`, easing: 'cubic-bezier(0.3, 0, 0.4, 1)' },
           {
@@ -210,24 +148,19 @@ export function RouletteWheel({ config, spin, onFinished }: RouletteWheelProps):
           { transform: `rotate(${to}deg)` },
         ],
         {
-          duration: settings.spinDurationMs,
+          duration: config.spinDurationMs,
           // Спрятанное колесо сначала появляется, потом крутится.
-          delay: settings.hideWhenIdle ? ENTER_MS : 0,
+          delay: config.hideWhenIdle ? ENTER_MS : 0,
           fill: 'forwards',
         },
       );
-      animation.onfinish = () => {
-        element.style.transform = `rotate(${to}deg)`;
-        animation?.cancel();
-        cancelAnimationFrame(frame);
-        finish();
-      };
 
       // Флажок цепляет границу каждого сектора: щелчок на стыке — то, по чему
       // зритель слышит и видит, что колесо замедляется.
-      let under = sectorAt(shape, from);
+      let frame = 0;
+      let under = sectorAt(geometry, from);
       const tick = (): void => {
-        const now = sectorAt(shape, currentAngle(element));
+        const now = sectorAt(geometry, currentAngle(element));
         if (now !== under) {
           under = now;
           flag.current?.animate([{ transform: 'rotate(-24deg)' }, { transform: 'rotate(0deg)' }], {
@@ -238,25 +171,29 @@ export function RouletteWheel({ config, spin, onFinished }: RouletteWheelProps):
         frame = requestAnimationFrame(tick);
       };
       frame = requestAnimationFrame(tick);
-    }
 
-    return () => {
-      for (const timer of timers) clearTimeout(timer);
-      cancelAnimationFrame(frame);
-      if (animation) {
+      animation.onfinish = () => {
+        element.style.transform = `rotate(${to}deg)`;
+        animation.cancel();
+        cancelAnimationFrame(frame);
+        land();
+      };
+
+      return () => {
+        cancelAnimationFrame(frame);
         // Прерванный прокрут (виджет перенастроили, сцену закрыли) оставляет
         // колесо на месте остановки, а не отбрасывает к началу.
         const angle = currentAngle(element);
         animation.cancel();
         element.style.transform = `rotate(${angle}deg)`;
         restRef.current = angle;
-      }
-    };
-  }, [spinId]);
+      };
+    },
+    onFinished,
+  );
 
   const text = textStyleToCss(config.text);
   const size = config.wheelSize;
-  const visible = !config.hideWhenIdle || phase !== 'idle';
   const settled = phase === 'result' || phase === 'leaving';
   const winner = settled && shown ? shown : null;
   const winnerIndex = winner ? sectors.findIndex((sector) => sector.id === winner.sectorId) : -1;
@@ -265,60 +202,10 @@ export function RouletteWheel({ config, spin, onFinished }: RouletteWheelProps):
   const wheelFont = config.slots.wheel.fontSize ?? config.text.fontSize;
   const labelSize = Math.min(16, Math.max(5, (wheelFont * 200) / size / 1.6));
 
-  const wheelStyle: CSSProperties = {
-    ...slotCss(config.slots.wheel, config.text.fontSize),
-    position: isPositioned(config.slots.wheel) ? 'absolute' : 'relative',
-    width: size,
-    height: size,
-    flexShrink: 0,
-  };
-  // Вход и уход — на внутренней обёртке, а не на элементе кадра: у того свой
-  // `transform` (перенос на середину в раскладке), и два трансформа на одном
-  // элементе затирают друг друга. Отдельные `scale` и `translate` решили бы
-  // это, но они появились в Chromium 104, а браузер-сорс OBS бывает старше.
-  const presence: CSSProperties = {
-    position: 'relative',
-    width: '100%',
-    height: '100%',
-    opacity: visible ? 1 : 0,
-    // Появляется из почти полного размера, а не из точки: колесо, растущее из
-    // ничего, читается как всплывающая реклама.
-    transform: visible ? 'scale(1)' : 'scale(0.94)',
-    transition: visible
-      ? `opacity ${ENTER_MS}ms ${EASE_OUT}, transform ${ENTER_MS}ms ${EASE_OUT}`
-      : `opacity ${LEAVE_MS}ms ease-out, transform ${LEAVE_MS}ms ease-out`,
-  };
-
   return (
-    <WidgetFrame
-      testId="roulette"
-      background={config.background}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 12,
-        padding: 16,
-      }}
-    >
-      {config.title ? (
-        <div
-          data-slot="title"
-          style={{
-            ...text,
-            ...slotCss(config.slots.title, config.text.fontSize),
-            fontWeight: 700,
-            opacity: visible ? 1 : 0,
-            transition: `opacity ${ENTER_MS}ms ${EASE_OUT}`,
-          }}
-        >
-          {config.title}
-        </div>
-      ) : null}
-
-      <div data-slot="wheel" style={wheelStyle}>
-        <div style={presence}>
+    <RouletteFrame config={config} phase={phase} winner={winner}>
+      {() => (
+        <>
           <div
             ref={rotor}
             data-testid="roulette-rotor"
@@ -413,60 +300,8 @@ export function RouletteWheel({ config, spin, onFinished }: RouletteWheelProps):
               strokeLinejoin="round"
             />
           </svg>
-        </div>
-      </div>
-
-      <div
-        data-slot="result"
-        role="status"
-        style={{
-          ...text,
-          ...slotCss(config.slots.result, config.text.fontSize),
-          textAlign: 'center',
-          // Итог занимает место и до появления: иначе в обычной раскладке
-          // колесо подпрыгивало бы вверх в момент остановки.
-          visibility: winner ? 'visible' : 'hidden',
-        }}
-      >
-        <span
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 2,
-            opacity: phase === 'result' ? 1 : 0,
-            transform: phase === 'result' ? 'translateY(0)' : 'translateY(6px)',
-            transition:
-              phase === 'result'
-                ? `opacity 300ms ${EASE_OUT}, transform 300ms ${EASE_OUT}`
-                : `opacity ${LEAVE_MS}ms ease-out, transform ${LEAVE_MS}ms ease-out`,
-          }}
-        >
-          <span style={{ display: 'flex', alignItems: 'center', gap: '0.35em', fontWeight: 700 }}>
-            <span
-              aria-hidden="true"
-              style={{
-                width: '0.6em',
-                height: '0.6em',
-                borderRadius: 2,
-                background: winner?.color ?? 'transparent',
-                boxShadow: `0 0 0 2px ${config.rimColor}`,
-                flexShrink: 0,
-              }}
-            />
-            {/* Подпись — из прокрута: сектор могли переименовать, пока колесо крутилось. */}
-            <span style={{ color: config.slots.result.color ?? config.text.highlightColor }}>
-              {winner?.label ?? ' '}
-            </span>
-          </span>
-          {config.showDonor && winner?.username ? (
-            <span style={{ fontSize: '0.6em' }}>
-              {winner.username}
-              {winner.amount ? ` · ${formatMoney(winner.amount)}` : ''}
-            </span>
-          ) : null}
-        </span>
-      </div>
-    </WidgetFrame>
+        </>
+      )}
+    </RouletteFrame>
   );
 }

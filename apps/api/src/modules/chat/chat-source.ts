@@ -1,5 +1,10 @@
 import type { Logger } from '@nestjs/common';
-import type { ChatMessage, ChatPlatform, ChatState } from '@streamkit/contracts';
+import type {
+  ChatMessage,
+  ChatPlatform,
+  ChatState,
+  IncomingAlertEvent,
+} from '@streamkit/contracts';
 
 /**
  * Источник чата площадки: единица работы — КАНАЛ.
@@ -18,7 +23,15 @@ export interface ChatSource {
   readonly platform: ChatPlatform;
   /** На какие каналы подписаны сейчас. */
   readonly channels: ReadonlySet<string>;
-  start(sink: (message: ChatMessage) => void): Promise<void>;
+  /**
+   * `events` — только для YouTube, и это не прихоть: у него нет подписки на
+   * события, и спонсорства с суперчатами приходят строками того же потока, что
+   * и чат. У Twitch для них есть EventSub, и оттуда они приходят сами.
+   */
+  start(
+    sink: (message: ChatMessage) => void,
+    events?: (event: IncomingAlertEvent) => void,
+  ): Promise<void>;
   join(channel: string): Promise<void>;
   leave(channel: string): Promise<void>;
   stop(): Promise<void>;

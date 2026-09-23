@@ -12,6 +12,10 @@ import {
   isVideoUrl,
   LATEST_DEFAULT_TEMPLATES,
   MAX_GUESTS_PER_ROOM,
+  MAX_VERTICAL_SECTORS,
+  maxRouletteSectors,
+  ROULETTE_MODES,
+  type RouletteMode,
   TOP_DONORS_PERIODS,
   type WidgetType,
 } from '@streamkit/contracts';
@@ -21,12 +25,12 @@ import { Link } from 'react-router-dom';
 import { Button, cn, Label, selectClasses } from '@streamkit/app-kit';
 import { toast } from 'sonner';
 import { useChannels } from '@/features/analytics/queries';
-import { usePlanAccess } from '@/features/billing/PlanPaywall';
+import { PlanPaywall, usePlanAccess } from '@/features/billing/PlanPaywall';
 import { useRooms } from '@/features/rooms/queries';
 import { ApiError } from '@/lib/api';
 import { useSendTestAlert } from './queries';
 import { LayoutSection, StyleSection } from './AdvancedStyling';
-import { AlertTriggers, conditionSummary } from './AlertTriggers';
+import { AlertTriggers, conditionSummary, triggerTitle } from './AlertTriggers';
 import { RouletteSectors } from './RouletteSectors';
 import { GuestSeatsCanvas } from './GuestSeatsCanvas';
 import { canvasOf, WidgetSurface } from './WidgetPreview';
@@ -91,6 +95,12 @@ const STYLE_SECTION: SectionDef = {
 export function sectionsFor(
   type: WidgetType,
   scenario: AlertEventType = 'donation',
+  /**
+   * Правят вид триггера. Тогда вкладки настраивают ЕГО, и списка триггеров
+   * среди них нет: вкладка, которая правит совсем другой объект, стояла бы в
+   * одном ряду с теми, что правят триггер. Обратно — шапкой над вкладками.
+   */
+  editingTrigger = false,
 ): readonly SectionDef[] {
   switch (type) {
     case 'alerts':
@@ -110,7 +120,7 @@ export function sectionsFor(
         },
         // Триггеры — только у доната: сумма есть только у него. Сразу после
         // «Показа», до вида: от них зависит, ЧЕЙ вид правят следующие вкладки.
-        ...(scenario === 'donation'
+        ...(scenario === 'donation' && !editingTrigger
           ? [{ id: 'triggers', label: 'widgets.tab.triggers', fields: ['triggers'] } as const]
           : []),
         {
@@ -307,7 +317,7 @@ export function WidgetConfigForm({
   onAlertTriggerChange?: (trigger: string | null) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const sections = sectionsFor(type, alertScenario);
+  const sections = sectionsFor(type, alertScenario, alertTrigger !== null);
   const current = sections.find((item) => item.id === section) ?? sections[0]!;
   const triggers = (
     type === 'alerts' ? (form.watch(`scenarios.${alertScenario}.triggers`) ?? []) : []
@@ -336,32 +346,42 @@ export function WidgetConfigForm({
   ) as Record<string, unknown> | undefined;
 
   // Взялись за вид — сразу к нему: список триггеров вид не показывает.
-  const editTrigger = (id: string | null): void => {
+  const editTrigger = (id: string): void => {
     onAlertTriggerChange?.(id);
     onSectionChange('show');
   };
 
-  // Из вида триггера — обратно к списку, откуда в него зашли. Только переход:
-  // выбранный триггер остаётся выбранным, и список отмечает его словами. Сброс
-  // выбора «заодно» был бы действием, которого кнопка не называет.
+  // Из вида триггера — к списку, и выбор при этом снимается: пока триггер
+  // выбран, вкладки правят его, а не основной вид. Значит выйти из триггера и
+  // вернуться к списку — одно и то же действие, и двух кнопок для него не надо.
+  const leaveTrigger = (): void => {
+    onAlertTriggerChange?.(null);
+    onSectionChange('triggers');
+  };
 
   return (
-    <div className="overflow-hidden rounded-card border border-border bg-surface">
+    <div
+      className={cn(
+        'overflow-hidden rounded-card border bg-surface',
+        // Правится не основной вид — это видно по рамке всей формы, а не только
+        // по подписи в шапке: поля у триггера и у сценария одни и те же.
+        trigger ? 'border-accent/60' : 'border-border',
+      )}
+    >
       {type === 'alerts' ? (
         <ScenarioHeader form={form} selected={alertScenario} onSelect={onAlertScenarioChange} />
       ) : null}
 
       {/* Чей вид правят разделы — словом над вкладками: одинаковые поля у
           сценария и триггера иначе неотличимы, и правка ушла бы не туда. */}
-      {trigger && current.id !== 'triggers' ? (
+      {trigger ? (
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface-hover/50 px-5 py-3 sm:px-6">
           <p className="text-sm">
             <span className="text-muted">{t('widgets.triggers.editingBanner')} </span>
-            <span className="font-medium">
-              {triggerIndex + 1}. {trigger.name.trim() || conditionSummary(t, trigger.condition)}
-            </span>
+            <span className="font-medium">{triggerTitle(t, triggerIndex, trigger)}</span>
           </p>
-          <Button variant="ghost" onClick={() => onSectionChange('triggers')}>
+          <Button variant="ghost" onClick={leaveTrigger}>
+            <span aria-hidden="true">← </span>
             {t('widgets.triggers.backToList')}
           </Button>
         </div>
@@ -387,12 +407,7 @@ export function WidgetConfigForm({
         className="p-5 sm:p-6"
       >
         {current.id === 'triggers' ? (
-          <AlertTriggers
-            form={form}
-            scenario={alertScenario}
-            editing={trigger ? trigger.id : null}
-            onEdit={editTrigger}
-          />
+          <AlertTriggers form={form} scenario={alertScenario} onEdit={editTrigger} />
         ) : (
           <SectionBody
             type={type}
@@ -495,7 +510,11 @@ function SectionBody({
       );
     case 'roulette':
       if (section === 'spin') return <RouletteSpinSettings form={form} />;
-      return section === 'look' ? <RouletteLook form={form} /> : <RouletteSectors form={form} />;
+      return section === 'look' ? (
+        <RouletteLook form={form} />
+      ) : (
+        <RouletteSectorsSection form={form} />
+      );
   }
 }
 
@@ -983,6 +1002,30 @@ function AlertSection({
         />
         <VoiceSettings form={form} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * События YouTube: спонсорства и платная поддержка.
+ *
+ * Настройка виджета, а не сценария, поэтому стоит рядом с предпросмотром, а не
+ * в разделах: в разделах она повторялась бы в каждом сценарии и выглядела бы
+ * настройкой доната или фолловера по отдельности.
+ *
+ * Отдельная настройка, а не «включено всегда»: у YouTube нет подписки на
+ * события, они приходят строками потока чата эфира, а его открытие стоит квоты,
+ * общей на весь сервис. И приходят, только пока оверлей этого виджета открыт в
+ * OBS, — сказать об этом нужно прямо, иначе «оповещения о спонсорах не
+ * работают» выглядит поломкой.
+ */
+export function YouTubeEvents({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-medium">{t('widgets.section.youtubeEvents')}</h3>
+      <CheckboxField form={form} name="youtubeEvents" label={t('widgets.field.youtubeEvents')} />
+      <p className="max-w-prose text-xs text-muted">{t('widgets.hint.youtubeEvents')}</p>
     </div>
   );
 }
@@ -1502,12 +1545,49 @@ function RouletteSpinSettings({ form }: { form: UseFormReturn<FieldValues> }): R
   );
 }
 
+/**
+ * Сколько секторов помещается сейчас.
+ *
+ * Вид решает предел (у колеса двадцать четыре, у ленты сто), а тариф решает,
+ * какой вид доедет до кадра: без «Про» лента становится колесом, и список,
+ * набранный длиннее, в эфире всё равно обрежется. Поэтому предел считается по
+ * тому виду, который увидят зрители, а не по выбранному в форме.
+ */
+function useSectorLimit(form: UseFormReturn<FieldValues>): number {
+  const pro = usePlanAccess('advancedStyling');
+  const mode = (form.watch('mode') as RouletteMode | undefined) ?? 'wheel';
+  return maxRouletteSectors(pro ? mode : 'wheel');
+}
+
+function RouletteSectorsSection({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.Element {
+  return <RouletteSectors form={form} maxSectors={useSectorLimit(form)} />;
+}
+
 function RouletteLook({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.Element {
   const { t } = useTranslation();
   const textLabels = useTextLabels();
+  const pro = usePlanAccess('advancedStyling');
+  const vertical = form.watch('mode') === 'vertical';
   return (
     <div className="space-y-6">
-      <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+      <div className="space-y-4">
+        <SelectField
+          form={form}
+          name="mode"
+          label={t('widgets.field.rouletteMode')}
+          options={ROULETTE_MODES.map((value) => ({
+            value,
+            label: t(`widgets.rouletteMode.${value}`),
+          }))}
+        />
+        <p className="max-w-prose text-xs text-muted">
+          {t('widgets.hint.rouletteMode', { max: MAX_VERTICAL_SECTORS })}
+        </p>
+        {/* Настройка остаётся, а в кадр без «Про» идёт колесо — как и всё
+            продвинутое оформление. Молча показывать не то, что выбрано, нельзя. */}
+        {vertical && !pro ? <PlanPaywall gate="advancedStyling" /> : null}
+      </div>
+      <div className="grid gap-x-6 gap-y-5 border-t border-border pt-5 sm:grid-cols-2">
         <RangeField
           form={form}
           name="wheelSize"

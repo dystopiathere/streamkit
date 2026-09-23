@@ -16,6 +16,7 @@ import {
 } from '@streamkit/app-kit';
 import { MicrophoneSettings } from '@/features/rooms/MicrophoneSettings';
 import { RoomStage } from '@/features/rooms/RoomStage';
+import { useMirrorCamera, writeMirrorCamera } from '@/features/rooms/mirror';
 import { ROOM_OPTIONS } from '@/features/rooms/room-options';
 import { useGuestJoin } from '@/features/rooms/queries';
 import { ApiError } from '@/lib/api';
@@ -145,6 +146,7 @@ function JoinForm({
   const videoTrack = tracks?.find((track) => track.kind === Track.Kind.Video) as
     LocalVideoTrack | undefined;
 
+  const mirror = useMirrorCamera();
   const nameValid = guestDisplayNameSchema.safeParse(name).success;
 
   const errorText = (() => {
@@ -184,13 +186,25 @@ function JoinForm({
         <div className="space-y-2">
           <div className="aspect-video overflow-hidden rounded-lg bg-black">
             {videoTrack ? (
-              <PreviewVideo track={videoTrack} />
+              <PreviewVideo track={videoTrack} mirrored={mirror} />
             ) : (
               <div className="grid h-full place-items-center text-sm text-muted">
                 {t('join.previewOff')}
               </div>
             )}
           </div>
+          {/* Зеркало выбирается ещё до входа: гость видит превью и решает,
+              глядя на него. Тот же выбор потом действует в комнате и в кадре. */}
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="h-4 w-4"
+              checked={mirror}
+              onChange={(event) => writeMirrorCamera(event.target.checked)}
+            />
+            {t('rooms.stage.mirror')}
+          </label>
+          <p className="text-xs text-muted">{t('rooms.stage.mirrorHint')}</p>
           {mediaDenied ? (
             <p role="alert" className="text-xs text-danger">
               {t('join.cameraDenied')}
@@ -298,8 +312,14 @@ function DeviceSelect({
   );
 }
 
-/** Своё превью зеркально — как в любом созвоне. */
-function PreviewVideo({ track }: { track: LocalVideoTrack }): React.JSX.Element {
+/** Превью до входа — по тому же выбору, что потом действует в комнате. */
+function PreviewVideo({
+  track,
+  mirrored,
+}: {
+  track: LocalVideoTrack;
+  mirrored: boolean;
+}): React.JSX.Element {
   const { t } = useTranslation();
   const ref = useRef<HTMLVideoElement>(null);
 
@@ -319,7 +339,7 @@ function PreviewVideo({ track }: { track: LocalVideoTrack }): React.JSX.Element 
       muted
       playsInline
       className="h-full w-full object-cover"
-      style={{ transform: 'scaleX(-1)' }}
+      style={mirrored ? { transform: 'scaleX(-1)' } : undefined}
     />
   );
 }

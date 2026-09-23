@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { Widget as PrismaWidget } from '@prisma/client';
 import {
   type AlertEvent,
+  applyPlanToConfig,
   type Currency,
   CURRENCIES,
   donationSeconds,
@@ -26,6 +27,7 @@ import { z } from 'zod';
 import { RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { RedisLock } from '../../common/redis/lock.service';
+import { BillingService } from '../billing/billing.service';
 import { toPrismaEventType } from '../events/event.mappers';
 
 /**
@@ -206,6 +208,7 @@ export class WidgetStateService {
     private readonly prisma: PrismaService,
     private readonly bus: RealtimeBus,
     private readonly lock: RedisLock,
+    private readonly billing: BillingService,
   ) {}
 
   /**
@@ -577,7 +580,14 @@ export class WidgetStateService {
     widget: PrismaWidget,
     trigger: Pick<RouletteSpin, 'source' | 'username' | 'amount'>,
   ): Promise<RouletteSpin> {
-    const config = rouletteWidgetConfigSchema.parse(widget.config);
+    // Конфиг — приведённый к тарифу, тот же, что уходит в оверлей: без «Про»
+    // вертикальная лента становится колесом, а список режется до двадцати
+    // четырёх секторов. Выбери сервер сектор по полному списку — в кадр ушёл бы
+    // номер, которого на колесе нет, и оверлей доводил бы колесо не туда.
+    const config = applyPlanToConfig(
+      rouletteWidgetConfigSchema.parse(widget.config),
+      await this.billing.planFeatures(widget.userId),
+    );
     const index = pickRouletteSector(config.sectors, secureRandom());
     const sector = config.sectors[index]!;
     const spin: RouletteSpin = {

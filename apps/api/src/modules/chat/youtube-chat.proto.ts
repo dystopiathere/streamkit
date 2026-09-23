@@ -4,8 +4,12 @@
  * Выдержка из официального `stream_list.proto`
  * (https://developers.google.com/youtube/v3/live/streaming-live-chat, Apache 2.0):
  * только то, что мы читаем. Номера полей — официальные и меняться не могут;
- * неизвестные поля proto2 при разборе пропускает, так что суперчаты, опросы и
- * подарки, которых здесь нет, ответ не ломают.
+ * неизвестные поля proto2 при разборе пропускает, так что опросы и подарки,
+ * которых здесь нет, ответ не ломают.
+ *
+ * Номер поля, списанный неверно, не даёт ошибки: разбор просто пропустит его, и
+ * суперчат приедет без суммы. Поэтому сверять их — только с официальным
+ * `stream_list.proto` на странице документации, а не по памяти.
  *
  * Строкой в коде, а не файлом `.proto` рядом: файл пришлось бы отдельно
  * копировать в `dist` и не потерять в `pnpm deploy`. Потерянный ассет
@@ -84,11 +88,54 @@ message LiveChatMessageSnippet {
   optional string display_message = 16;
   oneof displayed_content {
     LiveChatTextMessageDetails text_message_details = 19;
+    LiveChatSuperChatDetails super_chat_details = 27;
+    LiveChatSuperStickerDetails super_sticker_details = 28;
+    LiveChatNewSponsorDetails new_sponsor_details = 29;
+    LiveChatMemberMilestoneChatDetails member_milestone_chat_details = 30;
+    LiveChatMembershipGiftingDetails membership_gifting_details = 31;
   }
 }
 
 message LiveChatTextMessageDetails {
   optional string message_text = 1;
+}
+
+message LiveChatSuperChatDetails {
+  optional uint64 amount_micros = 1;
+  optional string currency = 2;
+  optional string amount_display_string = 3;
+  optional string user_comment = 4;
+  optional uint32 tier = 5;
+}
+
+message LiveChatSuperStickerDetails {
+  optional uint64 amount_micros = 1;
+  optional string currency = 2;
+  optional string amount_display_string = 3;
+  optional uint32 tier = 4;
+  optional SuperStickerMetadata super_sticker_metadata = 5;
+}
+
+message SuperStickerMetadata {
+  optional string sticker_id = 1;
+  optional string alt_text = 2;
+  optional string alt_text_language = 3;
+}
+
+message LiveChatNewSponsorDetails {
+  optional string member_level_name = 1;
+  optional bool is_upgrade = 2;
+}
+
+message LiveChatMemberMilestoneChatDetails {
+  optional string member_level_name = 1;
+  optional uint32 member_month = 2;
+  optional string user_comment = 3;
+}
+
+message LiveChatMembershipGiftingDetails {
+  optional int32 gift_memberships_count = 1;
+  optional string gift_memberships_level_name = 2;
 }
 `;
 
@@ -110,6 +157,32 @@ export interface YouTubeChatItem {
     publishedAt?: string;
     displayMessage?: string;
     textMessageDetails?: { messageText?: string };
+    /**
+     * Суммы приходят в микро (1 750 000 = 1,75) и числом, которое не помещается
+     * в 32 бита, поэтому protobufjs отдаёт их строкой (`longs: String`).
+     */
+    superChatDetails?: {
+      amountMicros?: string | number;
+      currency?: string;
+      amountDisplayString?: string;
+      userComment?: string;
+    };
+    superStickerDetails?: {
+      amountMicros?: string | number;
+      currency?: string;
+      amountDisplayString?: string;
+      superStickerMetadata?: { altText?: string };
+    };
+    newSponsorDetails?: { memberLevelName?: string; isUpgrade?: boolean };
+    memberMilestoneChatDetails?: {
+      memberLevelName?: string;
+      memberMonth?: number;
+      userComment?: string;
+    };
+    membershipGiftingDetails?: {
+      giftMembershipsCount?: number;
+      giftMembershipsLevelName?: string;
+    };
   };
   authorDetails?: YouTubeChatAuthor;
 }

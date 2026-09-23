@@ -1,10 +1,10 @@
 import {
-  MAX_ROULETTE_SECTORS,
   MIN_ROULETTE_SECTORS,
   type RouletteSector,
   rouletteSectorColor,
 } from '@streamkit/contracts';
-import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Plus, Trash2, Upload } from 'lucide-react';
+import { useRef, useState } from 'react';
 import {
   Controller,
   type FieldValues,
@@ -13,9 +13,11 @@ import {
   useWatch,
 } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { Button, FieldError, Input } from '@streamkit/app-kit';
+import { Button, ConfirmDialog, FieldError, Input } from '@streamkit/app-kit';
+import { toast } from 'sonner';
 import { intlLocale } from '@/lib/locale';
 import { IconButton } from './AlertTriggers';
+import { type CsvSector, decodeCsv, parseSectorsCsv } from './sectors-csv';
 
 /**
  * Сектора колеса: подпись, вес и цвет.
@@ -28,12 +30,22 @@ import { IconButton } from './AlertTriggers';
  * клавиатуры, а соседство секторов на колесе стример расставляет сознательно
  * (чтобы «ничего» не стояло рядом с главным призом).
  */
-export function RouletteSectors({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.Element {
+export function RouletteSectors({
+  form,
+  maxSectors,
+}: {
+  form: UseFormReturn<FieldValues>;
+  /** Сколько секторов помещается: у колеса и у ленты по-разному. */
+  maxSectors: number;
+}): React.JSX.Element {
   const { t } = useTranslation();
-  const { fields, append, remove, move } = useFieldArray({
+  const { fields, append, remove, move, replace } = useFieldArray({
     control: form.control,
     name: 'sectors',
   });
+  const file = useRef<HTMLInputElement>(null);
+  // Секторов в файле больше, чем влезает: спрашиваем, брать ли первые.
+  const [tooMany, setTooMany] = useState<CsvSector[] | null>(null);
   const sectors = (useWatch({ control: form.control, name: 'sectors' }) ?? []) as RouletteSector[];
   const total = sectors.reduce((sum, sector) => sum + (Number(sector.weight) || 0), 0);
   const percent = new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: 1 });
@@ -46,6 +58,50 @@ export function RouletteSectors({ form }: { form: UseFormReturn<FieldValues> }):
       weight: 1,
       color: rouletteSectorColor(fields.length, fields.length + 1),
     });
+  };
+
+  // Список из файла заменяет сектора целиком, а не дописывается: файл — это
+  // весь список, и «добавить к тому, что было» дало бы дубли.
+  const load = (sectors: CsvSector[]): void => {
+    replace(
+      sectors.map((sector, index) => ({
+        id: crypto.randomUUID(),
+        label: sector.label,
+        weight: sector.weight,
+        color: rouletteSectorColor(index, sectors.length),
+      })),
+    );
+    toast.success(t('widgets.roulette.csvLoaded', { count: sectors.length }));
+  };
+
+  const read = async (chosen: File): Promise<void> => {
+    const parsed = parseSectorsCsv(decodeCsv(await chosen.arrayBuffer()));
+    if (!parsed.ok) {
+      if ('empty' in parsed) {
+        toast.error(t('widgets.roulette.csvEmpty'));
+        return;
+      }
+      toast.error(
+        [
+          t('widgets.roulette.csvBad'),
+          ...parsed.issues.map((issue) =>
+            t(`widgets.roulette.csvIssue.${issue.kind}`, { line: issue.line }),
+          ),
+        ].join('\n'),
+      );
+      return;
+    }
+    if (parsed.sectors.length < MIN_ROULETTE_SECTORS) {
+      toast.error(t('widgets.roulette.csvTooFew', { min: MIN_ROULETTE_SECTORS }));
+      return;
+    }
+    // Предупреждение с выбором, а не молчаливая обрезка: в файле мог быть не
+    // тот список, и потерю половины розыгрыша стример заметил бы в эфире.
+    if (parsed.sectors.length > maxSectors) {
+      setTooMany(parsed.sectors);
+      return;
+    }
+    load(parsed.sectors);
   };
 
   // Цвета по кругу проверенной палитры: после перестановок и удалений соседние
@@ -159,18 +215,51 @@ export function RouletteSectors({ form }: { form: UseFormReturn<FieldValues> }):
       <FieldError id="sectors" message={listError} />
 
       <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
-        <Button variant="secondary" onClick={add} disabled={fields.length >= MAX_ROULETTE_SECTORS}>
+        <Button variant="secondary" onClick={add} disabled={fields.length >= maxSectors}>
           <Plus aria-hidden="true" className="h-4 w-4" />
           {t('widgets.roulette.add')}
+        </Button>
+        <Button variant="ghost" onClick={() => file.current?.click()}>
+          <Upload aria-hidden="true" className="h-4 w-4" />
+          {t('widgets.roulette.csvLoad')}
         </Button>
         <Button variant="ghost" onClick={recolor}>
           {t('widgets.roulette.recolor')}
         </Button>
         <span className="ml-auto text-xs text-muted tabular-nums">
-          {t('widgets.roulette.count', { used: fields.length, max: MAX_ROULETTE_SECTORS })}
+          {t('widgets.roulette.count', { used: fields.length, max: maxSectors })}
         </span>
+        <input
+          ref={file}
+          type="file"
+          accept=".csv,text/csv,text/plain"
+          className="hidden"
+          aria-label={t('widgets.roulette.csvLoad')}
+          onChange={(event) => {
+            const chosen = event.target.files?.[0];
+            // Поле очищается сразу: тот же файл, выбранный второй раз (его
+            // поправили в Excel), иначе не даёт события.
+            event.target.value = '';
+            if (chosen) void read(chosen);
+          }}
+        />
       </div>
+
+      <ConfirmDialog
+        open={tooMany !== null}
+        title={t('widgets.roulette.csvTooManyTitle')}
+        confirmLabel={t('common.yes')}
+        cancelLabel={t('common.no')}
+        onConfirm={() => {
+          if (tooMany) load(tooMany.slice(0, maxSectors));
+          setTooMany(null);
+        }}
+        onClose={() => setTooMany(null)}
+      >
+        <p>{t('widgets.roulette.csvTooMany', { count: tooMany?.length ?? 0, max: maxSectors })}</p>
+      </ConfirmDialog>
       <p className="max-w-prose text-xs text-muted">{t('widgets.roulette.weightHint')}</p>
+      <p className="max-w-prose text-xs text-muted">{t('widgets.roulette.csvHint')}</p>
     </div>
   );
 }

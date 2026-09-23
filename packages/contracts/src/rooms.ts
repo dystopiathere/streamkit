@@ -161,6 +161,32 @@ export function parseParticipantIdentity(identity: string): ParsedIdentity | nul
   return { role: match[1] as ParticipantRole, id: match[2]! };
 }
 
+/**
+ * Зеркалить ли камеру участника — его собственный выбор, и он один на всех.
+ *
+ * Едет атрибутом участника LiveKit, а не настройкой комнаты или виджета: так
+ * решение принимает ТОТ, чья это камера, и доходит до всех сразу — до его
+ * плитки, до плиток остальных и до кадра OBS. Стример развернуть чужую камеру не
+ * может: атрибуты участник меняет только свои, это право выдано в токене
+ * (`canUpdateOwnMetadata`), и чужие ему сервер не отдаст.
+ *
+ * Зеркало действует везде одинаково, а не только в своём окне: иначе гость не
+ * знает, как его видят зрители, — а именно это и нужно знать, поднимая к камере
+ * надпись или показывая, в какую сторону двигаться.
+ *
+ * По умолчанию выключено: в кадр идёт то, что снимает камера, пока человек сам
+ * не решил иначе.
+ */
+export const MIRROR_ATTRIBUTE = 'mirror';
+
+export function isMirrored(attributes: Readonly<Record<string, string>> | undefined): boolean {
+  return attributes?.[MIRROR_ATTRIBUTE] === '1';
+}
+
+export function mirrorAttribute(mirrored: boolean): Record<string, string> {
+  return { [MIRROR_ATTRIBUTE]: mirrored ? '1' : '0' };
+}
+
 export const roomParticipantSchema = z.object({
   identity: z.string(),
   role: z.enum(PARTICIPANT_ROLES),

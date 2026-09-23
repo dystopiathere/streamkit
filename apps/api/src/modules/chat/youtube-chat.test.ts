@@ -101,4 +101,49 @@ describe('прото потока чата', () => {
     expect(decoded.items?.[0]?.authorDetails?.channelId).toBe(AUTHOR);
     expect(decoded.items?.[0]?.snippet?.textMessageDetails?.messageText).toBe('привет стрим');
   });
+
+  it('подробности суперчата и спонсорства доезжают через разбор', () => {
+    // Номер поля, списанный неверно, ошибки не даёт: разбор просто пропустит
+    // его, и суперчат приедет без суммы. Этот тест ловит именно это.
+    const definition = youtubeChatServiceDefinition().StreamList;
+    const response: YouTubeChatResponse = {
+      items: [
+        {
+          id: 'LCC.super',
+          snippet: {
+            type: 'SUPER_CHAT_EVENT',
+            publishedAt: '2026-09-19T18:30:00Z',
+            superChatDetails: {
+              amountMicros: '1750000',
+              currency: 'RUB',
+              amountDisplayString: '1,75 ₽',
+              userComment: 'спасибо',
+            },
+          },
+        },
+        {
+          id: 'LCC.gift',
+          snippet: {
+            type: 'MEMBERSHIP_GIFTING_EVENT',
+            publishedAt: '2026-09-19T18:31:00Z',
+            membershipGiftingDetails: { giftMembershipsCount: 5, giftMembershipsLevelName: 'Друг' },
+          },
+        },
+      ],
+    };
+    const decoded = definition.responseDeserialize(
+      definition.responseSerialize(response),
+    ) as YouTubeChatResponse;
+
+    expect(decoded.items?.[0]?.snippet?.superChatDetails).toMatchObject({
+      // uint64 приезжает строкой: `longs: String` в настройках разбора.
+      amountMicros: '1750000',
+      currency: 'RUB',
+      userComment: 'спасибо',
+    });
+    expect(decoded.items?.[1]?.snippet?.membershipGiftingDetails).toMatchObject({
+      giftMembershipsCount: 5,
+      giftMembershipsLevelName: 'Друг',
+    });
+  });
 });

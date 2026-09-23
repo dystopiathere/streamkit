@@ -123,7 +123,9 @@ export class LiveKitRoomMediaServer implements RoomMediaServer {
   /**
    * Права меняются целиком, а не полем: LiveKit заменяет разрешения атомарно, и
    * всё, что не передано, сбрасывается. Поэтому здесь повторён полный набор прав
-   * гостя из `LiveKitTokens`, а не только список источников.
+   * гостя из `LiveKitTokens`, а не только список источников. Забыть здесь
+   * `canUpdateMetadata` значит отнять у гостя выбор зеркала в тот момент, когда
+   * стример выключил ему микрофон, — и вернуть его только перезаходом.
    */
   async setPublishSources(
     roomId: string,
@@ -137,7 +139,7 @@ export class LiveKitRoomMediaServer implements RoomMediaServer {
           canPublish: sources.length > 0,
           canPublishSources: sources.map((source) => TRACK_SOURCES[source]),
           canPublishData: false,
-          canUpdateMetadata: false,
+          canUpdateMetadata: true,
           hidden: false,
         },
       });
@@ -196,7 +198,13 @@ export class LiveKitTokens {
           // Сообщения данных комнате не нужны, а открытый канал между
           // незнакомыми людьми — лишняя поверхность.
           canPublishData: false,
-          canUpdateOwnMetadata: false,
+          // Свои атрибуты — да: ими участник сообщает остальным, зеркалить ли
+          // его камеру (`MIRROR_ATTRIBUTE`). Чужие этим правом не изменить.
+          // Вместе с атрибутами оно открывает и смену своего имени, но имя гость
+          // и так вписывает сам при входе, а перезаход по той же ссылке ничем не
+          // ограничен: нового здесь только то, что для этого не нужно
+          // переподключаться.
+          canUpdateOwnMetadata: true,
         });
         break;
 
