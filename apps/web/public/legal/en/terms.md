@@ -1,6 +1,6 @@
 # StreamKit Terms of Service
 
-Version No. 9 of 20.09.2026
+Version No. 10 of 23.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/terms?lang=ru); if the two
@@ -8,10 +8,11 @@ differ, the Russian version prevails.
 
 ## 1. General provisions
 
-1.1. These Terms are a public offer by {{SELLER_NAME}}, who applies the special
-tax regime “Professional Income Tax”, Taxpayer ID (INN) {{SELLER_INN}}
-(the “Operator”), and set out the terms of use of the StreamKit service
-available at https://stream-kit.ru (the “Service”).
+1.1. The operator of the Service is {{SELLER_NAME}}, who applies the special tax
+regime “Professional Income Tax”, Taxpayer ID (INN) {{SELLER_INN}} (the
+“Operator”). These Terms are a public offer by the Operator and set out the terms
+of use of the StreamKit service available at https://stream-kit.ru (the
+“Service”).
 
 1.2. Signing up for the Service means full and unconditional acceptance of these
 Terms (acceptance of the offer), and having an account and using the Service
@@ -28,9 +29,10 @@ processing of the user's viewers' and guests' data is described in section 13.
 2.1. The Service provides tools for streaming:
 
 - a widget builder for streaming software: alerts for donations and channel
-  events (follows, subscriptions, Bits, raids, Channel Points rewards), donation
-  goal, timer, top donors, chat of the connected Twitch and YouTube channels in
-  one feed, private room guests;
+  events (follows, subscriptions, memberships, gifts, Bits, raids, Channel Points
+  rewards, paid support), donation goal, timer, top donors, latest event,
+  roulette, chat of the connected Twitch and YouTube channels in one feed,
+  private room guests;
 - public links for showing widgets in streaming software (for example, OBS);
 - receiving events from external services connected by the user;
 - channel analytics on connected platforms (Twitch, YouTube);
@@ -54,11 +56,16 @@ includes, the prices and how to change a plan are in the offer
 YouTube channel to the Service, the user agrees to the YouTube Terms of Service
 (https://www.youtube.com/t/terms). YouTube chat is available while a stream is
 live and is limited by the daily quota Google allocates to the Service for all
-users: once it is used up, YouTube chat resumes after Google resets the quota.
+users: once it is used up, YouTube chat resumes after Google resets the quota. YouTube events — memberships, member
+milestones, gifted memberships, Super Chats and Super Stickers — arrive as lines
+of the same live chat, so they are switched on in the alert widget settings, spend
+the same quota and only arrive while the widget link is open in streaming
+software. The Service does not guarantee delivery of such events while the link
+is closed or the quota is exhausted.
 
 ## 3. Sign-up and account
 
-3.1. Persons aged 14 and over may sign up for the Service. The Pro plan may be
+3.1. Persons aged 14 and over may sign up for the Service. A paid plan may be
 paid for by adult users, and by users aged 14 to 18 out of their own earnings or
 with the consent of their legal representatives (Article 26 of the Civil Code of
 the Russian Federation).
@@ -113,7 +120,7 @@ It is prohibited to:
 
 If these terms are violated, the Operator may suspend or terminate access to the
 Service. If a paid plan is active at that time, the refund for the unused period
-is made under the rules of the Pro plan offer.
+is made under the rules of the paid plans offer.
 
 While access is suspended, signing in to the account is impossible, widget links
 and room invites do not open, ongoing calls are ended, and the plan's automatic
@@ -176,12 +183,12 @@ required, and access to the Service does not depend on it.
 
 11.4. A user who disagrees with a new version stops using the Service and may
 delete their account in the Privacy section. Amounts paid for the unused part of
-a paid plan period are refunded as provided by the Pro plan offer.
+a paid plan period are refunded as provided by the paid plans offer.
 
 11.5. Two changes are outside this procedure:
 
 - a new subscription price applies to existing subscribers no earlier than 30
-  days after the notification (Pro plan offer);
+  days after the notification (paid plans offer);
 - when the version of the personal data processing consent changes, the consent
   is requested again: silence and inaction are not consent (Article 9 of the
   Federal Law “On Personal Data”). Until new consent is given, processing
@@ -208,20 +215,26 @@ effect for as long as the user's account exists.
 
 13.2. The personal data covered:
 
-- event participants from services connected by the user (donations, follows,
-  subscriptions, gifted subscriptions, Bits, raids, Channel Points rewards and
-  other alerts): name or nickname, message text, amount and currency or a
-  quantity, date and time;
+- event participants from the services and platforms connected by the user
+  (donations, follows, subscriptions, memberships and member milestones, gifted
+  subscriptions and gifted memberships, Bits, raids, Channel Points rewards,
+  YouTube Super Chats and Super Stickers): name or nickname, message text, amount
+  and currency or a quantity, date and time, and for a voice donation a link to
+  the recording held by the source service;
 - Twitch and YouTube chat viewers on the channels the user has connected to the
   Service: username or name, for YouTube the author's channel ID, and message
   text;
+- names, nicknames and labels the user types into the Service themselves:
+  giveaway participants in roulette sectors, viewers hidden in the chat widget
+  settings, the label of a guest invitation;
 - guests of the user's private rooms: the name entered before joining, image and
   voice.
 
 13.3. Purposes of processing: showing alerts and widgets on the pages whose links
 the user has issued; showing chat messages and events to the user in the stream
-window of their dashboard; the account's event history; calculating the donation
-goal and top donors; the user's video calls with guests.
+window of their dashboard; the account's event history and roulette spin history;
+calculating the donation goal and top donors; drawing lots among the participants
+the user entered themselves; the user's video calls with guests.
 
 13.4. Actions with the data: collection, recording, systematization,
 accumulation, storage, correction, retrieval, use, transfer (giving access to

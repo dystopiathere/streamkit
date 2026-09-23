@@ -1,6 +1,6 @@
 # Cookie Policy
 
-Version No. 2 of 15.09.2026
+Version No. 3 of 23.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/cookies?lang=ru); if the two
@@ -15,6 +15,7 @@ require consent.
 |---|---|---|
 | `sk_refresh` | Session renewal token. Not accessible to page scripts (httpOnly), sent only to `/api/auth` addresses. | 30 days |
 | `sk_oauth_state` | One-time marker for connecting a platform (Twitch, YouTube): confirms that the same browser that started the connection has returned. Sent only to `/api/integrations` addresses. | 10 minutes, deleted on return |
+| `sk_admin_refresh` | The same as `sk_refresh`, but for an employee signing in to the admin panel on a separate address. It is never set for visitors or streamers. | 30 days |
 
 In the browser's local storage (not a cookie; it is not sent to the server by
 itself), the service stores:
@@ -27,7 +28,12 @@ itself), the service stores:
   entry to this browser. It is linked neither to an account nor to visit
   statistics;
 - `streamkit.microphone-processing` — the voice processing you chose for the
-  microphone in a private room: it relates to this computer's microphone.
+  microphone in a private room: it relates to this computer's microphone;
+- `streamkit.mirror-camera` — whether to mirror your camera in a private room:
+  the choice relates to this camera on this computer;
+- `streamkit.language` — the interface language you picked with the switcher;
+- `streamkit.legal-notice` — the “later” mark on the notice about a new version
+  of the documents, so that it is not shown again in this browser.
 
 ## 2. Visit statistics
 

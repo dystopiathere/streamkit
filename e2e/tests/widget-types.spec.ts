@@ -170,18 +170,30 @@ test('переставленный заголовок цели оказывае�
   // Под кадром — настройки ВЫБРАННОГО элемента: щелчок выбрал заголовок.
   await expect(element).toHaveAttribute('aria-pressed', 'true');
   // Первое нажатие ставит позицию от того места, где элемент нарисован, — оно
-  // зависит от шрифта, поэтому шаги проверяются относительно него.
-  // Координаты — в пикселях окна виджета (у нового — 800 × 600): шаг с Shift —
-  // десятая часть окна, 80 px по горизонтали и 60 по вертикали.
+  // зависит от шрифта, поэтому дальше место задаётся числом, а шаги
+  // проверяются от него.
   await page.keyboard.press('ArrowRight');
   const x = page.getByLabel('По горизонтали, px');
   const y = page.getByLabel('По вертикали, px');
-  const startX = Number(await x.inputValue());
-  const startY = Number(await y.inputValue());
-  for (let step = 0; step < 3; step += 1) await page.keyboard.press('Shift+ArrowLeft');
-  for (let step = 0; step < 2; step += 1) await page.keyboard.press('Shift+ArrowDown');
-  await expect(x).toHaveValue(String(Math.max(0, startX - 240)));
-  await expect(y).toHaveValue(String(Math.min(600, startY + 120)));
+
+  // Координаты — в пикселях окна виджета (у нового — 800 × 600). Обычная
+  // стрелка двигает на процент окна, Shift — НА СЛЕДУЮЩУЮ ЛИНИЮ СЕТКИ (десятая
+  // часть окна: 80 px по горизонтали, 60 по вертикали). Прибавление процентов
+  // от произвольного места на линию никогда не приводит, а выравнивать
+  // элементы стример будет именно по ней.
+  await x.fill('200');
+  await x.press('Enter');
+  await y.fill('200');
+  await y.press('Enter');
+  await element.click();
+
+  await page.keyboard.press('Shift+ArrowRight');
+  await expect(x).toHaveValue('240');
+  await page.keyboard.press('Shift+ArrowDown');
+  await expect(y).toHaveValue('240');
+  await page.keyboard.press('ArrowLeft');
+  await expect(x).toHaveValue('232');
+
   // Точное место — числом рядом с ползунком: так же, как это сделал бы стример.
   await x.fill('160');
   await x.press('Enter');

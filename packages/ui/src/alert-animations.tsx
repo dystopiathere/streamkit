@@ -117,6 +117,9 @@ export const ALERT_KEYFRAMES = `
 }
 `;
 
+/** Длительность анимации появления. Одна на рендерер и на предпросмотр. */
+export const ALERT_ENTER_DURATION_MS = 400;
+
 /** Длительность анимации ухода. Учитывается в очереди показа. */
 export const ALERT_EXIT_DURATION_MS = 300;
 

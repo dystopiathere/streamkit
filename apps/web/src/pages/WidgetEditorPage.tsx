@@ -1,9 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   type AlertEventType,
+  applyPlanToConfig,
   configSchemaFor,
   hasWidgetState,
   pickRouletteSector,
+  type PlanFeatures,
   type RouletteSpin,
   rouletteWidgetConfigSchema,
 } from '@streamkit/contracts';
@@ -20,8 +22,12 @@ import {
   type SectionId,
   sectionsFor,
   WidgetConfigForm,
+  YouTubeEvents,
 } from '@/features/widgets/WidgetConfigForm';
+import { usePlanFeatures } from '@/features/billing/PlanPaywall';
 import { CanvasSize } from '@/features/widgets/CanvasSize';
+import { triggerTitle } from '@/features/widgets/AlertTriggers';
+import { isChanged } from '@/features/widgets/config-changes';
 import { WidgetPreview } from '@/features/widgets/WidgetPreview';
 import { TypeMark } from '@/features/widgets/TypeMark';
 import { WidgetStateControls } from '@/features/widgets/WidgetStateControls';
@@ -68,7 +74,6 @@ export function WidgetEditorPage(): React.JSX.Element {
     // Значения приходят асинхронно, поэтому форма наполняется через reset ниже.
     defaultValues: configSchemaFor(type).parse({}) as FieldValues,
   });
-  const dirty = form.formState.isDirty;
 
   useEffect(() => {
     if (widget.data) {
@@ -81,6 +86,12 @@ export function WidgetEditorPage(): React.JSX.Element {
     }
   }, [widget.data, form]);
 
+  // Предпросмотр обновляется на каждое изменение поля: подбирать размер шрифта
+  // и цвет обводки вслепую, сохраняя и переключаясь в OBS, невозможно.
+  const previewConfig = form.watch();
+  const planFeatures = usePlanFeatures();
+  const dirty = isChanged(type, widget.data?.config, previewConfig);
+
   // Разделы прячут поля, а несохранённая правка в закрытом разделе легко
   // забывается. Закрыть вкладку с ней — только через вопрос браузера.
   useEffect(() => {
@@ -90,9 +101,6 @@ export function WidgetEditorPage(): React.JSX.Element {
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
 
-  // Предпросмотр обновляется на каждое изменение поля: подбирать размер шрифта
-  // и цвет обводки вслепую, сохраняя и переключаясь в OBS, невозможно.
-  const previewConfig = form.watch();
   usePageTitle(widget.data?.name);
 
   const onSubmit = form.handleSubmit(
@@ -123,6 +131,8 @@ export function WidgetEditorPage(): React.JSX.Element {
   }
 
   const currency = state.data && 'currency' in state.data ? state.data.currency : 'RUB';
+  const editedTrigger =
+    type === 'alerts' ? triggerName(t, previewConfig, alertScenario, alertTrigger) : null;
 
   return (
     <div className="space-y-6 pb-24 lg:pb-0">
@@ -152,10 +162,15 @@ export function WidgetEditorPage(): React.JSX.Element {
         </form>
 
         {/* Прилипает целиком и прокручивается сама, если выше экрана: ссылки
-            OBS внизу колонки не должны становиться недостижимыми. */}
+            OBS внизу колонки не должны становиться недостижимыми.
+
+            Без `overscroll-contain`: он не пускает прокрутку дальше колонки — и
+            когда колонка помещается целиком (а помещается она почти всегда),
+            страница переставала прокручиваться просто от того, что указатель
+            над правой колонкой. */}
         <aside
           aria-label={t('widgets.editor.aside')}
-          className="space-y-4 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1"
+          className="space-y-4 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto lg:pr-1"
         >
           <SaveBar dirty={dirty} saving={updateWidget.isPending} onDiscard={() => form.reset()} />
 
@@ -165,7 +180,12 @@ export function WidgetEditorPage(): React.JSX.Element {
               {type === 'alerts' ? (
                 <span className="text-xs text-muted">
                   {t(`events.type.${alertScenario}`)}
-                  {alertTrigger ? ` · ${t('widgets.triggers.previewMark')}` : ''}
+                  {/* Чей вид в кадре — словом: у триггера и у сценария вид
+                      отличается настолько, насколько его настроили, и «похоже
+                      на основной» не отличить от «это и есть основной». */}
+                  {editedTrigger
+                    ? ` (${t('widgets.triggers.previewMark', { name: editedTrigger })})`
+                    : ''}
                 </span>
               ) : null}
               {type === 'roulette' ? (
@@ -173,7 +193,7 @@ export function WidgetEditorPage(): React.JSX.Element {
                   variant="ghost"
                   className="-my-1 px-2 py-1 text-xs"
                   disabled={previewSpin !== null}
-                  onClick={() => setPreviewSpin(trialSpin(previewConfig))}
+                  onClick={() => setPreviewSpin(trialSpin(previewConfig, planFeatures))}
                 >
                   {t('widgets.roulette.trySpin')}
                 </Button>
@@ -192,6 +212,14 @@ export function WidgetEditorPage(): React.JSX.Element {
               <h3 className="text-sm font-medium">{t('widgets.canvas.title')}</h3>
               <CanvasSize form={form} />
             </div>
+            {/* Настройки всего виджета — здесь, а не в разделах: раздел
+                принадлежит сценарию, и настройка виджета повторялась бы в
+                каждом из них. */}
+            {type === 'alerts' ? (
+              <div className="mt-4 border-t border-border pt-4">
+                <YouTubeEvents form={form} />
+              </div>
+            ) : null}
           </Card>
 
           <WidgetStateControls widget={widget.data} onSpin={setPreviewSpin} />
@@ -203,14 +231,35 @@ export function WidgetEditorPage(): React.JSX.Element {
   );
 }
 
+/** Подпись правимого триггера для предпросмотра; null — правят основной вид. */
+function triggerName(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  config: FieldValues,
+  scenario: AlertEventType,
+  triggerId: string | null,
+): string | null {
+  if (!triggerId) return null;
+  const triggers = (config.scenarios?.[scenario]?.triggers ?? []) as {
+    id: string;
+    name: string;
+    condition: Parameters<typeof triggerTitle>[2]['condition'];
+  }[];
+  const index = triggers.findIndex((trigger) => trigger.id === triggerId);
+  return index === -1 ? null : triggerTitle(t, index, triggers[index]!);
+}
+
 /**
  * Пробный прокрут в предпросмотре — выбор здесь же, в браузере: он никуда не
  * уходит и ничего не обещает зрителям. Настоящий выбирает сервер.
  */
-function trialSpin(values: FieldValues): RouletteSpin | null {
+function trialSpin(values: FieldValues, features: PlanFeatures | null): RouletteSpin | null {
   const parsed = rouletteWidgetConfigSchema.safeParse(values);
   if (!parsed.success) return null;
-  const { sectors, spinDurationMs } = parsed.data;
+  // Конфиг приводится к тарифу, как на сервере: без «Про» предпросмотр рисует
+  // колесо из первых секторов, и выпасть должен один из них.
+  const { sectors, spinDurationMs } = features
+    ? applyPlanToConfig(parsed.data, features)
+    : parsed.data;
   const index = pickRouletteSector(sectors, Math.random());
   const sector = sectors[index]!;
   return {

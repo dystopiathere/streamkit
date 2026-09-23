@@ -23,7 +23,7 @@ import {
   ChatBox,
   GoalBar,
   LatestEventDisplay,
-  RouletteWheel,
+  RouletteDisplay,
   TimerDisplay,
   TopDonorsList,
   WidgetStage,
@@ -252,7 +252,7 @@ export function OverlayApp(): React.JSX.Element | null {
       // прокрутов приходит и при подключении, и прокрутила бы последний заново.
       case 'roulette':
         return (
-          <RouletteWheel
+          <RouletteDisplay
             config={widget.config}
             spin={roulette.current}
             onFinished={roulette.finish}

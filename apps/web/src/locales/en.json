@@ -2,6 +2,8 @@
   "common": {
     "save": "Save",
     "cancel": "Cancel",
+    "yes": "Yes",
+    "no": "No",
     "delete": "Delete",
     "create": "Create",
     "copy": "Copy",
@@ -78,10 +80,11 @@
       "chat": "Chat",
       "guests": "Guests",
       "media": "Image and sound",
-      "layout": "Frame layout",
+      "layout": "The window size is not set: the frame is 16:9 and coordinates are percentages. Set the window on the right so the layout matches the OBS browser source. Drag an element and the others are pinned where they are; with the keyboard use Tab and arrows, and Shift to follow the grid.",
       "background": "Background",
       "barImages": "Bar images",
-      "allScenarios": "For all scenarios"
+      "allScenarios": "For all scenarios",
+      "youtubeEvents": "YouTube events"
     },
     "field": {
       "layout": "Layout",
@@ -166,7 +169,9 @@
       "pointerColor": "Pointer and prize",
       "voiceEnabled": "Play voice donations",
       "voiceVolume": "Voice volume",
-      "voiceMaxSeconds": "No longer than"
+      "voiceMaxSeconds": "No longer than",
+      "rouletteMode": "Roulette style",
+      "youtubeEvents": "YouTube events: members and paid support"
     },
     "templateHint": "Available variables: {{vars}}",
     "tokens": {
@@ -218,13 +223,15 @@
       "backgroundOpacity": "0% — the background is invisible, 100% — solid.",
       "neverFades": "never fades",
       "soundFromVideo": "The sound comes from the alert’s video.",
-      "layoutCanvas": "The frame is the widget window, {{width}} × {{height}} px, like the browser source in OBS. Drag an element and the others are pinned where they are. With the keyboard: Tab selects, arrows move, Shift for bigger steps. Dashed lines are safe areas.",
+      "layoutCanvas": "The frame is the widget window, {{width}} × {{height}} px, like the browser source in OBS. Drag an element and the others are pinned where they are. Shift snaps to the grid, while dragging and with arrows. With the keyboard: Tab selects, arrows move. Dashed lines are safe areas, cells are the grid.",
       "emptyText": "Leave empty to keep the widget invisible until the first event.",
       "latestTest": "Test events never land here: a “Test viewer” would stay on screen until a real donation.",
       "spinPrice": "A donation of at least this amount is one spin, however much it exceeds the price. A currency without a price does not spin the wheel: we do not convert currencies.",
       "manualOnly": "The wheel spins only from the button in the “Controls” block — for giveaways without donations.",
       "voice": "A voice donation is a recording the donor made in DonationAlerts. The alert stays on screen while it plays, and the scenario sound is skipped: together they turn into noise.",
-      "voiceMaxSeconds": "A longer recording is cut off: its length is set by the donor, not by you."
+      "voiceMaxSeconds": "A longer recording is cut off: its length is set by the donor, not by you.",
+      "rouletteMode": "A wheel stays readable up to a couple dozen sectors; beyond that the labels turn into spokes. The vertical reel keeps labels horizontal and holds up to {{max}} positions; the reel is part of the Pro plan.",
+      "youtubeEvents": "Memberships, member milestones, gifts and Super Chats from a YouTube stream arrive as alerts through the Subscription, Renewal, Gifted subscriptions and Donation scenarios. YouTube has no event subscription: they come as lines of the live chat, so they only arrive while this OBS link is open, and they spend the daily YouTube quota shared by the whole service. Twitch events need no switch — they arrive on their own."
     },
     "state": {
       "raised": "Raised",
@@ -348,7 +355,7 @@
     },
     "seats": {
       "title": "Guest spots in the frame",
-      "hint": "The first guest to join takes spot 1, the second takes spot 2. Drag a spot by its middle and resize it by the corner; with the keyboard use the arrows, Alt with arrows resizes. Tiles are always 16:9.",
+      "hint": "The first guest to join takes seat 1, the second takes seat 2. Drag a seat by its middle and resize it by the corner; hold Shift to follow the grid. With the keyboard: arrows move, Alt with arrows resizes. Tiles are always 16:9.",
       "seat": "Spot {{number}}",
       "label": "{{seat}}: center {{x}}% · {{y}}%, width {{width}}%",
       "width": "Width"
@@ -386,7 +393,7 @@
       "reward": "Latest reward"
     },
     "triggers": {
-      "intro": "A trigger gives a donation its own alert look by amount. They are checked top to bottom and the first match wins. When none matches, the donation uses the base look.",
+      "intro": "A trigger gives a donation its own alert look by amount. They are checked top to bottom and the first match wins. When none matches, the donation uses the base look, which the other tabs edit while no trigger is selected.",
       "listLabel": "Triggers by priority",
       "name": "Trigger {{number}} name",
       "up": "Move “{{name}}” up in priority",
@@ -408,8 +415,6 @@
       "edit": "Edit look",
       "test": "Test with {{amount}}",
       "testNamed": "Test trigger “{{name}}” in OBS",
-      "fallback": "Base look",
-      "fallbackHint": "This is how a donation looks when no trigger matches. “Edit look” opens its sections — Display, Text, Image and sound, Layout, and Font and background.",
       "add": "Add trigger",
       "count": "{{used}} of {{max}}",
       "summary": {
@@ -421,8 +426,7 @@
         "between": "{{amount}} to {{to}}"
       },
       "editingBanner": "Trigger look:",
-      "previewMark": "trigger",
-      "current": "being edited",
+      "previewMark": "trigger {{name}}",
       "backToList": "Back to triggers"
     },
     "roulette": {
@@ -457,7 +461,24 @@
       "clear": "Clear",
       "clearConfirm": "Erase the spin history? The wheel and its sectors stay.",
       "historyEmpty": "The wheel has not been spun yet.",
-      "manual": "by button"
+      "manual": "by button",
+      "csvLoad": "Load from file",
+      "csvHint": "A CSV file with semicolons, one line per sector: “name;weight”. That is how Excel saves a sheet by default. The list from the file replaces the current one entirely.",
+      "csvLoaded": "Sectors loaded: {{count}}",
+      "csvEmpty": "The file has no “name;weight” lines",
+      "csvBad": "The file could not be read, the list is unchanged:",
+      "csvTooFew": "At least {{min}} sectors are needed",
+      "csvTooManyTitle": "More sectors than fit",
+      "csvTooMany": "The file has {{count}} sectors and {{max}} fit. Load the first {{max}}?",
+      "csvIssue": {
+        "fields": "line {{line}}: exactly two semicolon-separated fields are required",
+        "label": "line {{line}}: the name is empty or longer than 40 characters",
+        "weight": "line {{line}}: the weight must be a whole number from 1 to 1000"
+      }
+    },
+    "rouletteMode": {
+      "wheel": "Wheel",
+      "vertical": "Vertical reel"
     }
   },
   "sources": {
@@ -677,6 +698,8 @@
       "leave": "Leave",
       "mic": "Microphone",
       "camera": "Camera",
+      "mirror": "Mirror",
+      "mirrorHint": "Mirroring applies to your camera only, and everywhere: this is how other participants and viewers on stream see you. Nobody can flip another person’s camera.",
       "empty": "Nobody here yet. Send a guest an invite link.",
       "you": "you",
       "host": "streamer",
@@ -901,19 +924,19 @@
       "title": "What it does",
       "alerts": {
         "title": "Donation and event alerts",
-        "text": "Donations from DonationAlerts and your own webhook, plus Twitch follows, subscriptions, bits and raids — each event with its own style."
+        "text": "Donations from connected services and your own webhook, followers, subscriptions, gifts, raids and paid support from connected platforms — every event gets its own look."
       },
       "widgets": {
         "title": "Goal, timer, top donors",
         "text": "A donation goal, a subathon timer and a top donors list, with live preview."
       },
       "chat": {
-        "title": "Twitch and YouTube multichat",
-        "text": "Chats of your connected channels in one feed — on screen and in the stream window, with the platform icon on every line."
+        "title": "Multichat across connected platforms",
+        "text": "Chats from all connected channels in one feed — on stream and in the stream window, with a platform icon on every line."
       },
       "analytics": {
         "title": "Channel analytics",
-        "text": "YouTube and Twitch viewers and subscribers on charts in your dashboard."
+        "text": "Viewers and subscribers of connected channels on charts in your dashboard."
       },
       "rooms": {
         "title": "Private rooms",
@@ -1052,7 +1075,7 @@
   "seo": {
     "home": {
       "title": "Donation alerts, widgets and multichat for OBS",
-      "description": "Donation and Twitch event alerts, donation goal, marathon timer, Twitch and YouTube multichat and live guests — one link for OBS. Free plan available."
+      "description": "Donation and platform event alerts, a donation goal, a marathon timer, multichat and guests on stream — through a single OBS link. Free plan available."
     },
     "register": {
       "description": "Create a StreamKit account: donation alerts, OBS widgets, multichat and channel analytics. Free plan with no time limit."

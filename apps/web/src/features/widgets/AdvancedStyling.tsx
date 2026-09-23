@@ -18,6 +18,7 @@ import { WidgetStage } from '@streamkit/ui';
 import { PlanPaywall, usePlanAccess } from '@/features/billing/PlanPaywall';
 import { NullableColorField, RangeField, SelectField, TextField } from './fields';
 import { FrameGuides } from './FrameGuides';
+import { snapToGrid, stepToGrid } from './grid';
 import { CanvasFrame, canvasOf, WidgetSurface } from './WidgetPreview';
 
 /**
@@ -199,9 +200,13 @@ const FIRST_POSITION: Record<string, { x: number; y: number }> = {
 /** Элементы-картинки: у них ширина, а не размер шрифта и цвет. */
 const MEDIA_SLOTS = new Set(['image']);
 
-/** Шаг клавиатуры в процентах кадра. С Shift — крупный: пройти кадр за десяток нажатий. */
+/**
+ * Шаг клавиатуры в процентах кадра. С Shift элемент идёт по сетке — на
+ * следующую её линию, а не «на десять процентов»: от произвольной позиции
+ * прибавление шага никогда не приводит на линию, и выровнять два элемента с
+ * клавиатуры было бы нельзя.
+ */
 const STEP = 1;
-const BIG_STEP = 10;
 
 /**
  * Кадр с перетаскиваемыми элементами.
@@ -248,6 +253,8 @@ function LayoutCanvas({
   const frame = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<string>(slots[0] ?? '');
   const [dragging, setDragging] = useState<string | null>(null);
+  // Держат Shift во время переноса: элемент идёт по клеткам, и клетки видны ярче.
+  const [snapping, setSnapping] = useState(false);
   const at = (slot: string, field: string): string => `${prefix}slots.${slot}.${field}`;
 
   // Где виджет под ручками на самом деле нарисовал элементы без позиции. Без
@@ -358,14 +365,17 @@ function LayoutCanvas({
         setDragging(slot);
         pinAll();
       }
-      put(
-        slot,
-        ((moveEvent.clientX - box.left) / box.width) * 100,
-        ((moveEvent.clientY - box.top) / box.height) * 100,
-      );
+      // Shift читается из каждого движения, а не из начала жеста: его жмут и
+      // отпускают посреди переноса, и элемент обязан слушаться сразу.
+      const grid = moveEvent.shiftKey;
+      setSnapping(grid);
+      const x = ((moveEvent.clientX - box.left) / box.width) * 100;
+      const y = ((moveEvent.clientY - box.top) / box.height) * 100;
+      put(slot, grid ? snapToGrid(x) : x, grid ? snapToGrid(y) : y);
     };
     const stop = (): void => {
       setDragging(null);
+      setSnapping(false);
       target.removeEventListener('pointermove', move);
       target.removeEventListener('pointerup', stop);
       target.removeEventListener('pointercancel', stop);
@@ -378,14 +388,20 @@ function LayoutCanvas({
 
   const nudge = (slot: string) => (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (locked) return;
-    const step = event.shiftKey ? BIG_STEP : STEP;
     const shift = ARROWS[event.key];
     if (!shift) return;
     event.preventDefault();
     const current = read(slot);
     const start = restingSpot(slot);
+    const from = { x: current.x ?? start.x, y: current.y ?? start.y };
+    const along = (value: number, direction: number): number =>
+      direction === 0
+        ? value
+        : event.shiftKey
+          ? stepToGrid(value, direction)
+          : value + direction * STEP;
     pinAll();
-    put(slot, (current.x ?? start.x) + shift.x * step, (current.y ?? start.y) + shift.y * step);
+    put(slot, along(from.x, shift.x), along(from.y, shift.y));
   };
 
   const active = read(selected);
@@ -401,7 +417,7 @@ function LayoutCanvas({
   const frameClass = 'checkerboard touch-none rounded-lg border border-border-strong select-none';
   const contents = (
     <>
-      <FrameGuides />
+      <FrameGuides snapping={snapping} />
       {underlay ? (
         // Виджет — под ручками и без ввода: щелчок достаётся ручке, а не
         // кнопкам и ссылкам внутри рендерера.

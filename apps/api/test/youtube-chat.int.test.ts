@@ -329,20 +329,121 @@ describe('Чат YouTube (feature)', () => {
     await until(() => fake.openCalls.length === 0);
   });
 
+  /** Токен доступа стримера: регистрация в `beforeEach` его не сохраняет. */
+  async function login(): Promise<{ Authorization: string }> {
+    const response = await request(harness.app.getHttpServer())
+      .post('/api/auth/login')
+      .send({
+        email: (await harness.prisma.user.findFirstOrThrow()).email,
+        password: registrationPayload().password,
+      })
+      .expect(200);
+    return { Authorization: `Bearer ${response.body.accessToken as string}` };
+  }
+
+  it('спонсоры и суперчаты YouTube становятся событиями, пока оверлей оповещений открыт', async () => {
+    const auth = await login();
+    // Ни виджета чата, ни окна эфира: поток держит виджет оповещений — у
+    // YouTube события приходят той же дорогой, что и чат.
+    const widget = await request(harness.app.getHttpServer())
+      .post('/api/widgets')
+      .set(auth)
+      .send({ name: 'Оповещения', type: 'alerts', config: { youtubeEvents: true } })
+      .expect(201);
+    const token = await request(harness.app.getHttpServer())
+      .post(`/api/widgets/${widget.body.id as string}/tokens`)
+      .set(auth)
+      .send({})
+      .expect(201);
+    await presence.markOverlays([token.body.id as string]);
+
+    await chat.tick();
+    await until(() => fake.openCalls.length === 1);
+
+    const [entry] = fake.openCalls;
+    entry!.call.write({
+      items: [
+        {
+          id: youtubeMessageId('super'),
+          snippet: {
+            type: 'SUPER_CHAT_EVENT',
+            publishedAt: new Date().toISOString(),
+            superChatDetails: {
+              amountMicros: '1750000',
+              currency: 'RUB',
+              amountDisplayString: '1,75 ₽',
+              userComment: 'спасибо за стрим',
+            },
+          },
+          authorDetails: { channelId: AUTHOR, displayName: 'Аня' },
+        },
+        {
+          id: youtubeMessageId('sponsor'),
+          snippet: {
+            type: 'NEW_SPONSOR_EVENT',
+            publishedAt: new Date().toISOString(),
+            newSponsorDetails: { memberLevelName: 'Друг канала' },
+          },
+          authorDetails: { channelId: AUTHOR, displayName: 'Боря' },
+        },
+      ],
+    });
+
+    await until(async () => (await harness.prisma.alertEvent.count({ where: { userId } })) === 2);
+    const events = await harness.prisma.alertEvent.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(events[0]).toMatchObject({
+      type: 'DONATION',
+      provider: 'YOUTUBE',
+      username: 'Аня',
+      amountMinor: 175,
+      currency: 'RUB',
+      message: 'спасибо за стрим',
+    });
+    expect(events[1]).toMatchObject({ type: 'SUBSCRIPTION', username: 'Боря' });
+
+    // Те же строки при переоткрытии потока второй раз не записываются.
+    entry!.call.write({
+      items: [
+        {
+          id: events[1]!.externalId,
+          snippet: {
+            type: 'NEW_SPONSOR_EVENT',
+            publishedAt: new Date().toISOString(),
+            newSponsorDetails: { memberLevelName: 'Друг канала' },
+          },
+          authorDetails: { channelId: AUTHOR, displayName: 'Боря' },
+        },
+      ],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(await harness.prisma.alertEvent.count({ where: { userId } })).toBe(2);
+  });
+
+  it('без включённых событий YouTube виджет оповещений поток не держит', async () => {
+    const auth = await login();
+    const widget = await request(harness.app.getHttpServer())
+      .post('/api/widgets')
+      .set(auth)
+      .send({ name: 'Оповещения', type: 'alerts', config: {} })
+      .expect(201);
+    const token = await request(harness.app.getHttpServer())
+      .post(`/api/widgets/${widget.body.id as string}/tokens`)
+      .set(auth)
+      .send({})
+      .expect(201);
+    await presence.markOverlays([token.body.id as string]);
+
+    await chat.tick();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    // Поток стоит квоты, общей на сервис: без просьбы его не открывают.
+    expect(fake.discoveries).toBe(0);
+  });
+
   it('виджет чата с выключенным YouTube чат YouTube не читает', async () => {
-    const auth = {
-      Authorization: `Bearer ${
-        (
-          await request(harness.app.getHttpServer())
-            .post('/api/auth/login')
-            .send({
-              email: (await harness.prisma.user.findFirstOrThrow()).email,
-              password: registrationPayload().password,
-            })
-            .expect(200)
-        ).body.accessToken as string
-      }`,
-    };
+    const auth = await login();
     const widget = await request(harness.app.getHttpServer())
       .post('/api/widgets')
       .set(auth)

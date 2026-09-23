@@ -1,5 +1,5 @@
 import { ServiceUnavailableException } from '@nestjs/common';
-import { TokenVerifier } from 'livekit-server-sdk';
+import { TokenVerifier, TrackSource } from 'livekit-server-sdk';
 import { describe, expect, it } from 'vitest';
 import type { AppConfig } from '../../config/app-config.service';
 import { LiveKitRoomMediaServer, LiveKitTokens, livekitRoomName } from './livekit.service';
@@ -42,7 +42,9 @@ describe('токены LiveKit', () => {
     expect(grant?.room).toBe(livekitRoomName(ROOM));
     expect(grant?.canPublishSources).toEqual(['camera', 'microphone']);
     expect(grant?.canPublishData).toBe(false);
-    expect(grant?.canUpdateOwnMetadata).toBe(false);
+    // Свои атрибуты — да: ими гость сообщает, зеркалить ли его камеру. Чужие
+    // этим правом не изменить, и комнатой оно не управляет.
+    expect(grant?.canUpdateOwnMetadata).toBe(true);
     expect(grant?.roomAdmin).toBeUndefined();
   });
 
@@ -116,6 +118,31 @@ describe('медиасервер и ушедшие участники', () => {
     };
     return server;
   }
+
+  it('смена права на публикацию не отнимает право на свои атрибуты', async () => {
+    // LiveKit заменяет права целиком: не переданное сбрасывается. Забыть здесь
+    // `canUpdateMetadata` значило бы отнять у гостя выбор зеркала в тот момент,
+    // когда стример выключил ему микрофон.
+    const server = new LiveKitRoomMediaServer(configured);
+    const calls: { permission?: Record<string, unknown> }[] = [];
+    (server as unknown as { client: unknown }).client = {
+      updateParticipant: (
+        _room: string,
+        _identity: string,
+        update: { permission?: Record<string, unknown> },
+      ) => {
+        calls.push(update);
+        return Promise.resolve();
+      },
+    };
+    await server.setPublishSources(ROOM, 'guest:x:y', ['camera']);
+    expect(calls[0]?.permission).toMatchObject({
+      // Камера — это TrackSource.CAMERA, у SDK она числом.
+      canPublishSources: [TrackSource.CAMERA],
+      canUpdateMetadata: true,
+      canPublishData: false,
+    });
+  });
 
   it('действие над ушедшим участником не считается сбоем', async () => {
     // Запрет микрофона обходит все вкладки гостя, и вкладка, которую он только

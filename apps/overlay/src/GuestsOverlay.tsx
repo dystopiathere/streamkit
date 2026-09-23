@@ -2,11 +2,14 @@ import {
   AudioTrack,
   isTrackReference,
   LiveKitRoom,
+  type TrackReference,
+  useParticipantAttributes,
   useTracks,
   VideoTrack,
 } from '@livekit/components-react';
 import {
   type GuestsWidgetConfig,
+  isMirrored,
   parseParticipantIdentity,
   type RoomAccess,
   roomAccessSchema,
@@ -129,13 +132,7 @@ function GuestsStage({ config }: { config: GuestsWidgetConfig }): React.JSX.Elem
         id: ref.participant.identity,
         name: ref.participant.name || '',
         hasVideo,
-        media:
-          hasVideo && isTrackReference(ref) ? (
-            <VideoTrack
-              trackRef={ref}
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-            />
-          ) : null,
+        media: hasVideo && isTrackReference(ref) ? <GuestVideo trackRef={ref} /> : null,
       };
     });
 
@@ -148,6 +145,28 @@ function GuestsStage({ config }: { config: GuestsWidgetConfig }): React.JSX.Elem
           <AudioTrack key={ref.publication.trackSid} trackRef={ref} />
         ))}
     </>
+  );
+}
+
+/**
+ * Видео гостя в кадре — зеркальное, если гость сам так решил.
+ *
+ * Выбор приходит атрибутом участника: настройки виджета его не содержат и
+ * содержать не должны — стример не разворачивает чужую камеру.
+ */
+function GuestVideo({ trackRef }: { trackRef: TrackReference }): React.JSX.Element {
+  const { attributes } = useParticipantAttributes({ participant: trackRef.participant });
+  return (
+    <VideoTrack
+      trackRef={trackRef}
+      style={{
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+        display: 'block',
+        transform: isMirrored(attributes) ? 'scaleX(-1)' : undefined,
+      }}
+    />
   );
 }
 

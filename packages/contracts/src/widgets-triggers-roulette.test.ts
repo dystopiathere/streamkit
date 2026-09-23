@@ -9,6 +9,7 @@ import {
   donationSpins,
   latestWidgetConfigSchema,
   matchAlertTrigger,
+  MAX_ROULETTE_SECTORS,
   matchesTriggerCondition,
   pickRouletteSector,
   resolveAlertScenario,
@@ -193,6 +194,47 @@ describe('рулетка', () => {
       const next = sectors[(index + 1) % sectors.length]!;
       expect(sector.color).not.toBe(next.color);
     });
+  });
+
+  it('в колесо помещается 24 сектора, в ленту — сто', () => {
+    const many = (count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        id: `s${index}`,
+        label: `Сектор ${index + 1}`,
+        weight: 1,
+        color: '#A3850F',
+      }));
+    expect(rouletteWidgetConfigSchema.safeParse({ sectors: many(25) }).success).toBe(false);
+    expect(
+      rouletteWidgetConfigSchema.safeParse({ mode: 'vertical', sectors: many(25) }).success,
+    ).toBe(true);
+    expect(
+      rouletteWidgetConfigSchema.safeParse({ mode: 'vertical', sectors: many(101) }).success,
+    ).toBe(false);
+    // Вид по умолчанию — колесо: у виджетов, настроенных до появления ленты,
+    // поля `mode` в конфиге нет.
+    expect(rouletteWidgetConfigSchema.parse({}).mode).toBe('wheel');
+  });
+
+  it('без «Про» лента становится колесом, а длинный список режется', () => {
+    const config = rouletteWidgetConfigSchema.parse({
+      mode: 'vertical',
+      sectors: Array.from({ length: 40 }, (_, index) => ({
+        id: `s${index}`,
+        label: `Сектор ${index + 1}`,
+        weight: 1,
+        color: '#A3850F',
+      })),
+    });
+    const basic = applyPlanToConfig(config, { advancedStyling: false });
+    expect(basic.mode).toBe('wheel');
+    expect(basic.sectors).toHaveLength(MAX_ROULETTE_SECTORS);
+    // Сервер выбирает сектор по ЭТОМУ же конфигу: иначе в кадр ушёл бы номер,
+    // которого на колесе нет.
+    expect(pickRouletteSector(basic.sectors, 0.999999)).toBeLessThan(MAX_ROULETTE_SECTORS);
+    // В настройках всё осталось: вернут «Про» — вернётся и лента.
+    expect(config.mode).toBe('vertical');
+    expect(config.sectors).toHaveLength(40);
   });
 
   it('цвет последнего сектора не совпадает с первым и заменяется на стыке кольца', () => {

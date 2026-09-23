@@ -101,7 +101,7 @@ describe('раскладка элементов в кадре', () => {
     expect(value('По горизонтали')).toBe('200');
   });
 
-  it('стрелки двигают элемент, а Shift — крупным шагом', () => {
+  it('стрелки двигают элемент, а Shift ведёт по сетке', () => {
     renderEditor();
     const title = element('Заголовок');
 
@@ -109,11 +109,34 @@ describe('раскладка элементов в кадре', () => {
     // Первое нажатие считается от места в потоке, а не от нуля: 51 % от 800.
     expect(value('По горизонтали')).toBe('408');
 
+    // С Shift — на следующую линию сетки (60 %), а не «на десять процентов» от
+    // 51 %: иначе на линию не попасть, а значит и не выровнять два элемента.
     fireEvent.keyDown(title, { key: 'ArrowRight', shiftKey: true });
-    expect(value('По горизонтали')).toBe('488');
+    expect(value('По горизонтали')).toBe('480');
+    fireEvent.keyDown(title, { key: 'ArrowRight', shiftKey: true });
+    expect(value('По горизонтали')).toBe('560');
 
+    // Значение ровно на линии сдвигается на клетку, а не остаётся на месте.
     fireEvent.keyDown(title, { key: 'ArrowUp', shiftKey: true });
     expect(value('По вертикали')).toBe('60');
+  });
+
+  it('Shift при перетаскивании примагничивает к сетке, и отпускание снимает магнит', () => {
+    renderEditor();
+    sizeFrame();
+    const title = element('Заголовок');
+
+    fireEvent.pointerDown(title, { pointerId: 1, button: 0, clientX: 400, clientY: 300 });
+    // 212 px — это 26.5 % кадра: ближайшая линия сетки — 30 %, то есть 240 px.
+    fireEvent.pointerMove(title, { pointerId: 1, clientX: 212, clientY: 182, shiftKey: true });
+    expect(value('По горизонтали')).toBe('240');
+    expect(value('По вертикали')).toBe('180');
+
+    // Shift отпустили посреди переноса — элемент снова идёт точно за курсором.
+    fireEvent.pointerMove(title, { pointerId: 1, clientX: 212, clientY: 182 });
+    expect(value('По горизонтали')).toBe('212');
+    expect(value('По вертикали')).toBe('182');
+    fireEvent.pointerUp(title, { pointerId: 1 });
   });
 
   it('за края кадра элемент не уходит', () => {

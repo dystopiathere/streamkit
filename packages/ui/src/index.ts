@@ -7,6 +7,7 @@
  */
 export { AlertCard, type AlertCardProps } from './AlertCard';
 export {
+  ALERT_ENTER_DURATION_MS,
   ALERT_EXIT_DURATION_MS,
   ALERT_KEYFRAMES,
   AlertAnimationStyles,
@@ -23,6 +24,8 @@ export {
 } from './ParticipantLayout';
 export { isVideoUrl, Media } from './media';
 export { probeAudioSeconds } from './voice';
+export { RouletteDisplay } from './RouletteDisplay';
+export { RouletteReel, type RouletteReelProps, reelGeometry, reelTravel } from './RouletteReel';
 export { RouletteWheel, type RouletteWheelProps } from './RouletteWheel';
 export { isPositioned, slotCss, WidgetBackgroundLayer, WidgetFrame } from './slots';
 export { canvasScale, WidgetStage } from './stage';

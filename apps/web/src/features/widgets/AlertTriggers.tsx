@@ -36,15 +36,12 @@ const NEW_TRIGGER_AMOUNT = 100_000;
 export function AlertTriggers({
   form,
   scenario,
-  editing,
   onEdit,
 }: {
   form: UseFormReturn<FieldValues>;
   scenario: AlertEventType;
-  /** Триггер, чей вид правят сейчас; null — вид самого сценария. */
-  editing: string | null;
-  /** Переключить разделы на вид триггера (или обратно на сценарий — null). */
-  onEdit: (triggerId: string | null) => void;
+  /** Переключить разделы на вид этого триггера. */
+  onEdit: (triggerId: string) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const name = `scenarios.${scenario}.triggers`;
@@ -66,11 +63,6 @@ export function AlertTriggers({
       condition: { operator: 'gte', currency, amountMinor: NEW_TRIGGER_AMOUNT, toMinor: null },
       ...appearance,
     });
-  };
-
-  const drop = (index: number): void => {
-    if (triggers[index]?.id === editing) onEdit(null);
-    remove(index);
   };
 
   const test = async (trigger: AlertTrigger): Promise<void> => {
@@ -100,16 +92,8 @@ export function AlertTriggers({
             { triggers: triggers.slice(0, index) },
             { amount: sample },
           );
-          const active = trigger.id === editing;
-
           return (
-            <li
-              key={field.id}
-              className={cn(
-                'space-y-4 rounded-lg border p-4',
-                active ? 'border-fg bg-surface-hover/40' : 'border-border',
-              )}
-            >
+            <li key={field.id} className="space-y-4 rounded-lg border border-border p-4">
               <div className="flex items-center gap-2">
                 <span
                   className="inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded bg-surface-hover px-1.5 text-xs font-semibold tabular-nums"
@@ -140,7 +124,7 @@ export function AlertTriggers({
                 </IconButton>
                 <IconButton
                   label={t('common.deleteNamed', { name: title })}
-                  onClick={() => drop(index)}
+                  onClick={() => remove(index)}
                 >
                   <Trash2 aria-hidden="true" className="h-4 w-4" />
                 </IconButton>
@@ -202,7 +186,6 @@ export function AlertTriggers({
                 <Button variant="secondary" onClick={() => onEdit(trigger.id)}>
                   {t('widgets.triggers.edit')}
                 </Button>
-                {active ? <CurrentMark /> : null}
                 <Button
                   variant="ghost"
                   onClick={() => void test(trigger)}
@@ -215,26 +198,6 @@ export function AlertTriggers({
             </li>
           );
         })}
-
-        {/* Основной вид — последним и без номера: он срабатывает, когда не
-            подошёл ни один триггер, а убрать или поднять его нельзя. */}
-        <li
-          className={cn(
-            'flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed p-4',
-            editing === null ? 'border-fg' : 'border-border-strong',
-          )}
-        >
-          <div className="min-w-0">
-            <p className="text-sm font-medium">{t('widgets.triggers.fallback')}</p>
-            <p className="max-w-prose text-xs text-muted">{t('widgets.triggers.fallbackHint')}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" onClick={() => onEdit(null)}>
-              {t('widgets.triggers.edit')}
-            </Button>
-            {editing === null ? <CurrentMark /> : null}
-          </div>
-        </li>
       </ol>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -251,19 +214,15 @@ export function AlertTriggers({
 }
 
 /**
- * Отметка «правится сейчас» — состояние, а не кнопка.
- *
- * Раньше это была подпись на самой кнопке, и кнопка называла не действие, а
- * положение дел: «Настраивается» нечего нажимать. Теперь кнопка всегда
- * открывает вид, а отметка говорит, чей вид открыт.
+ * Как триггер называется человеку: номер приоритета и имя, а без имени —
+ * условие. Тем же именем он подписан в шапке разделов и в предпросмотре.
  */
-function CurrentMark(): React.JSX.Element {
-  const { t } = useTranslation();
-  return (
-    <span className="rounded-full border border-border-strong px-2 py-0.5 text-xs text-muted">
-      {t('widgets.triggers.current')}
-    </span>
-  );
+export function triggerTitle(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  index: number,
+  trigger: { name: string; condition: AlertTrigger['condition'] },
+): string {
+  return `${index + 1}. ${trigger.name.trim() || conditionSummary(t, trigger.condition)}`;
 }
 
 /** Условие словами: «от 1 000 ₽», «ровно 500 ₽», «от 500 до 999 ₽». */

@@ -12,12 +12,12 @@ import { useTranslation } from 'react-i18next';
 import { Button, cn } from '@streamkit/app-kit';
 import { WidgetStage } from '@streamkit/ui';
 import { FrameGuides } from './FrameGuides';
+import { snapToGrid, stepToGrid } from './grid';
 import { RangeField } from './fields';
 import { CanvasFrame } from './WidgetPreview';
 
-/** Шаг клавиатуры в процентах кадра; с Shift — крупный. */
+/** Шаг клавиатуры в процентах кадра; с Shift место идёт по сетке (`grid.ts`). */
 const STEP = 1;
-const BIG_STEP = 10;
 /** Кадр без заданного окна виджета — 16:9, как обычная сцена OBS. */
 const DEFAULT_FRAME_ASPECT = 16 / 9;
 
@@ -76,6 +76,8 @@ export function GuestSeatsCanvas({
   const unit = canvas ? 'px' : '%';
   const [selected, setSelected] = useState(0);
   const [active, setActive] = useState<{ index: number; mode: 'move' | 'resize' } | null>(null);
+  // Держат Shift во время переноса: место идёт по клеткам, и клетки видны ярче.
+  const [snapping, setSnapping] = useState(false);
 
   const count = Math.min(
     MAX_GUESTS_PER_ROOM,
@@ -139,8 +141,16 @@ export function GuestSeatsCanvas({
         }
         const dx = (dxPx / box.width) * 100;
         const dy = (dyPx / box.height) * 100;
+        // Shift читается из каждого движения, а не из начала жеста: его жмут и
+        // отпускают посреди переноса.
+        const grid = moveEvent.shiftKey;
+        setSnapping(grid);
         if (mode === 'move') {
-          write(index, { ...start, x: start.x + dx, y: start.y + dy });
+          const x = start.x + dx;
+          const y = start.y + dy;
+          // Магнитится середина места — по ней его и ставят: на линии сетки
+          // оказывается центр плитки, а не её угол.
+          write(index, { ...start, x: grid ? snapToGrid(x) : x, y: grid ? snapToGrid(y) : y });
           return;
         }
         // Угол тянется от неподвижного верхнего левого края рамки. Высоту даёт
@@ -149,11 +159,13 @@ export function GuestSeatsCanvas({
         const left = start.x - start.width / 2;
         const top = start.y - heightOf(start.width) / 2;
         const grow = Math.abs(dx) >= Math.abs(dy) ? dx : dy;
-        const width = Math.max(MIN_SIZE, start.width + grow);
+        const grown = start.width + grow;
+        const width = Math.max(MIN_SIZE, grid ? snapToGrid(grown) : grown);
         write(index, { x: left + width / 2, y: top + heightOf(width) / 2, width });
       };
       const stop = (): void => {
         setActive(null);
+        setSnapping(false);
         target.removeEventListener('pointermove', move);
         target.removeEventListener('pointerup', stop);
         target.removeEventListener('pointercancel', stop);
@@ -168,18 +180,26 @@ export function GuestSeatsCanvas({
     const shift = ARROWS[event.key];
     if (!shift) return;
     event.preventDefault();
-    const step = event.shiftKey ? BIG_STEP : STEP;
     const seat = read(index);
+    // Shift ведёт по сетке — на следующую её линию, а не «на десять процентов»:
+    // иначе от произвольной позиции на линию не попасть, а значит и не выровнять
+    // два места друг с другом.
+    const along = (value: number, direction: number): number =>
+      direction === 0
+        ? value
+        : event.shiftKey
+          ? stepToGrid(value, direction)
+          : value + direction * STEP;
     if (event.altKey) {
       // Размер — от верхнего левого края, как при растягивании за угол:
       // вправо и вниз — крупнее, влево и вверх — мельче.
       const left = seat.x - seat.width / 2;
       const top = seat.y - heightOf(seat.width) / 2;
-      const width = Math.max(MIN_SIZE, seat.width + (shift.x + shift.y) * step);
+      const width = Math.max(MIN_SIZE, along(seat.width, shift.x + shift.y));
       write(index, { x: left + width / 2, y: top + heightOf(width) / 2, width });
       return;
     }
-    write(index, { ...seat, x: seat.x + shift.x * step, y: seat.y + shift.y * step });
+    write(index, { ...seat, x: along(seat.x, shift.x), y: along(seat.y, shift.y) });
   };
 
   const seatName = (index: number): string => t('widgets.seats.seat', { number: index + 1 });
@@ -198,7 +218,7 @@ export function GuestSeatsCanvas({
       </div>
 
       <SeatsFrame canvas={canvas} frameRef={frame}>
-        <FrameGuides />
+        <FrameGuides snapping={snapping} />
         {underlay ? (
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-90">
             <WidgetStage canvas={canvas}>{underlay}</WidgetStage>
