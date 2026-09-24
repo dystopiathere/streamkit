@@ -46,7 +46,7 @@ export function PlanPaywall({ gate }: { gate: Gate }): React.JSX.Element | null 
         </p>
         <p className="max-w-2xl text-sm text-muted">{t(`billing.paywall.${gate}.hint`)}</p>
       </div>
-      <ButtonLink to="/billing">{t('billing.paywall.action')}</ButtonLink>
+      <ButtonLink to="/account/billing">{t('billing.paywall.action')}</ButtonLink>
     </div>
   );
 }

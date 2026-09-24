@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button, Card, Input, Label, NewTabHint, usePageTitle } from '@streamkit/app-kit';
-import { TwoFactorCard } from '@/features/auth/TwoFactorCard';
 import { useConsents, useGrantConsent, useRevokeConsent } from '@/features/privacy/queries';
 import { ApiError, api } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
@@ -147,8 +146,6 @@ export function PrivacyPage(): React.JSX.Element {
           ))}
         </ul>
       </Card>
-
-      <TwoFactorCard />
 
       <Card className="space-y-3">
         <h2 className="font-medium">{t('privacy.export')}</h2>

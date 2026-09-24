@@ -46,6 +46,7 @@ import {
   TextField,
   TextStyleFields,
 } from './fields';
+import { PLATFORMS_PATH } from '@/components/navigation';
 
 const LAYOUTS = ['center', 'banner', 'side'] as const;
 
@@ -1251,7 +1252,7 @@ function ChatMain({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.Ele
       ) : !anyConnected ? (
         <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm">
           {t('widgets.chat.none')}{' '}
-          <Link to="/analytics" className="underline">
+          <Link to={PLATFORMS_PATH} className="underline">
             {t('widgets.chat.connect')}
           </Link>
         </p>
@@ -1279,7 +1280,7 @@ function ChatMain({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.Ele
                 {t('widgets.chat.notConnected', {
                   platform: platform === 'twitch' ? 'Twitch' : 'YouTube',
                 })}{' '}
-                <Link to="/analytics" className="underline hover:text-fg">
+                <Link to={PLATFORMS_PATH} className="underline hover:text-fg">
                   {t('widgets.chat.connect')}
                 </Link>
               </p>

@@ -1,6 +1,6 @@
 # StreamKit Terms of Service
 
-Version No. 10 of 23.09.2026
+Version No. 11 of 24.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/terms?lang=ru); if the two
@@ -76,7 +76,11 @@ performed by the user. Two-factor authentication can be enabled to protect the
 account.
 
 3.3. If the account is suspected to be compromised, the user changes the
-password and notifies the Operator at {{SELLER_EMAIL}}.
+password and notifies the Operator at {{SELLER_EMAIL}}. The password is changed
+in the dashboard (Profile, Security section); a password change ends the
+sessions on all other devices. A forgotten password is recovered through a link
+that the Service sends on request to the account email address; the link works
+once and for one hour.
 
 ## 4. Public widget links
 
@@ -151,7 +155,8 @@ out in the paid plans offer. Bank card details are not passed to the Operator.
 
 The Operator sends to the account email address the service emails necessary to
 perform the contract: about an upcoming automatic charge, and about changes in
-price and terms. The Service does not send marketing emails.
+price and terms, as well as an email with a password recovery link, sent only on
+a request made on the sign-in page. The Service does not send marketing emails.
 
 ## 10. Liability
 

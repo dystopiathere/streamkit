@@ -22,7 +22,7 @@ describe('письмо о предстоящем списании', () => {
     expect(message.text).toContain('Не ранее 15 октября 2026');
     expect(message.text).toContain('(Карта *4444)');
     expect(message.text).toMatch(/490\s₽/);
-    expect(message.text).toContain('https://stream-kit.ru/billing');
+    expect(message.text).toContain('https://stream-kit.ru/account/billing');
     expect(message.text).toContain('https://stream-kit.ru/legal/subscription');
   });
 

@@ -41,8 +41,8 @@ export function renewalNoticeMessage(input: RenewalNoticeInput): MailMessage {
       `Не ранее ${DATE.format(input.chargeNotBefore)} с сохранённого способа оплаты${method} ` +
         `будет списано ${formatMoney(input.amount)} за продление на ${periodLabel}.`,
       '',
-      'Если продлевать не нужно, выключите автопродление в разделе «Тариф» — одной кнопкой:',
-      `${base}/billing`,
+      'Если продлевать не нужно, выключите автопродление в профиле, раздел «Тариф», — одной кнопкой:',
+      `${base}/account/billing`,
       'После отключения ничего не спишется, а доступ сохранится до конца оплаченного периода.',
       '',
       `Условия тарифа: ${base}/legal/subscription`,

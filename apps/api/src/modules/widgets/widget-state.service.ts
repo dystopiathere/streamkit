@@ -5,7 +5,6 @@ import {
   type AlertEvent,
   applyPlanToConfig,
   type Currency,
-  CURRENCIES,
   donationSeconds,
   type GoalWidgetConfig,
   donationSpins,
@@ -29,6 +28,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { RedisLock } from '../../common/redis/lock.service';
 import { BillingService } from '../billing/billing.service';
 import { toPrismaEventType } from '../events/event.mappers';
+import { findPrimaryCurrency } from '../events/primary-currency';
 
 /**
  * Сохранённое состояние виджета.
@@ -246,31 +246,9 @@ export class WidgetStateService {
     return widget ? this.compute(widget) : null;
   }
 
-  /**
-   * Основная валюта донатов владельца — в ней считают цель, таймер и топ.
-   *
-   * Валюту не выбирает стример: она приходит с событием. Сложить рубли с
-   * долларами нельзя, а курс мы не считаем (см. цель), поэтому виджеты берут
-   * валюту, в которой донатов больше всего, а остальные в сумму не идут.
-   * Пока донатов нет — рубли: аудитория сервиса русскоязычная.
-   *
-   * Считается по всей истории, а не за период: иначе один долларовый донат
-   * в тихую неделю переключал бы цель на доллары прямо посреди сбора.
-   */
+  /** Основная валюта донатов владельца — см. `findPrimaryCurrency`. */
   async primaryCurrency(userId: string): Promise<Currency> {
-    const rows = await this.prisma.alertEvent.groupBy({
-      by: ['currency'],
-      where: { userId, isTest: false, currency: { not: null } },
-      _count: { _all: true },
-      // Вторая сортировка — по коду: при равенстве валюта не должна
-      // переключаться от запроса к запросу.
-      orderBy: [{ _count: { currency: 'desc' } }, { currency: 'asc' }],
-      take: 1,
-    });
-    const currency = rows[0]?.currency;
-    return currency && (CURRENCIES as readonly string[]).includes(currency)
-      ? (currency as Currency)
-      : 'RUB';
+    return findPrimaryCurrency(this.prisma, userId);
   }
 
   /**

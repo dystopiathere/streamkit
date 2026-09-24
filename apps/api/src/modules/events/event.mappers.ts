@@ -56,6 +56,10 @@ export function toPrismaEventType(type: AlertEventType): PrismaEventType {
   return EVENT_TYPE_TO_PRISMA[type];
 }
 
+export function toContractEventType(type: PrismaEventType): AlertEventType {
+  return EVENT_TYPE_FROM_PRISMA[type];
+}
+
 export function toPrismaProvider(provider: EventProvider): PrismaProvider {
   return PROVIDER_TO_PRISMA[provider];
 }

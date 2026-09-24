@@ -10,9 +10,9 @@ const AUDIT_RETENTION_DAYS = 180;
 /**
  * Срок хранения снимков метрик. Тоже заявлен в политике обработки ПДн.
  *
- * Девяносто дней — это максимальный диапазон графика (30 дней) с тройным
- * запасом на сравнение «месяц к месяцу». Держать дольше значит хранить данные
- * без цели, а это ровно то, что 152-ФЗ запрещает.
+ * Девяносто дней — это самый длинный диапазон аналитики (`ANALYTICS_RANGES`).
+ * Держать дольше значит хранить данные без цели, а это ровно то, что 152-ФЗ
+ * запрещает; укоротить — значит молча обрезать график за три месяца.
  */
 const SNAPSHOT_RETENTION_DAYS = 90;
 
@@ -57,6 +57,7 @@ export class MaintenanceScheduler {
     try {
       await this.lock.withLock(MAINTENANCE_LOCK_KEY, 60 * 60 * 1000, async () => {
         await this.maintenance.purgeExpiredTokens();
+        await this.maintenance.purgeExpiredPasswordResets();
         await this.maintenance.purgeOldAuditLogs(AUDIT_RETENTION_DAYS);
         await this.maintenance.purgeOldSnapshots(SNAPSHOT_RETENTION_DAYS);
         await this.maintenance.purgeOldGuestConsents(AUDIT_RETENTION_DAYS);

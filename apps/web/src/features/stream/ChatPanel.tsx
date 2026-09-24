@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { cn } from '@streamkit/app-kit';
 import { PlatformIcon } from '@streamkit/ui';
+import { PLATFORMS_PATH } from '@/components/navigation';
 
 /** Насколько близко к низу считается «читаю свежее» — тогда ленту докручиваем сами. */
 const STICK_THRESHOLD_PX = 48;
@@ -104,7 +105,7 @@ export function ChatPanel({
           </div>
           <p className="max-w-prose text-sm text-muted">
             {t('stream.chat.none')}{' '}
-            <Link to="/analytics" className="underline hover:text-fg">
+            <Link to={PLATFORMS_PATH} className="underline hover:text-fg">
               {t('stream.connectPlatform')}
             </Link>
           </p>

@@ -300,7 +300,7 @@ describe('Подписка на платформу (feature)', () => {
       customerEmail: owner.email,
       amountMinor: PLAN_PRICES.pro.year.amountMinor,
     });
-    expect(gateway.created[0]!.returnUrl).toContain(`/billing?payment=${payment.id}`);
+    expect(gateway.created[0]!.returnUrl).toContain(`/account/billing?payment=${payment.id}`);
 
     const consent = await harness.prisma.consent.findFirstOrThrow({
       where: { userId: owner.userId, document: 'SUBSCRIPTION_OFFER' },

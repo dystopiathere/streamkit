@@ -62,6 +62,7 @@ model User {
   anonymizedAt        DateTime?
 
   refreshTokens   RefreshToken[]
+  passwordResets  PasswordResetToken[]
   consents        Consent[]
   widgets         Widget[]
   alertEvents     AlertEvent[]
@@ -78,6 +79,27 @@ model User {
   @@index([status])
   @@index([role])
   @@index([createdAt])
+}
+
+/// Ссылка восстановления пароля из письма.
+///
+/// Хранится только HMAC токена (`TOKEN_HASH_PEPPER`), как у сессий: утёкшая
+/// таблица не даёт сменить пароль ни одному пользователю. Живёт час и
+/// расходуется один раз; новая ссылка гасит прежние, чтобы в ящике работало
+/// только последнее письмо.
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  /// Уборка истёкших — по одному сроку.
+  @@index([expiresAt])
 }
 
 /// Где действует сессия. Админская сессия — отдельное семейство со своей

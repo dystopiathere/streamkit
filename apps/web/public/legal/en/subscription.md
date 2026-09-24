@@ -1,6 +1,6 @@
 # Paid Plans Offer
 
-Version No. 5 of 22.09.2026
+Version No. 6 of 24.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/subscription?lang=ru); if the
@@ -34,7 +34,7 @@ extended set of animations).
 1.5. The limits of the free plan apply to creating new things: widgets that
 already exist are not deleted and keep working. If more platforms are connected
 than the plan allows, one of them stays active — the customer chooses which one
-in the Analytics section; the others are kept with their settings and do not
+in the Platforms section of the profile; the others are kept with their settings and do not
 work until the plan allows it. Advanced styling settings are kept, but outside
 the Pro plan the widget is shown with the basic styling.
 

@@ -353,7 +353,7 @@ export class BillingService {
         currency: payment.currency,
         description: describe(plan, period),
         customerEmail: user.email,
-        returnUrl: `${this.config.webBaseUrl.replace(/\/+$/, '')}/billing?payment=${payment.id}`,
+        returnUrl: `${this.config.webBaseUrl.replace(/\/+$/, '')}/account/billing?payment=${payment.id}`,
       });
     } catch (error) {
       const rejected = error instanceof PlatformError && error.status >= 400 && error.status < 500;

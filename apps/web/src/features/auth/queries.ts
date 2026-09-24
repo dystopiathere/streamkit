@@ -1,5 +1,5 @@
-import { useMutation } from '@tanstack/react-query';
-import type { DisableTotpInput } from '@streamkit/contracts';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { DisableTotpInput, SessionInfo } from '@streamkit/contracts';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -33,7 +33,7 @@ export function useConfirmTotp() {
     mutationFn: (code: string) => api.post<void>('/auth/totp/confirm', { code }),
     onSuccess: () => {
       patchUser({ isTotpEnabled: true });
-      toast.success(t('privacy.totp.enabled'));
+      toast.success(t('security.totp.enabled'));
     },
   });
 }
@@ -45,7 +45,31 @@ export function useDisableTotp() {
     mutationFn: (input: DisableTotpInput) => api.post<void>('/auth/totp/disable', input),
     onSuccess: () => {
       patchUser({ isTotpEnabled: false });
-      toast.success(t('privacy.totp.disabled'));
+      toast.success(t('security.totp.disabled'));
     },
+  });
+}
+
+export const sessionKeys = {
+  all: ['auth', 'sessions'] as const,
+};
+
+/** Устройства, на которых открыт дашборд: одно семейство токенов — одно устройство. */
+export function useSessions() {
+  return useQuery({
+    queryKey: sessionKeys.all,
+    queryFn: () => api.get<SessionInfo[]>('/auth/sessions'),
+  });
+}
+
+/**
+ * Выход на другом устройстве. Тот, кто держит эту сессию, выйдет при
+ * следующем обновлении токена — в пределах срока access-токена.
+ */
+export function useRevokeSession() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/auth/sessions/${id}`),
+    onSettled: () => client.invalidateQueries({ queryKey: sessionKeys.all }),
   });
 }

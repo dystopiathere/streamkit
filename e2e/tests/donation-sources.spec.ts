@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { mainNav } from './navigation';
 
 /**
  * Подключение DonationAlerts в настоящем браузере.
@@ -21,7 +22,7 @@ test('стример подключает DonationAlerts и отключает �
   await expect(page).toHaveURL(/\/widgets$/);
   await page.getByRole('button', { name: 'Только необходимые' }).click();
 
-  await page.getByRole('link', { name: 'Источники' }).click();
+  await mainNav(page).getByRole('link', { name: 'Источники', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'DonationAlerts' })).toBeVisible();
   await expect(page.getByText('Не подключён', { exact: true })).toBeVisible();
 

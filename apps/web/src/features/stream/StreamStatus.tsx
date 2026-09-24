@@ -6,6 +6,7 @@ import { cn, StatusPill } from '@streamkit/app-kit';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { intlLocale } from '@/lib/locale';
 import { StreamClock } from './StreamClock';
+import { PLATFORMS_PATH } from '@/components/navigation';
 
 /**
  * Состояние эфира: идёт ли, сколько идёт, сколько зрителей всего и на каждой
@@ -32,7 +33,7 @@ export function StreamStatus({
     return (
       <p className="rounded-card border border-dashed border-border-strong px-4 py-3 text-sm text-muted">
         {t('stream.noPlatforms')}{' '}
-        <Link to="/analytics" className="underline hover:text-fg">
+        <Link to={PLATFORMS_PATH} className="underline hover:text-fg">
           {t('stream.connectPlatform')}
         </Link>
       </p>
@@ -117,7 +118,10 @@ export function StreamStatus({
                     <span className="shrink-0 text-muted">{t('stream.platformOffline')}</span>
                   )}
                   {channel.syncState !== 'ok' ? (
-                    <Link to="/analytics" className="shrink-0 text-xs text-warning hover:underline">
+                    <Link
+                      to={PLATFORMS_PATH}
+                      className="shrink-0 text-xs text-warning hover:underline"
+                    >
                       {t('stream.syncProblem')}
                     </Link>
                   ) : channel.title ? (

@@ -246,7 +246,7 @@ describe('Аналитика каналов (feature)', () => {
   it('отклоняет неизвестный диапазон', async () => {
     const channelId = await createChannel();
     await request(server())
-      .get(`/api/channels/${channelId}/series?range=90d`)
+      .get(`/api/channels/${channelId}/series?range=1y`)
       .set(auth())
       .expect(400);
   });
@@ -395,6 +395,141 @@ describe('Аналитика каналов (feature)', () => {
       .expect(302);
 
     expect(response.headers.location).toContain('status=cancelled');
+  });
+  describe('сводка по эфирам и донатам', () => {
+    const MINUTE = 60 * 1000;
+
+    /** Эфир из минутных снимков: `minutes` снимков подряд, заканчивая `endHoursAgo`. */
+    async function seedStream(
+      channelId: string,
+      endHoursAgo: number,
+      minutes: number,
+      followersFrom: number,
+      followersTo: number,
+    ): Promise<void> {
+      const end = Date.now() - endHoursAgo * HOUR;
+      await harness.prisma.analyticsSnapshot.createMany({
+        data: Array.from({ length: minutes }, (_, index) => ({
+          channelId,
+          capturedAt: new Date(end - (minutes - 1 - index) * MINUTE),
+          isLive: true,
+          viewers: 50 + index,
+          followers:
+            followersFrom + Math.round(((followersTo - followersFrom) * index) / (minutes - 1)),
+          subscribers: null,
+          totalViews: null,
+        })),
+      });
+    }
+
+    it('собирает эфиры, раскладывает донаты по ним и по дням', async () => {
+      const channelId = await createChannel();
+      await seedStream(channelId, 30, 90, 1000, 1012);
+      await seedStream(channelId, 5, 60, 1012, 1015);
+      const streamDonation = new Date(Date.now() - 5 * HOUR - 10 * MINUTE);
+      await harness.prisma.alertEvent.createMany({
+        data: [
+          { ...makeEvent(userId, 'in-stream', 70_000, 'RUB'), createdAt: streamDonation },
+          {
+            ...makeEvent(userId, 'off-stream', 5_000, 'RUB'),
+            createdAt: new Date(Date.now() - 50 * HOUR),
+          },
+          { ...makeEvent(userId, 'usd', 1_000, 'USD'), createdAt: streamDonation },
+          {
+            ...makeEvent(userId, 'follow', 0, 'RUB'),
+            type: 'FOLLOW' as const,
+            amountMinor: null,
+            currency: null,
+            createdAt: streamDonation,
+          },
+        ],
+      });
+
+      const response = await request(server())
+        .get('/api/analytics/overview?range=7d&timeZone=Europe%2FMoscow')
+        .set(auth())
+        .expect(200);
+      const body = response.body;
+
+      expect(body.bucket).toBe('day');
+      expect(body.currency).toBe('RUB');
+      expect(body.buckets.length).toBeGreaterThanOrEqual(7);
+      expect(body.streams).toHaveLength(2);
+      expect(body.streams[0]).toMatchObject({
+        minutes: 90,
+        platforms: ['twitch'],
+        audienceGain: 12,
+      });
+      expect(body.streams[1]).toMatchObject({
+        minutes: 60,
+        peakViewers: 109,
+        donationsMinor: 70_000,
+        donationsCount: 1,
+        events: 1,
+        audienceGain: 3,
+      });
+      // Доллары в рублёвые корзины не идут, но в итог по валютам — да.
+      expect(body.donationsDuringStreamsMinor).toBe(70_000);
+      const bucketSum = body.buckets.reduce(
+        (sum: number, bucket: { donationsMinor: number }) => sum + bucket.donationsMinor,
+        0,
+      );
+      expect(bucketSum).toBe(75_000);
+      const liveMinutes = body.buckets.reduce(
+        (sum: number, bucket: { liveMinutes: number }) => sum + bucket.liveMinutes,
+        0,
+      );
+      expect(liveMinutes).toBe(150);
+      expect(body.donationTotals).toEqual([
+        { currency: 'RUB', amountMinor: 75_000, count: 2 },
+        { currency: 'USD', amountMinor: 1_000, count: 1 },
+      ]);
+      expect(body.eventCounts).toEqual([
+        { type: 'donation', count: 3 },
+        { type: 'follow', count: 1 },
+      ]);
+      const heat = body.heatmap.reduce(
+        (sum: number, cell: { amountMinor: number }) => sum + cell.amountMinor,
+        0,
+      );
+      expect(heat).toBe(75_000);
+    });
+
+    it('без эфиров и донатов отдаёт пустые корзины, а не ошибку', async () => {
+      const response = await request(server())
+        .get('/api/analytics/overview?range=24h')
+        .set(auth())
+        .expect(200);
+
+      expect(response.body.bucket).toBe('hour');
+      expect(response.body.streams).toEqual([]);
+      expect(response.body.buckets.length).toBeGreaterThanOrEqual(24);
+      expect(
+        response.body.buckets.every(
+          (bucket: { audienceGain: number | null }) => bucket.audienceGain === null,
+        ),
+      ).toBe(true);
+    });
+
+    it('не видит чужих эфиров и донатов', async () => {
+      const other = await request(server())
+        .post('/api/auth/register')
+        .send(registrationPayload())
+        .expect(201);
+      const otherId = other.body.user.id as string;
+      const channelId = await createChannel(otherId);
+      await seedStream(channelId, 2, 30, 10, 20);
+      await harness.prisma.alertEvent.create({ data: makeEvent(otherId, 'alien', 9_000, 'RUB') });
+
+      const response = await request(server())
+        .get('/api/analytics/overview?range=7d')
+        .set(auth())
+        .expect(200);
+
+      expect(response.body.streams).toEqual([]);
+      expect(response.body.donationTotals).toEqual([]);
+      expect(response.body.heatmap).toEqual([]);
+    });
   });
 });
 

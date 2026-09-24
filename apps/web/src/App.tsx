@@ -1,8 +1,9 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
+import { AccountLayout } from './components/AccountLayout';
 import { AppLayout } from './components/AppLayout';
 import { CookieBanner } from './components/CookieBanner';
 import { SiteStats } from './features/public/SiteStats';
@@ -11,12 +12,16 @@ import { useAuthStore } from './lib/auth-store';
 import { queryClient } from './lib/query-client';
 import { usePageMeta } from './lib/seo';
 import { EventsPage } from './pages/EventsPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { BillingPage } from './pages/BillingPage';
+import { PlatformsPage } from './pages/PlatformsPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { RegisterPage } from './pages/RegisterPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { RoomsPage } from './pages/RoomsPage';
+import { SecurityPage } from './pages/SecurityPage';
 import { SourcesPage } from './pages/SourcesPage';
 import { StreamPage, StreamWindowPage } from './pages/StreamPage';
 import { WidgetEditorPage } from './pages/WidgetEditorPage';
@@ -31,6 +36,9 @@ import { WidgetsPage } from './pages/WidgetsPage';
  */
 const AnalyticsPage = lazy(async () => ({
   default: (await import('./pages/AnalyticsPage')).AnalyticsPage,
+}));
+const AnalyticsChartsPage = lazy(async () => ({
+  default: (await import('./pages/AnalyticsChartsPage')).AnalyticsChartsPage,
 }));
 
 /**
@@ -74,6 +82,18 @@ function Lazy({ children }: { children: React.ReactNode }): React.JSX.Element {
  * дашборд, ни выкидывать на логин — иначе при каждом F5 будет мелькать форма
  * входа у вошедшего пользователя.
  */
+/**
+ * Переадресация со старого адреса раздела с сохранением строки запроса.
+ *
+ * `/billing` и `/privacy` переехали в профиль, но на них ведут письма о
+ * продлении, уже лежащие в ящиках, и возврат ЮKassa по платежам, оформленным
+ * до выкатки: `?payment=` обязан доехать до страницы тарифа.
+ */
+function MovedTo({ to }: { to: string }): React.JSX.Element {
+  const { search } = useLocation();
+  return <Navigate to={{ pathname: to, search }} replace />;
+}
+
 function RequireAuth(): React.JSX.Element {
   const { accessToken, isRestoring } = useAuthStore();
   // Кабинет — вне выдачи. robots.txt закрывает его от обхода, а тег — на
@@ -102,6 +122,8 @@ export function App(): React.JSX.Element {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route
             path="/legal/:slug"
             element={
@@ -131,9 +153,17 @@ export function App(): React.JSX.Element {
               <Route
                 path="/analytics"
                 element={
-                  <Suspense fallback={<Loading />}>
+                  <Lazy>
                     <AnalyticsPage />
-                  </Suspense>
+                  </Lazy>
+                }
+              />
+              <Route
+                path="/analytics/charts"
+                element={
+                  <Lazy>
+                    <AnalyticsChartsPage />
+                  </Lazy>
                 }
               />
               <Route path="/rooms" element={<RoomsPage />} />
@@ -146,8 +176,15 @@ export function App(): React.JSX.Element {
                 }
               />
               <Route path="/sources" element={<SourcesPage />} />
-              <Route path="/billing" element={<BillingPage />} />
-              <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="/account" element={<AccountLayout />}>
+                <Route index element={<Navigate to="platforms" replace />} />
+                <Route path="platforms" element={<PlatformsPage />} />
+                <Route path="security" element={<SecurityPage />} />
+                <Route path="billing" element={<BillingPage />} />
+                <Route path="privacy" element={<PrivacyPage />} />
+              </Route>
+              <Route path="/billing" element={<MovedTo to="/account/billing" />} />
+              <Route path="/privacy" element={<MovedTo to="/account/privacy" />} />
             </Route>
           </Route>
 

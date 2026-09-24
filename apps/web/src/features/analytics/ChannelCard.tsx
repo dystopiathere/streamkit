@@ -1,34 +1,41 @@
-import type { AnalyticsRange, Channel } from '@streamkit/contracts';
-import { useTranslation } from 'react-i18next';
-import { Button, Card, cn, ConfirmDialog } from '@streamkit/app-kit';
-import { useState } from 'react';
 import {
-  useChannelSeries,
-  useChannelSummary,
-  useConnectPlatform,
-  useDisconnectChannel,
-  useSetChannelEnabled,
-} from './queries';
-import { MetricChart } from './MetricChart';
+  type AnalyticsRange,
+  type Channel,
+  type ChannelCounter,
+  PLATFORM_COUNTERS,
+} from '@streamkit/contracts';
+import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
+import { Card, StatusPill } from '@streamkit/app-kit';
+import { PLATFORMS_PATH } from '@/components/navigation';
 import { intlLocale } from '@/lib/locale';
+import { useChannelSummary } from './queries';
 
 interface ChannelCardProps {
   channel: Channel;
   range: AnalyticsRange;
 }
 
+/**
+ * Показатели канала за период — без графиков и без управления.
+ *
+ * Графики — на вкладке «Графики», подключение и отключение — в профиле. Здесь
+ * только то, что площадка действительно сообщает (`PLATFORM_COUNTERS`): у
+ * YouTube нет фолловеров, у Twitch — суммарных просмотров, и прочерк на их
+ * месте выглядел как сбой сбора, которого нет.
+ */
 export function ChannelCard({ channel, range }: ChannelCardProps): React.JSX.Element {
   const { t } = useTranslation();
   const summary = useChannelSummary(channel.id, range);
-  const series = useChannelSeries(channel.id, range);
-  const disconnect = useDisconnectChannel();
-  const setEnabled = useSetChannelEnabled();
-  // Отключение стирает все собранные метрики сразу и безвозвратно — как и
-  // обещает политика. Одним случайным нажатием такое не делается.
-  const [confirming, setConfirming] = useState(false);
+  const current = summary.data?.current ?? null;
+  const counters = PLATFORM_COUNTERS[channel.platform];
+  const visible = counters.counters.filter(
+    (counter) => !counters.optional.includes(counter) || (current?.[counter] ?? null) !== null,
+  );
+  const needsAttention = !channel.isEnabled || channel.syncState !== 'ok' || channel.needsReconnect;
 
   return (
-    <Card className="space-y-6">
+    <Card className="space-y-4">
       <header className="flex flex-wrap items-center gap-3">
         {channel.avatarUrl ? (
           <img
@@ -37,148 +44,66 @@ export function ChannelCard({ channel, range }: ChannelCardProps): React.JSX.Ele
             className="h-10 w-10 rounded-full border border-border"
           />
         ) : null}
-
         <div className="min-w-0 flex-1">
-          <h2 className="flex items-center gap-2 font-medium">
+          <h2 className="flex flex-wrap items-center gap-2 font-medium">
             <span className="truncate">{channel.displayName}</span>
-            {summary.data?.current?.isLive ? (
+            {current?.isLive ? (
               // Состояние передаётся формой и текстом, а не только цветом.
-              <span className="shrink-0 rounded bg-danger/15 px-1.5 py-0.5 text-xs text-danger">
-                {t('analytics.live')}
-              </span>
+              <StatusPill tone="danger">{t('analytics.live')}</StatusPill>
             ) : null}
           </h2>
           <p className="truncate text-xs text-muted">
             {t(`analytics.platform.${channel.platform}`)} · {channel.login}
           </p>
         </div>
-
-        {/* Выключенная площадка не опрашивается, не читает чат и не шлёт
-            события: так работает тариф с одной активной площадкой у того, кто
-            подключил две. Включение одной выключает другую — это делает сервер. */}
-        {channel.isEnabled ? null : (
-          <Button
-            variant="secondary"
-            isLoading={setEnabled.isPending}
-            aria-label={t('analytics.activateNamed', { name: channel.displayName })}
-            onClick={() => setEnabled.mutate({ channelId: channel.id, isEnabled: true })}
-          >
-            {t('analytics.activate')}
-          </Button>
-        )}
-        <Button
-          variant="ghost"
-          aria-label={t('analytics.disconnectNamed', { name: channel.displayName })}
-          onClick={() => setConfirming(true)}
-        >
-          {t('analytics.disconnect')}
-        </Button>
-        <ConfirmDialog
-          open={confirming}
-          title={t('analytics.disconnectTitle', { name: channel.displayName })}
-          confirmLabel={t('analytics.disconnect')}
-          cancelLabel={t('common.cancel')}
-          isPending={disconnect.isPending}
-          onClose={() => setConfirming(false)}
-          onConfirm={() => disconnect.mutate(channel.id, { onSettled: () => setConfirming(false) })}
-        >
-          {t('analytics.disconnectText')}
-        </ConfirmDialog>
       </header>
 
-      {channel.isEnabled ? null : (
+      {needsAttention ? (
+        // Здесь только отметка и дорога: чинят площадку в профиле, где есть
+        // кнопки, а не в двух местах сразу.
         <p className="rounded-lg border border-border bg-surface-hover px-3 py-2 text-sm text-muted">
-          {t('analytics.inactive')}
+          {channel.isEnabled ? t('analytics.channelNeedsAction') : t('analytics.channelInactive')}{' '}
+          <Link to={PLATFORMS_PATH} className="underline hover:text-fg">
+            {t('nav.platforms')}
+          </Link>
         </p>
-      )}
+      ) : null}
 
-      <SyncNotice channel={channel} />
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Stat
           label={t('analytics.viewersNow')}
-          value={summary.data?.current?.isLive ? summary.data.current.viewers : null}
+          value={current?.isLive ? current.viewers : null}
+          missing={current && !current.isLive ? t('analytics.offline') : undefined}
         />
-        <Stat
-          label={t('analytics.subscribers')}
-          value={summary.data?.current?.subscribers ?? null}
-          delta={summary.data?.deltas.subscribers ?? null}
-        />
-        <Stat
-          label={t('analytics.followers')}
-          value={summary.data?.current?.followers ?? null}
-          delta={summary.data?.deltas.followers ?? null}
-        />
+        {visible.map((counter) => (
+          <Stat
+            key={counter}
+            label={t(`analytics.counter.${counter}`)}
+            value={current?.[counter] ?? null}
+            delta={summary.data?.deltas[counter] ?? null}
+            hint={counterHint(channel, counter, t)}
+          />
+        ))}
+        <Stat label={t('analytics.peakViewers')} value={summary.data?.peakViewers ?? null} />
         <Stat
           label={t('analytics.liveHours')}
           value={summary.data?.liveHours ?? null}
           suffix={t('analytics.hoursSuffix')}
         />
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <MetricChart
-          points={series.data?.points ?? []}
-          range={range}
-          kind="viewers"
-          title={t('analytics.chartViewers')}
-          valueLabel={t('analytics.viewersNow')}
-          emptyLabel={t('analytics.noLiveData')}
-        />
-        <MetricChart
-          points={series.data?.points ?? []}
-          range={range}
-          kind="subscribers"
-          title={t('analytics.chartSubscribers')}
-          valueLabel={t('analytics.subscribers')}
-          emptyLabel={t('analytics.noData')}
-        />
-      </div>
+      </dl>
     </Card>
   );
 }
 
-/**
- * Состояние сбора.
- *
- * Показывается только когда оно требует действия или объяснения: «всё в
- * порядке» отдельной строкой — шум, который учит не читать это место.
- *
- * Мёртвый доступ и нехватка прав чинятся одним и тем же — повторным входом на
- * площадку, поэтому кнопка прямо здесь: подключение обновляет канал, а не
- * заводит новый.
- */
-function SyncNotice({ channel }: { channel: Channel }): React.JSX.Element | null {
-  const { t } = useTranslation();
-  const connect = useConnectPlatform();
-  const isAuth = channel.syncState === 'auth-expired';
-  const needsAction = isAuth || channel.needsReconnect;
-  if (channel.syncState === 'ok' && !channel.needsReconnect) return null;
-
-  return (
-    <div
-      role={needsAction ? 'alert' : undefined}
-      className={cn(
-        'flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm',
-        needsAction ? 'border-danger/40 bg-danger/10' : 'border-border bg-surface-hover text-muted',
-      )}
-    >
-      <p>
-        {isAuth || channel.syncState !== 'ok'
-          ? t(`analytics.syncState.${channel.syncState}`)
-          : t('analytics.needsReconnect')}
-      </p>
-      {needsAction ? (
-        <Button
-          variant="secondary"
-          isLoading={connect.isPending}
-          onClick={() => connect.mutate(channel.platform)}
-        >
-          {t('analytics.reconnect')}
-        </Button>
-      ) : null}
-    </div>
-  );
+/** YouTube округляет подписчиков в самом API — об этом нужно сказать у числа. */
+function counterHint(
+  channel: Channel,
+  counter: ChannelCounter,
+  t: (key: string) => string,
+): string | undefined {
+  return channel.platform === 'youtube' && counter === 'subscribers'
+    ? t('analytics.youtubeRounding')
+    : undefined;
 }
 
 interface StatProps {
@@ -186,35 +111,45 @@ interface StatProps {
   value: number | null;
   delta?: number | null;
   suffix?: string;
+  /** Что написать вместо прочерка, когда значения нет по понятной причине. */
+  missing?: string;
+  hint?: string;
 }
 
-function Stat({ label, value, delta, suffix }: StatProps): React.JSX.Element {
+function Stat({ label, value, delta, suffix, missing, hint }: StatProps): React.JSX.Element {
   const { t } = useTranslation();
+  const format = (number: number): string => new Intl.NumberFormat(intlLocale()).format(number);
 
   return (
     <div className="rounded-lg border border-border px-3 py-2">
-      <p className="text-xs text-muted">{label}</p>
-      <p className="mt-0.5 text-lg font-semibold tabular-nums sm:text-xl">
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className="mt-0.5 text-lg font-semibold sm:text-xl">
         {value === null ? (
-          // Прочерк, а не ноль: «неизвестно» и «ноль» — разные утверждения, и
-          // площадки регулярно не отдают часть счётчиков.
-          <span className="text-muted">
-            <span aria-hidden="true">{t('analytics.noValue')}</span>
-            <span className="sr-only">{t('common.noData')}</span>
-          </span>
+          missing ? (
+            <span className="text-sm font-normal text-muted">{missing}</span>
+          ) : (
+            // Прочерк, а не ноль: «неизвестно» и «ноль» — разные утверждения.
+            <span className="text-muted">
+              <span aria-hidden="true">{t('analytics.noValue')}</span>
+              <span className="sr-only">{t('common.noData')}</span>
+            </span>
+          )
         ) : (
           <>
-            {new Intl.NumberFormat(intlLocale()).format(value)}
+            {format(value)}
             {suffix ? <span className="ml-1 text-sm font-normal text-muted">{suffix}</span> : null}
           </>
         )}
-      </p>
+      </dd>
       {delta !== undefined && delta !== null && delta !== 0 ? (
-        <p className={delta > 0 ? 'text-xs text-success' : 'text-xs text-muted'}>
-          {delta > 0 ? '+' : ''}
-          {new Intl.NumberFormat(intlLocale()).format(delta)}
-        </p>
+        // Тренд ахроматичен: рост светлее, падение приглушённее, знак — словом.
+        <dd className={delta > 0 ? 'text-xs text-fg' : 'text-xs text-muted'}>
+          {delta > 0 ? '+' : '−'}
+          {format(Math.abs(delta))}
+          <span className="sr-only"> {t('analytics.deltaForPeriod')}</span>
+        </dd>
       ) : null}
+      {hint ? <dd className="mt-1 text-xs text-muted">{hint}</dd> : null}
     </div>
   );
 }

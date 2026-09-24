@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { mainNav } from './navigation';
 
 /**
  * Английская версия сайта.
@@ -49,7 +50,7 @@ test('английский сайт: главная, вход, дашборд, �
     await page.getByRole('button', { name: 'Test alert' }).click();
     await expect(page.getByText('Test alert sent')).toBeVisible();
 
-    await page.getByRole('link', { name: 'Events' }).click();
+    await mainNav(page, 'Sections').getByRole('link', { name: 'Events', exact: true }).click();
     await expect(page.getByText('Test viewer')).toBeVisible();
   });
 

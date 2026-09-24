@@ -103,3 +103,63 @@ export const sessionSchema = z.object({
   isCurrent: z.boolean(),
 });
 export type SessionInfo = z.infer<typeof sessionSchema>;
+
+/**
+ * Язык письма о восстановлении пароля.
+ *
+ * Язык аккаунта нигде не хранится: интерфейс выбирает его по браузеру. Письмо
+ * уходит на языке той страницы, с которой его запросили, — её читает тот же
+ * человек, который сейчас будет читать письмо.
+ */
+export const MAIL_LANGUAGES = ['ru', 'en'] as const;
+export type MailLanguage = (typeof MAIL_LANGUAGES)[number];
+
+export const forgotPasswordSchema = z.object({
+  email: emailSchema,
+  language: z.enum(MAIL_LANGUAGES).default('ru'),
+});
+export type ForgotPasswordInput = z.input<typeof forgotPasswordSchema>;
+
+/**
+ * Сколько живёт ссылка восстановления пароля.
+ *
+ * Час — с запасом на письмо, застрявшее в очереди почтового сервиса, и мало
+ * для того, кто позже доберётся до чужого ящика: ссылка в старом письме к
+ * тому времени уже ничего не открывает.
+ */
+export const PASSWORD_RESET_TTL_MINUTES = 60;
+
+/**
+ * Новый пароль по ссылке из письма.
+ *
+ * Токен — base64url от 32 случайных байт, то есть 43 символа. Длину держим
+ * строго: всё остальное заведомо не наш токен, и в хэш его отправлять незачем.
+ */
+export const resetPasswordSchema = z.object({
+  token: z.string().regex(/^[A-Za-z0-9_-]{43}$/, 'Ссылка недействительна или устарела'),
+  newPassword: passwordSchema,
+});
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
+const PASSWORDS_DIFFER = 'Пароли не совпадают';
+
+/**
+ * Формы нового пароля — с повтором. Повтор серверу не нужен и в запрос не
+ * уходит: он ловит опечатку в пароле, которого никто не видит, до того, как
+ * её обнаружат на следующем входе.
+ */
+export const changePasswordFormSchema = changePasswordSchema
+  .extend({ confirmPassword: z.string() })
+  .refine((values) => values.confirmPassword === values.newPassword, {
+    path: ['confirmPassword'],
+    message: PASSWORDS_DIFFER,
+  });
+export type ChangePasswordFormValues = z.infer<typeof changePasswordFormSchema>;
+
+export const resetPasswordFormSchema = z
+  .object({ newPassword: passwordSchema, confirmPassword: z.string() })
+  .refine((values) => values.confirmPassword === values.newPassword, {
+    path: ['confirmPassword'],
+    message: PASSWORDS_DIFFER,
+  });
+export type ResetPasswordFormValues = z.infer<typeof resetPasswordFormSchema>;

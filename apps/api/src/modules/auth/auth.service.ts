@@ -161,17 +161,22 @@ export class AuthService {
   /**
    * Смена пароля гасит все сессии, включая текущую: если пароль меняют из-за
    * подозрения на компрометацию, оставлять чужую активную сессию бессмысленно.
+   * Устройству, с которого сменили пароль, выдаётся новая сессия — новым
+   * семейством, а не продлением погашенного.
+   *
+   * Неверный текущий пароль — 400, а не 401: 401 клиент понимает как протухший
+   * access-токен, обновляет его и повторяет запрос, а человек просто ошибся.
    */
   async changePassword(
     userId: string,
     currentPassword: string,
     newPassword: string,
     context: AuditContext = {},
-  ): Promise<void> {
+  ): Promise<AuthResult & { refreshToken: string }> {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     const valid = await this.passwords.verify(user.passwordHash, currentPassword);
     if (!valid) {
-      throw new UnauthorizedException('Текущий пароль указан неверно');
+      throw new BadRequestException('Текущий пароль указан неверно');
     }
     if (await this.passwords.verify(user.passwordHash, newPassword)) {
       throw new BadRequestException('Новый пароль совпадает с текущим');
@@ -183,6 +188,14 @@ export class AuthService {
     });
     await this.tokens.revokeAllForUser(userId);
     await this.audit.record('auth.password.changed', userId, context);
+
+    const issued = await this.tokens.startSession(user, context);
+    return {
+      accessToken: issued.accessToken,
+      expiresIn: issued.expiresIn,
+      refreshToken: issued.refreshToken,
+      user: toPublicUser(user),
+    };
   }
 
   /** Шаг 1 подключения 2FA: выдаём секрет и QR, но ещё не включаем. */

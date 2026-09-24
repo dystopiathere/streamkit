@@ -137,6 +137,6 @@ export class IntegrationsController {
     status: 'connected' | 'cancelled' | 'failed' | 'plan-limit',
   ): string {
     const base = this.config.webBaseUrl.replace(/\/+$/, '');
-    return `${base}/analytics?platform=${encodeURIComponent(platform)}&status=${status}`;
+    return `${base}/account/platforms?platform=${encodeURIComponent(platform)}&status=${status}`;
   }
 }

@@ -1,8 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import { cn } from '@streamkit/app-kit';
 import { resetVisitorCookieChoice } from '@/components/CookieBanner';
 import { LanguageSwitch } from '@/components/LanguageSwitch';
+import { ACCOUNT_SECTIONS, DASHBOARD_SECTIONS } from '@/components/navigation';
 import { useIsAuthenticated } from '@/lib/auth-store';
 import { missingValue, useSeller } from './seller';
 
@@ -38,15 +40,17 @@ const DOCUMENTS = [
  * переносились в неразличимую кашу, где документы стояли вперемешку с
  * настройками cookie.
  *
- * Разделов дашборда в карте нет намеренно: они все до одного стоят в шапке, и
- * второй их список ничего не добавляет, зато делает каждую ссылку на странице
- * неоднозначной — и для человека, и для сквозных тестов.
+ * В дашборде (`dashboard`) карта полная: разделы кабинета и профиля. Шапка
+ * показывает только рабочие разделы, а профиль прячется за именем, — подвал
+ * единственное место, где весь кабинет виден одним списком. Одинаковые ссылки
+ * в шапке и подвале различаются областью: сквозные тесты ищут ссылки шапки
+ * внутри её `<nav>`, а не по всей странице.
  *
  * Переключатель языка — здесь, а не в шапке. В шапке он был кнопкой «English»
  * посреди разделов дашборда: коротко и непонятно, что это — раздел, действие
  * или название чего-то. В подвале для него есть место под целую фразу.
  */
-export function PublicFooter(): React.JSX.Element {
+export function PublicFooter({ dashboard = false }: { dashboard?: boolean }): React.JSX.Element {
   const { t } = useTranslation();
   const seller = useSeller();
   const authenticated = useIsAuthenticated();
@@ -60,7 +64,26 @@ export function PublicFooter(): React.JSX.Element {
   return (
     <footer className="mt-12 border-t border-border">
       <div className="mx-auto max-w-6xl px-4 py-8 text-sm">
-        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+        <div
+          className={cn(
+            'grid gap-8 sm:grid-cols-2',
+            dashboard ? 'lg:grid-cols-5' : 'lg:grid-cols-3',
+          )}
+        >
+          {dashboard ? (
+            <>
+              <FooterSections
+                id="footer-dashboard"
+                title={t('public.footer.map.dashboard')}
+                items={DASHBOARD_SECTIONS}
+              />
+              <FooterSections
+                id="footer-account"
+                title={t('public.footer.map.account')}
+                items={ACCOUNT_SECTIONS}
+              />
+            </>
+          ) : null}
           <nav aria-labelledby="footer-service">
             <h2 id="footer-service" className="font-medium">
               {t('public.footer.map.service')}
@@ -90,7 +113,7 @@ export function PublicFooter(): React.JSX.Element {
               ))}
               <li>
                 {authenticated ? (
-                  <Link to="/privacy" className="hover:text-fg">
+                  <Link to="/account/privacy" className="hover:text-fg">
                     {t('public.footer.cookieSettings')}
                   </Link>
                 ) : (
@@ -134,5 +157,33 @@ export function PublicFooter(): React.JSX.Element {
         </p>
       </div>
     </footer>
+  );
+}
+
+function FooterSections({
+  id,
+  title,
+  items,
+}: {
+  id: string;
+  title: string;
+  items: ReadonlyArray<{ to: string; label: string }>;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <nav aria-labelledby={id}>
+      <h2 id={id} className="font-medium">
+        {title}
+      </h2>
+      <ul className="mt-2 space-y-1.5 text-muted">
+        {items.map((item) => (
+          <li key={item.to}>
+            <Link to={item.to} className="hover:text-fg">
+              {t(item.label)}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </nav>
   );
 }

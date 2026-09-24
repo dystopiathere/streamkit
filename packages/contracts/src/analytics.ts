@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { currencySchema, isoDateSchema, uuidSchema } from './common.js';
+import { alertEventTypeSchema } from './events.js';
 
 /* ------------------------------------------------------------------ */
 /* Площадки                                                            */
@@ -14,6 +15,40 @@ import { currencySchema, isoDateSchema, uuidSchema } from './common.js';
 export const PLATFORMS = ['twitch', 'youtube'] as const;
 export const platformSchema = z.enum(PLATFORMS);
 export type Platform = z.infer<typeof platformSchema>;
+
+/** Счётчики канала, которые площадка может отдавать. */
+export type ChannelCounter = 'followers' | 'subscribers' | 'totalViews';
+
+/**
+ * Какие счётчики отдаёт площадка — одна таблица на карточку канала, графики и
+ * сводку по эфирам.
+ *
+ * Карточка канала показывала все счётчики всем площадкам, и у YouTube стояли
+ * «Фолловеров —» навсегда: фолловеров у YouTube нет, это не пробел в данных, а
+ * поле не о нём. Прочерк оставлен для «площадка не сообщила», а не для «такого
+ * не бывает».
+ *
+ * `audience` — счётчик, которым меряется рост аудитории. Он у площадок разный
+ * по названию и одинаковый по смыслу: фолловер Twitch и подписчик YouTube — это
+ * бесплатное «следить за каналом». Платные подписчики Twitch — другое, их
+ * немного и не у всех: они есть только у компаньонов и партнёров, поэтому
+ * `optional` — без значения карточка их не показывает вовсе.
+ */
+export const PLATFORM_COUNTERS: Record<
+  Platform,
+  {
+    audience: ChannelCounter;
+    counters: readonly ChannelCounter[];
+    optional: readonly ChannelCounter[];
+  }
+> = {
+  twitch: {
+    audience: 'followers',
+    counters: ['followers', 'subscribers'],
+    optional: ['subscribers'],
+  },
+  youtube: { audience: 'subscribers', counters: ['subscribers', 'totalViews'], optional: [] },
+};
 
 /**
  * Состояние сбора метрик по каналу.
@@ -106,7 +141,12 @@ export type AnalyticsPoint = z.infer<typeof analyticsPointSchema>;
 /* Диапазоны                                                           */
 /* ------------------------------------------------------------------ */
 
-export const ANALYTICS_RANGES = ['24h', '7d', '30d'] as const;
+/**
+ * Диапазоны. Самый длинный — девяносто дней: столько хранятся снимки метрик
+ * (`SNAPSHOT_RETENTION_DAYS` в уборке), и более длинный диапазон молча
+ * показывал бы площадки только за последние три месяца из выбранных.
+ */
+export const ANALYTICS_RANGES = ['24h', '7d', '30d', '90d'] as const;
 export const analyticsRangeSchema = z.enum(ANALYTICS_RANGES);
 export type AnalyticsRange = z.infer<typeof analyticsRangeSchema>;
 
@@ -143,7 +183,12 @@ export const analyticsQuerySchema = z.object({
 });
 export type AnalyticsQuery = z.infer<typeof analyticsQuerySchema>;
 
-const RANGE_HOURS: Record<AnalyticsRange, number> = { '24h': 24, '7d': 24 * 7, '30d': 24 * 30 };
+const RANGE_HOURS: Record<AnalyticsRange, number> = {
+  '24h': 24,
+  '7d': 24 * 7,
+  '30d': 24 * 30,
+  '90d': 24 * 90,
+};
 
 export function rangeToMs(range: AnalyticsRange): number {
   return RANGE_HOURS[range] * 60 * 60 * 1000;
@@ -158,7 +203,19 @@ export function rangeToMs(range: AnalyticsRange): number {
  * различает, а больше только зашумляет линию.
  */
 export function rangeBucket(range: AnalyticsRange): 'hour' | 'day' {
-  return range === '30d' ? 'day' : 'hour';
+  return range === '30d' || range === '90d' ? 'day' : 'hour';
+}
+
+/**
+ * Корзина сводки по эфирам и донатам — сутки везде, кроме суток.
+ *
+ * Не та же, что у ряда метрик: зрители меняются в течение эфира, и неделю их
+ * читают по часам. Донаты и часы в эфире по часам недели — это 168 столбиков,
+ * почти все пустые; вопрос «в какие дни» они не отвечают, а «в какие часы»
+ * лучше отвечает тепловая карта.
+ */
+export function overviewBucket(range: AnalyticsRange): 'hour' | 'day' {
+  return range === '24h' ? 'hour' : 'day';
 }
 
 /* ------------------------------------------------------------------ */
@@ -241,3 +298,79 @@ export type AuthorizeResponse = z.infer<typeof authorizeResponseSchema>;
  */
 export const setChannelEnabledSchema = z.object({ isEnabled: z.boolean() });
 export type SetChannelEnabledInput = z.infer<typeof setChannelEnabledSchema>;
+
+/* ------------------------------------------------------------------ */
+/* Сводка по эфирам и донатам                                          */
+/* ------------------------------------------------------------------ */
+
+/** Прирост аудитории. null — снимков не хватило, чтобы сравнить. */
+const audienceGainSchema = z.number().int().nullable();
+
+/**
+ * Корзина времени: донаты, минуты в эфире, прирост аудитории и события.
+ *
+ * Донаты — в основной валюте стримера (`AnalyticsOverview.currency`): сложить
+ * рубли с тенге нельзя, а корзина без суммы бесполезна на графике.
+ */
+export const overviewBucketSchema = z.object({
+  at: isoDateSchema,
+  donationsMinor: z.number().int().nonnegative(),
+  donationsCount: z.number().int().nonnegative(),
+  /** Минут в эфире хотя бы на одной площадке — одновременный эфир не удваивается. */
+  liveMinutes: z.number().int().nonnegative(),
+  audienceGain: audienceGainSchema,
+});
+export type OverviewBucket = z.infer<typeof overviewBucketSchema>;
+
+/**
+ * Эфир — непрерывный отрезок «в эфире» хотя бы на одной площадке.
+ *
+ * Мультистрим на Twitch и YouTube одновременно — один эфир, а не два: донаты
+ * приходят не с площадки, и разделить их между двумя эфирами было бы нечем.
+ */
+export const streamSessionSchema = z.object({
+  startedAt: isoDateSchema,
+  endedAt: isoDateSchema,
+  minutes: z.number().int().nonnegative(),
+  platforms: z.array(platformSchema).min(1),
+  /** Пик зрителей, сложенный по площадкам в максимуме каждой. */
+  peakViewers: z.number().int().nonnegative().nullable(),
+  /** Средние зрители, сложенные по площадкам. */
+  avgViewers: z.number().int().nonnegative().nullable(),
+  donationsMinor: z.number().int().nonnegative(),
+  donationsCount: z.number().int().nonnegative(),
+  audienceGain: audienceGainSchema,
+  /** Остальные события за эфир: фолловы, подписки, подарки, рейды… */
+  events: z.number().int().nonnegative(),
+});
+export type StreamSession = z.infer<typeof streamSessionSchema>;
+
+/** Клетка тепловой карты: день недели (1 — понедельник) и час по местному времени. */
+export const donationHeatCellSchema = z.object({
+  weekday: z.number().int().min(1).max(7),
+  hour: z.number().int().min(0).max(23),
+  amountMinor: z.number().int().nonnegative(),
+  count: z.number().int().nonnegative(),
+});
+export type DonationHeatCell = z.infer<typeof donationHeatCellSchema>;
+
+export const analyticsOverviewSchema = z.object({
+  range: analyticsRangeSchema,
+  bucket: z.enum(['hour', 'day']),
+  /** Основная валюта донатов: в ней корзины, эфиры и тепловая карта. */
+  currency: currencySchema,
+  /** Донаты по всем валютам — итог периода без пересчёта курса. */
+  donationTotals: z.array(donationTotalSchema),
+  buckets: z.array(overviewBucketSchema),
+  /** Эфиры периода, от старых к новым. */
+  streams: z.array(streamSessionSchema),
+  /** Сколько донатов основной валюты пришло во время эфиров. */
+  donationsDuringStreamsMinor: z.number().int().nonnegative(),
+  /** События периода по типам, кроме тестовых. */
+  eventCounts: z.array(
+    z.object({ type: alertEventTypeSchema, count: z.number().int().positive() }),
+  ),
+  /** Только непустые клетки. */
+  heatmap: z.array(donationHeatCellSchema),
+});
+export type AnalyticsOverview = z.infer<typeof analyticsOverviewSchema>;

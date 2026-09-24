@@ -1,8 +1,9 @@
 import { expect, type Page } from '@playwright/test';
+import { openProfileSection } from './navigation';
 
 /**
- * Подключить Twitch так, как это делает стример: кнопка в «Аналитике», вход на
- * площадке (фальшивой, `fake-twitch.mjs`), возврат в дашборд.
+ * Подключить Twitch так, как это делает стример: профиль, раздел «Площадки»,
+ * вход на площадке (фальшивой, `fake-twitch.mjs`), возврат в дашборд.
  *
  * Фальшивый Twitch выдаёт на каждый вход новый канал, поэтому логин читается
  * с карточки канала, а не задаётся тестом.
@@ -10,9 +11,9 @@ import { expect, type Page } from '@playwright/test';
  * @returns логин подключённого канала — его чат покажут виджет и окно эфира.
  */
 export async function connectTwitch(page: Page): Promise<string> {
-  await page.getByRole('link', { name: 'Аналитика', exact: true }).click();
+  await openProfileSection(page, 'Площадки');
   await page.getByRole('button', { name: 'Подключить Twitch' }).click();
-  await expect(page).toHaveURL(/\/analytics/);
+  await expect(page).toHaveURL(/\/account\/platforms/);
 
   const card = page.getByText(/Twitch · e2e_streamer_\d+/).first();
   await expect(card).toBeVisible({ timeout: 15_000 });
@@ -30,9 +31,9 @@ export async function connectTwitch(page: Page): Promise<string> {
  * @returns id канала YouTube и его название — так канал подписан в окне эфира.
  */
 export async function connectYouTube(page: Page): Promise<{ channel: string; title: string }> {
-  await page.getByRole('link', { name: 'Аналитика', exact: true }).click();
+  await openProfileSection(page, 'Площадки');
   await page.getByRole('button', { name: 'Подключить YouTube' }).click();
-  await expect(page).toHaveURL(/\/analytics/);
+  await expect(page).toHaveURL(/\/account\/platforms/);
 
   const card = page.getByText(/YouTube · @e2e_yt_\d+/).first();
   await expect(card).toBeVisible({ timeout: 15_000 });

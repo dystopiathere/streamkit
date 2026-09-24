@@ -15,6 +15,8 @@ export type AuditAction =
   | 'auth.logout'
   | 'auth.refresh.reuse_detected'
   | 'auth.password.changed'
+  | 'auth.password.reset_requested'
+  | 'auth.password.reset'
   | 'auth.totp.enabled'
   | 'auth.totp.disabled'
   | 'auth.totp.disable_failed'
