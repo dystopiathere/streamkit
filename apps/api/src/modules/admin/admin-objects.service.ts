@@ -180,9 +180,9 @@ export class AdminObjectsService {
   }
 
   /**
-   * Приглашения комнаты. Подпись приглашения задаёт стример — это его пометка
-   * («для Васи»), а не имя гостя: гость представляется при входе, и его имя не
-   * хранится нигде.
+   * Приглашения комнаты — без пометки стримера: в ней он пишет, для кого
+   * ссылка («для Васи»), то есть имя гостя, а оно — данные по поручению
+   * (соглашение, 13.2) и сотруднику не показывается.
    */
   async listInvites(roomId: string): Promise<AdminInvite[]> {
     await this.roomOwner(roomId);
@@ -192,7 +192,6 @@ export class AdminObjectsService {
     });
     return rows.map((row) => ({
       id: row.id,
-      label: row.label,
       createdAt: row.createdAt.toISOString(),
       lastUsedAt: iso(row.lastUsedAt),
       revokedAt: iso(row.revokedAt),

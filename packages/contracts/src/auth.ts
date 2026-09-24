@@ -83,6 +83,17 @@ export const enableTotpSchema = z.object({
   code: z.string().regex(/^\d{6}$/, 'Код из 6 цифр'),
 });
 
+/**
+ * Выключение второго фактора — паролем И кодом. Одного пароля мало: второй
+ * фактор нужен ровно на случай, когда пароль уже у чужого, и снимать его
+ * должен тот, у кого телефон.
+ */
+export const disableTotpSchema = z.object({
+  password: z.string().min(1).max(128),
+  code: z.string().regex(/^\d{6}$/, 'Код из 6 цифр'),
+});
+export type DisableTotpInput = z.infer<typeof disableTotpSchema>;
+
 export const sessionSchema = z.object({
   id: uuidSchema,
   createdAt: isoDateSchema,

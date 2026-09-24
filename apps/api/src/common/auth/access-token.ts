@@ -36,6 +36,18 @@ export function audienceOf(payload: Pick<AccessTokenPayload, 'aud'>): TokenAudie
  */
 export const blockedUserKey = (userId: string): string => `auth:blocked:${userId}`;
 
+/**
+ * Закрыть уже выданные access-токены пользователя. Срок — самый долгий из
+ * токенов, которые могли быть выданы: после него отметка не нужна.
+ */
+export async function markUserBlocked(
+  redis: Redis,
+  userId: string,
+  ttlSeconds: number,
+): Promise<void> {
+  await redis.set(blockedUserKey(userId), '1', 'EX', ttlSeconds);
+}
+
 export class InvalidAccessToken extends Error {}
 
 /**

@@ -297,6 +297,28 @@ describe('Виджеты и приём событий (feature)', () => {
     expect(audit.length).toBeGreaterThan(0);
   });
 
+  it('поток неверных подписей не раздувает аудит, а чужой источник туда не пишет вовсе', async () => {
+    const { sourceId } = await createWebhookSource();
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const attempt = (id: string) =>
+      request(server())
+        .post(`/api/webhooks/${id}`)
+        .set('Content-Type', 'application/json')
+        .set('x-streamkit-timestamp', timestamp)
+        .set('x-streamkit-signature', 'a'.repeat(64))
+        .send(JSON.stringify({ externalId: 'evt-flood', username: 'Зритель' }))
+        .expect(401);
+
+    for (let i = 0; i < 5; i += 1) await attempt(sourceId);
+    for (let i = 0; i < 5; i += 1) await attempt('00000000-0000-4000-8000-000000000000');
+
+    const audit = await harness.prisma.auditLog.findMany({
+      where: { action: 'webhook.signature.invalid' },
+    });
+    expect(audit).toHaveLength(1);
+    expect(audit[0]!.metadata).toMatchObject({ sourceId, reason: 'bad-signature' });
+  });
+
   it('отвергает вебхук без заголовков подписи', async () => {
     const { sourceId } = await createWebhookSource();
     await request(server())

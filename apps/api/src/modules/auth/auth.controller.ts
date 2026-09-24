@@ -18,6 +18,8 @@ import { SkipThrottle } from '@nestjs/throttler';
 import {
   type AuthResult,
   changePasswordSchema,
+  type DisableTotpInput,
+  disableTotpSchema,
   enableTotpSchema,
   type LoginInput,
   loginSchema,
@@ -28,7 +30,6 @@ import {
   type SessionInfo,
 } from '@streamkit/contracts';
 import type { Request, Response } from 'express';
-import { z } from 'zod';
 import { AuditService } from '../../common/audit/audit.service';
 import { type AuthenticatedUser, CurrentUser, Public } from '../../common/auth/auth.decorators';
 import { zodBody } from '../../common/pipes/zod-validation.pipe';
@@ -209,10 +210,15 @@ export class AuthController {
   @Post('totp/disable')
   async disableTotp(
     @CurrentUser() user: AuthenticatedUser,
-    @Body(zodBody(z.object({ password: z.string().min(1).max(128) }))) body: { password: string },
+    @Body(zodBody(disableTotpSchema)) body: DisableTotpInput,
     @Req() request: Request,
   ): Promise<void> {
-    await this.auth.disableTotp(user.id, body.password, this.audit.contextFromRequest(request));
+    await this.auth.disableTotp(
+      user.id,
+      body.password,
+      body.code,
+      this.audit.contextFromRequest(request),
+    );
   }
 
   private issueRefreshCookie(response: Response, token: string): void {

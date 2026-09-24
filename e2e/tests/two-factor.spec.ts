@@ -38,7 +38,11 @@ test('стример включает двухфакторный вход, вх�
   await page.getByRole('button', { name: 'Подтвердить и включить' }).click();
   await expect(page.getByText('Неверный код подтверждения')).toBeVisible();
 
-  await page.getByLabel('Код из приложения').fill(generateSync({ secret }));
+  // Каждый код принимается один раз: включение, вход и выключение берут коды
+  // соседних шагов — допуск часов принимает все три.
+  const step = (offset: number) =>
+    generateSync({ secret, epoch: Math.floor(Date.now() / 1000) + offset * 30 });
+  await page.getByLabel('Код из приложения').fill(step(-1));
   await page.getByRole('button', { name: 'Подтвердить и включить' }).click();
   await expect(page.getByText('Двухфакторный вход включён')).toBeVisible();
   await expect(page.getByText('Включён', { exact: true })).toBeVisible();
@@ -49,13 +53,16 @@ test('стример включает двухфакторный вход, вх�
   await page.getByLabel('Электронная почта').fill(email);
   await page.getByLabel('Пароль').fill(PASSWORD);
   await page.getByRole('button', { name: 'Войти' }).click();
-  await page.getByLabel('Код из приложения').fill(generateSync({ secret }));
+  await page.getByLabel('Код из приложения').fill(step(0));
   await page.getByRole('button', { name: 'Войти' }).click();
   await expect(page).toHaveURL(/\/widgets$/);
 
   await page.getByRole('link', { name: 'Приватность' }).click();
   await expect(page.getByText('Включён', { exact: true })).toBeVisible();
   await page.getByLabel('Текущий пароль').first().fill(PASSWORD);
+  // Без кода из приложения выключить второй фактор нельзя: одного пароля мало.
+  await expect(page.getByRole('button', { name: 'Выключить двухфакторный вход' })).toBeDisabled();
+  await page.getByLabel('Код из приложения').fill(step(1));
   await page.getByRole('button', { name: 'Выключить двухфакторный вход' }).click();
   await expect(page.getByText('Двухфакторный вход выключен')).toBeVisible();
   await expect(page.getByText('Выключен', { exact: true })).toBeVisible();

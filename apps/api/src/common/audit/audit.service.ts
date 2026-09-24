@@ -17,6 +17,7 @@ export type AuditAction =
   | 'auth.password.changed'
   | 'auth.totp.enabled'
   | 'auth.totp.disabled'
+  | 'auth.totp.disable_failed'
   | 'overlay.token.created'
   | 'overlay.token.revoked'
   | 'room.created'
@@ -31,6 +32,7 @@ export type AuditAction =
   | 'billing.payment.amount_mismatch'
   | 'billing.payment.refunded'
   | 'billing.renewal.failed'
+  | 'billing.renewal.deferred'
   | 'billing.autorenew.changed'
   | 'billing.payment_method.removed'
   /** Стример выбрал другой тариф или период: применится при продлении. */

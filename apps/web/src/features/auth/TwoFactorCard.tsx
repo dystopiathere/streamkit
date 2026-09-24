@@ -144,15 +144,17 @@ function DisableForm(): React.JSX.Element {
   const { t } = useTranslation();
   const disable = useDisableTotp();
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
   const passwordId = useId();
-  const passwordError = disable.error ? errorText(disable.error, t('common.error')) : undefined;
+  const codeId = useId();
+  const error = disable.error ? errorText(disable.error, t('common.error')) : undefined;
 
   return (
     <form
       className="space-y-3"
       onSubmit={(event) => {
         event.preventDefault();
-        disable.mutate(password);
+        disable.mutate({ password, code });
       }}
     >
       <p className="text-sm text-muted">{t('privacy.totp.enabledDescription')}</p>
@@ -165,15 +167,28 @@ function DisableForm(): React.JSX.Element {
           value={password}
           required
           onChange={(event) => setPassword(event.target.value)}
-          {...describeField(passwordId, { error: passwordError })}
         />
-        <FieldError id={passwordId} message={passwordError} />
+      </div>
+      <div className="max-w-xs">
+        <Label htmlFor={codeId}>{t('auth.totpCode')}</Label>
+        <Input
+          id={codeId}
+          value={code}
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          pattern="\d{6}"
+          maxLength={6}
+          required
+          onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}
+          {...describeField(codeId, { error })}
+        />
+        <FieldError id={codeId} message={error} />
       </div>
       <Button
         type="submit"
         variant="secondary"
         isLoading={disable.isPending}
-        disabled={password.length === 0}
+        disabled={password.length === 0 || code.length !== 6}
       >
         {t('privacy.totp.disable')}
       </Button>

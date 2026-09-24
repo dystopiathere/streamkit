@@ -48,7 +48,9 @@ async function staffAccount(request: APIRequestContext): Promise<Account & { sec
   const { secret } = (await setup.json()) as { secret: string };
   const confirm = await request.post(`${API_URL}/api/auth/totp/confirm`, {
     headers: bearer(account.token),
-    data: { code: generateSync({ secret }) },
+    // Код подтверждения расходуется: код предыдущего шага (допуск часов его
+    // ещё принимает) оставляет текущий свободным для входа в админку.
+    data: { code: generateSync({ secret, epoch: Math.floor(Date.now() / 1000) - 30 }) },
   });
   expect(confirm.ok()).toBe(true);
 

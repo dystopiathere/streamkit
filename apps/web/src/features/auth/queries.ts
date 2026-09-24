@@ -1,4 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
+import type { DisableTotpInput } from '@streamkit/contracts';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -41,7 +42,7 @@ export function useDisableTotp() {
   const { t } = useTranslation();
   const patchUser = useAuthStore((state) => state.patchUser);
   return useMutation({
-    mutationFn: (password: string) => api.post<void>('/auth/totp/disable', { password }),
+    mutationFn: (input: DisableTotpInput) => api.post<void>('/auth/totp/disable', input),
     onSuccess: () => {
       patchUser({ isTotpEnabled: false });
       toast.success(t('privacy.totp.disabled'));

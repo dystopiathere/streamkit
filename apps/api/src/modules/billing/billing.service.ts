@@ -80,6 +80,15 @@ const TERMINAL_DECLINES = new Set([
  */
 const UNCONFIRMED_RENEWAL_TTL_MS = 20 * 60 * 60 * 1000;
 
+/**
+ * Отказы ЮKassa, которые говорят о нашем магазине, а не о карте стримера:
+ * неверные ключи, не подключённые автоплатежи, слишком частые запросы.
+ */
+const OUR_SIDE_REJECTIONS = new Set([401, 403, 429]);
+
+/** Через сколько повторить продление, отложенное из-за отказа магазину. */
+const OUR_SIDE_RETRY_MS = 60 * 60 * 1000;
+
 /** Тариф закрыт: 402 с кодом, по которому интерфейс показывает, где его купить. */
 export class SubscriptionRequiredException extends HttpException {
   constructor() {
@@ -300,7 +309,19 @@ export class BillingService {
       const subscription = await tx.subscription.upsert({
         where: { userId },
         create: { userId, ...renewal },
-        update: renewal,
+        update: {
+          ...renewal,
+          // Сюда попадает только кончившаяся подписка, но автопродление у неё
+          // может быть ещё включено, а письмо о списании — свежим. С новыми
+          // тарифом и ценой это письмо называло бы чужую сумму, и брошенная
+          // страница оплаты превратилась бы в списание по старой карте по
+          // новой цене без предупреждения. Автопродление вернёт оплата.
+          autoRenew: false,
+          renewalFailures: 0,
+          nextRenewalAttemptAt: null,
+          renewalNoticeFor: null,
+          renewalNoticeSentAt: null,
+        },
       });
       await tx.consent.create({
         data: {
@@ -431,19 +452,29 @@ export class BillingService {
       if (!row.subscriptionId || refunded.amountMinor === 0) return;
 
       await tx.$queryRaw`SELECT id FROM "Subscription" WHERE id = ${row.subscriptionId}::uuid FOR UPDATE`;
-      const subscription = await tx.subscription.findUniqueOrThrow({
-        where: { id: row.subscriptionId },
+      // Текущий — последний оплаченный период, который ещё не кончился. Раньше
+      // его узнавали по равенству конца платежа и конца подписки, но конец
+      // подписки двигают и подарочные дни: месяц с подарком поверх после
+      // возврата оставался открытым целиком. Продление, списанное позже,
+      // — уже следующий период: возврат прошлого его не закрывает.
+      if (!row.periodEnd || row.periodEnd <= now) return;
+      const later = await tx.payment.count({
+        where: {
+          subscriptionId: row.subscriptionId,
+          status: 'SUCCEEDED',
+          id: { not: row.id },
+          periodEnd: { gt: row.periodEnd },
+        },
       });
-      const isCurrentPeriod =
-        row.periodEnd !== null &&
-        subscription.currentPeriodEnd !== null &&
-        row.periodEnd.getTime() === subscription.currentPeriodEnd.getTime();
-      if (!isCurrentPeriod) return;
+      if (later > 0) return;
 
       await tx.subscription.update({
-        where: { id: subscription.id },
+        where: { id: row.subscriptionId },
         data: {
+          // Подарочные дни поверх возвращённого периода уходят вместе с ним:
+          // они продлевали доступ, за который деньги вернулись.
           currentPeriodEnd: now,
+          giftedDays: 0,
           autoRenew: false,
           renewalNoticeFor: null,
           renewalNoticeSentAt: null,
@@ -535,6 +566,12 @@ export class BillingService {
 
     if (input.autoRenew === true && !row.paymentMethodEncrypted) {
       throw new ConflictException('Нет сохранённого способа оплаты — оформите подписку заново');
+    }
+    // Включённое автопродление после конца периода — это льготные дни, то есть
+    // платный тариф ещё на трое суток. Включить его на кончившейся подписке
+    // значило бы получить их бесплатно и выключить до списания.
+    if (input.autoRenew === true && !row.autoRenew && row.currentPeriodEnd <= new Date()) {
+      throw new ConflictException('Подписка закончилась — оформите её заново');
     }
 
     // Тариф и период следующего периода меняются вместе: цена зависит от пары,
@@ -890,11 +927,19 @@ export class BillingService {
         // Заблокированному не списываем: пользоваться оплаченным он не может.
         user: { status: 'ACTIVE' },
         paymentMethodEncrypted: { not: null },
-        currentPeriodEnd: { lte: new Date(now.getTime() + RENEW_AHEAD_MS) },
+        currentPeriodEnd: {
+          lte: new Date(now.getTime() + RENEW_AHEAD_MS),
+          // После льготных дней подписка кончилась: списывать за неё — брать
+          // деньги за доступ, которого у человека уже нет. Так бывает, когда
+          // письмо ушло поздно (почта лежала) и три дня с него истекли уже
+          // после льготных.
+          gt: new Date(now.getTime() - GRACE_DAYS * DAY_MS),
+        },
         OR: [{ nextRenewalAttemptAt: null }, { nextRenewalAttemptAt: { lte: now } }],
         // Без письма о текущем конце периода, отправленного не меньше трёх
         // дней назад, не списываем: так обещает оферта. Поздно ушедшее письмо
-        // сдвигает списание в льготные дни, а не сокращает срок предупреждения.
+        // сдвигает списание в льготные дни, а не сокращает срок предупреждения;
+        // не уложилось в них — не списываем вовсе.
         renewalNoticeFor: { gte: new Date(now.getTime() - STALE_NOTICE_MS) },
         renewalNoticeSentAt: { lte: new Date(now.getTime() - NOTICE_LEAD_MS) },
       },
@@ -1009,9 +1054,34 @@ export class BillingService {
         paymentMethodId: this.crypto.decrypt(subscription.paymentMethodEncrypted),
       });
     } catch (error) {
-      // Ответ 4xx — ЮKassa отказалась принимать запрос, и повтор с тем же телом
-      // получит тот же отказ. Сеть и 5xx оставляют запись висеть: дочистка
-      // повторит с тем же ключом.
+      // 401, 403 и 429 — отказ НАШЕМУ магазину: ключи, права, частота. Карта
+      // стримера тут ни при чём, и считать это неудачной попыткой нельзя: после
+      // трёх таких автопродление выключилось бы у каждого, чьё продление
+      // пришлось на дни сломанных ключей. Платёж у ЮKassa при отказе не
+      // создаётся, поэтому запись удаляется — номер попытки освобождается, — и
+      // продление повторится через час.
+      if (error instanceof PlatformError && OUR_SIDE_REJECTIONS.has(error.status)) {
+        this.logger.error(
+          { paymentId: row.id, status: error.status, provider: error.providerError },
+          'ЮKassa отказала магазину — продление отложено, проверьте ключи и настройки',
+        );
+        const removed = await this.prisma.payment.deleteMany({
+          where: { id: row.id, status: 'PENDING', providerPaymentId: null },
+        });
+        if (removed.count > 0) {
+          await this.prisma.subscription.update({
+            where: { id: subscription.id },
+            data: { nextRenewalAttemptAt: new Date(Date.now() + OUR_SIDE_RETRY_MS) },
+          });
+          await this.audit.record('billing.renewal.deferred', subscription.userId, {
+            metadata: { subscriptionId: subscription.id, status: error.status },
+          });
+        }
+        return;
+      }
+      // Остальные 4xx — ЮKassa не приняла сам запрос (например, способ оплаты
+      // уже недействителен), и повтор с тем же телом получит тот же отказ. Сеть
+      // и 5xx оставляют запись висеть: дочистка повторит с тем же ключом.
       if (error instanceof PlatformError && error.status >= 400 && error.status < 500) {
         this.logger.error(
           { paymentId: row.id, status: error.status, provider: error.providerError },

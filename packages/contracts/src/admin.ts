@@ -139,9 +139,14 @@ export const adminRoomSchema = z.object({
 });
 export type AdminRoom = z.infer<typeof adminRoomSchema>;
 
+/**
+ * Приглашение комнаты глазами сотрудника — без пометки стримера.
+ *
+ * Пометку («для Васи») стример пишет о госте, и это данные по его поручению
+ * (соглашение, 13.2): сотрудник их не видит, как и имён донатеров.
+ */
 export const adminInviteSchema = z.object({
   id: uuidSchema,
-  label: z.string(),
   createdAt: isoDateSchema,
   lastUsedAt: isoDateSchema.nullable(),
   revokedAt: isoDateSchema.nullable(),

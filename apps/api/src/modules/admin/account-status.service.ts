@@ -9,7 +9,7 @@ import {
 import type { StaffRole, UserRole } from '@streamkit/contracts';
 import type { Redis } from 'ioredis';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
-import { blockedUserKey } from '../../common/auth/access-token';
+import { blockedUserKey, markUserBlocked } from '../../common/auth/access-token';
 import { RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
@@ -176,18 +176,16 @@ export class AccountStatusService {
     if (user.email !== confirmEmail) {
       throw new BadRequestException('Почта не совпадает с почтой аккаунта');
     }
+    // Живые токены, сокеты дашборда и роль гасит само обезличивание: у
+    // удаления из дашборда следствия обязаны быть те же.
     await this.privacy.anonymize(userId, context);
-    await this.markBlocked(userId);
-    // Роль обезличенному не нужна: сотрудник, ушедший так, не должен сохранить
-    // вход по восстановленному аккаунту.
-    await this.prisma.user.update({ where: { id: userId }, data: { role: 'USER' } });
     await this.audit.record('admin.user.anonymized', userId, context);
   }
 
   /** Выданные access-токены живут до своего срока — отметка закрывает их сразу. */
   private async markBlocked(userId: string): Promise<void> {
     const ttl = Math.max(this.config.accessTtlSeconds, ADMIN_ACCESS_TTL_SECONDS);
-    await this.redis.set(blockedUserKey(userId), '1', 'EX', ttl);
+    await markUserBlocked(this.redis, userId, ttl);
   }
 
   private async requireUser(userId: string) {
