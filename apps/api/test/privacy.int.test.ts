@@ -125,6 +125,14 @@ describe('Приватность и удаление аккаунта (feature)'
     await request(server()).get('/api/auth/me').set(auth()).expect(200);
   });
 
+  it('после удаления аккаунта уже выданный access-токен не работает', async () => {
+    await deleteAccount();
+
+    await request(server()).get('/api/widgets').set(auth()).expect(401);
+    await request(server()).post('/api/events/webhook/secret').set(auth()).expect(401);
+    expect(await harness.prisma.donationSource.count()).toBe(0);
+  });
+
   it('после удаления аккаунта вебхук перестаёт принимать события', async () => {
     const source = await request(server())
       .post('/api/events/webhook/secret')

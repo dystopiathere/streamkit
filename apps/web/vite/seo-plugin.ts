@@ -15,7 +15,9 @@ const LEGAL_SLUGS = ['terms', 'subscription', 'privacy', 'personal-data', 'cooki
 
 /**
  * Разделы кабинета: их обход закрыт в robots.txt. Список — корни маршрутов
- * `App.tsx` под `RequireAuth`, плюс вход и страница гостя. `/privacy` не задевает
+ * `App.tsx` под `RequireAuth`, плюс вход, восстановление пароля и страница гостя.
+ * `/sources`, `/billing` и `/privacy` — прежние адреса разделов профиля, теперь
+ * переадресации: по ним ещё ходят ссылки из старых писем. `/privacy` не задевает
  * `/legal/privacy`: правило robots.txt — префикс пути от корня.
  */
 const PRIVATE_PATHS = [
@@ -25,9 +27,12 @@ const PRIVATE_PATHS = [
   '/analytics',
   '/rooms',
   '/sources',
+  '/account',
   '/billing',
   '/privacy',
   '/login',
+  '/forgot-password',
+  '/reset-password',
   '/join',
   '/api/',
   '/u/',

@@ -22,6 +22,7 @@ import {
 import { ApiError } from '@/lib/api';
 import { API_BASE } from '@/lib/config';
 import { intlLocale } from '@/lib/locale';
+import { PLATFORMS_PATH } from '@/components/navigation';
 
 const errorText = (error: unknown, fallback: string): string =>
   error instanceof ApiError ? error.message : fallback;
@@ -91,7 +92,7 @@ function TwitchEventsCard(): React.JSX.Element {
       </div>
       <p className="text-sm text-muted">{t('sources.twitch.lead')}</p>
       {channels.data && !working ? (
-        <Link to="/analytics" className="text-sm underline">
+        <Link to={PLATFORMS_PATH} className="text-sm underline">
           {twitch ? t('sources.twitch.fix') : t('sources.twitch.connect')}
         </Link>
       ) : null}

@@ -80,7 +80,7 @@ export function LegalUpdateNotice(): React.JSX.Element | null {
         <p className="text-muted">
           {outdated.map((consent) => consent.title).join(', ')}
           <span aria-hidden="true"> · </span>
-          <Link to="/privacy" className="underline hover:text-fg">
+          <Link to="/account/privacy" className="underline hover:text-fg">
             {t('legalUpdate.details')}
           </Link>
         </p>

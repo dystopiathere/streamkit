@@ -18,6 +18,10 @@ import { SkipThrottle } from '@nestjs/throttler';
 import {
   type AuthResult,
   changePasswordSchema,
+  type ForgotPasswordInput,
+  forgotPasswordSchema,
+  type DisableTotpInput,
+  disableTotpSchema,
   enableTotpSchema,
   type LoginInput,
   loginSchema,
@@ -25,15 +29,17 @@ import {
   type PublicUser,
   type RegisterInput,
   registerSchema,
+  type ResetPasswordInput,
+  resetPasswordSchema,
   type SessionInfo,
 } from '@streamkit/contracts';
 import type { Request, Response } from 'express';
-import { z } from 'zod';
 import { AuditService } from '../../common/audit/audit.service';
 import { type AuthenticatedUser, CurrentUser, Public } from '../../common/auth/auth.decorators';
 import { zodBody } from '../../common/pipes/zod-validation.pipe';
 import { AppConfig } from '../../config/app-config.service';
 import { AuthService } from './auth.service';
+import { PasswordResetService } from './password-reset.service';
 import { clearRefreshCookie, readRefreshCookie, setRefreshCookie } from './refresh-cookie';
 import { TokenService } from './token.service';
 
@@ -53,6 +59,7 @@ import { TokenService } from './token.service';
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
+    private readonly passwordReset: PasswordResetService,
     private readonly tokens: TokenService,
     private readonly audit: AuditService,
     private readonly config: AppConfig,
@@ -168,22 +175,64 @@ export class AuthController {
     await this.tokens.revokeFamily(familyId);
   }
 
+  /**
+   * Смена пароля. Все сессии гаснут, а это устройство получает новую: человек,
+   * сменивший пароль в разделе «Безопасность», не должен тут же вводить его
+   * заново, а остальные устройства — в том числе чужие — выходят.
+   */
   @SkipThrottle({ auth: false })
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   @Post('password')
   async changePassword(
     @CurrentUser() user: AuthenticatedUser,
     @Body(zodBody(changePasswordSchema)) body: { currentPassword: string; newPassword: string },
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<void> {
-    await this.auth.changePassword(
+  ): Promise<AuthResult> {
+    const { refreshToken, ...result } = await this.auth.changePassword(
       user.id,
       body.currentPassword,
       body.newPassword,
       this.audit.contextFromRequest(request),
     );
-    clearRefreshCookie(response, this.config);
+    this.issueRefreshCookie(response, refreshToken);
+    return result;
+  }
+
+  /**
+   * Письмо со ссылкой восстановления пароля. 204 на любой адрес: разный ответ
+   * для зарегистрированного и незнакомого превратил бы форму в проверку, чья
+   * почта есть в сервисе.
+   */
+  @Public()
+  @SkipThrottle({ auth: false })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Post('password/forgot')
+  async forgotPassword(
+    @Body(zodBody(forgotPasswordSchema)) body: ForgotPasswordInput,
+    @Req() request: Request,
+  ): Promise<void> {
+    await this.passwordReset.request(
+      body.email,
+      body.language ?? 'ru',
+      this.audit.contextFromRequest(request),
+    );
+  }
+
+  /** Новый пароль по ссылке из письма. Сессию не выдаёт: вход — обычный, с 2FA. */
+  @Public()
+  @SkipThrottle({ auth: false })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Post('password/reset')
+  async resetPassword(
+    @Body(zodBody(resetPasswordSchema)) body: ResetPasswordInput,
+    @Req() request: Request,
+  ): Promise<void> {
+    await this.passwordReset.reset(
+      body.token,
+      body.newPassword,
+      this.audit.contextFromRequest(request),
+    );
   }
 
   @Post('totp/setup')
@@ -209,10 +258,15 @@ export class AuthController {
   @Post('totp/disable')
   async disableTotp(
     @CurrentUser() user: AuthenticatedUser,
-    @Body(zodBody(z.object({ password: z.string().min(1).max(128) }))) body: { password: string },
+    @Body(zodBody(disableTotpSchema)) body: DisableTotpInput,
     @Req() request: Request,
   ): Promise<void> {
-    await this.auth.disableTotp(user.id, body.password, this.audit.contextFromRequest(request));
+    await this.auth.disableTotp(
+      user.id,
+      body.password,
+      body.code,
+      this.audit.contextFromRequest(request),
+    );
   }
 
   private issueRefreshCookie(response: Response, token: string): void {

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { mainNav, openProfileSection } from './navigation';
 
 /**
  * Платный тариф целиком: от закрытых комнат до оплаты, смены тарифа и
@@ -41,7 +42,7 @@ test('стример оформляет тариф «Про», получает 
   expect(billingConfigured).toBe(true);
 
   // Без тарифа комнаты закрыты — и это видно, а не просто «ошибка».
-  await page.getByRole('link', { name: 'Комнаты' }).click();
+  await mainNav(page).getByRole('link', { name: 'Комнаты', exact: true }).click();
   await expect(page.getByText('Приватные комнаты — в тарифе «Про»')).toBeVisible();
   await page.getByPlaceholder('Название комнаты').fill('Вечерний эфир');
   await expect(page.getByRole('button', { name: 'Новая комната' })).toBeDisabled();
@@ -49,7 +50,7 @@ test('стример оформляет тариф «Про», получает 
   // Оплата: выбираются тариф и период, и без согласия с офертой кнопка не
   // нажимается.
   await page.getByRole('link', { name: 'Выбрать тариф' }).click();
-  await expect(page).toHaveURL(/\/billing$/);
+  await expect(page).toHaveURL(/\/account\/billing$/);
   await page.getByRole('radio', { name: /^Про/ }).check();
   await page.getByRole('radio', { name: /Месяц/ }).check();
   const pay = page.getByRole('button', { name: /^Оплатить/ });
@@ -58,7 +59,7 @@ test('стример оформляет тариф «Про», получает 
   await pay.click();
 
   // Страница ЮKassa «оплачивает» и возвращает браузер с идентификатором платежа.
-  await expect(page).toHaveURL(/\/billing\?payment=[0-9a-f-]{36}$/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/account\/billing\?payment=[0-9a-f-]{36}$/, { timeout: 15_000 });
   await expect(page.getByText('Оплата прошла — тариф «Про» подключён.')).toBeVisible({
     timeout: 15_000,
   });
@@ -67,7 +68,7 @@ test('стример оформляет тариф «Про», получает 
   await expect(page.getByRole('cell', { name: 'Оплачен' })).toBeVisible();
 
   // Комнаты открылись.
-  await page.getByRole('link', { name: 'Комнаты' }).click();
+  await mainNav(page).getByRole('link', { name: 'Комнаты', exact: true }).click();
   await expect(page.getByText('Приватные комнаты — в тарифе «Про»')).toHaveCount(0);
   await page.getByPlaceholder('Название комнаты').fill('Вечерний эфир');
   await page.getByRole('button', { name: 'Новая комната' }).click();
@@ -75,31 +76,30 @@ test('стример оформляет тариф «Про», получает 
 
   // Смена тарифа на «Мультистрим» действует со следующего продления: комнаты
   // остаются открытыми до конца оплаченного периода (оферта, 2.5).
-  // exact: без него «Тариф» находит и «Тарифы» в карте сайта в подвале.
-  await page.getByRole('link', { name: 'Тариф', exact: true }).click();
+  await openProfileSection(page, 'Тариф');
   await page.getByRole('button', { name: 'Мультистрим' }).click();
   await expect(page.getByText(/подписка продлится по тарифу «Мультистрим»/)).toBeVisible();
-  await page.getByRole('link', { name: 'Комнаты' }).click();
+  await mainNav(page).getByRole('link', { name: 'Комнаты', exact: true }).click();
   await expect(page.getByRole('link', { name: 'Открыть' })).toBeVisible();
   await expect(page.getByText('Приватные комнаты — в тарифе «Про»')).toHaveCount(0);
 
   // Отключение продления — одной кнопкой; доступ доживает оплаченный период.
-  await page.getByRole('link', { name: 'Тариф', exact: true }).click();
+  await openProfileSection(page, 'Тариф');
   await page.getByRole('button', { name: 'Отключить автопродление' }).click();
   await expect(page.getByTestId('subscription-status')).toContainText('Автопродление выключено');
-  await page.getByRole('link', { name: 'Комнаты' }).click();
+  await mainNav(page).getByRole('link', { name: 'Комнаты', exact: true }).click();
   await expect(page.getByRole('link', { name: 'Открыть' })).toBeVisible();
   await expect(page.getByText('Приватные комнаты — в тарифе «Про»')).toHaveCount(0);
 
   // Карту можно отвязать: у ЮKassa отменить сохранение нельзя, отвязка — это
   // удаление способа оплаты у нас (оферта, 5.6). Доступ остаётся до конца периода.
-  await page.getByRole('link', { name: 'Тариф', exact: true }).click();
+  await openProfileSection(page, 'Тариф');
   page.once('dialog', (dialog) => void dialog.accept());
   await page.getByRole('button', { name: /^Отвязать способ оплаты/ }).click();
   await expect(page.getByText('Способ оплаты отвязан, автопродление выключено')).toBeVisible();
   await expect(page.getByText('Способ оплаты: Карта *4444')).toHaveCount(0);
   // Включить продление по отвязанной карте негде: кнопки больше нет.
   await expect(page.getByRole('button', { name: 'Включить автопродление' })).toHaveCount(0);
-  await page.getByRole('link', { name: 'Комнаты' }).click();
+  await mainNav(page).getByRole('link', { name: 'Комнаты', exact: true }).click();
   await expect(page.getByRole('link', { name: 'Открыть' })).toBeVisible();
 });

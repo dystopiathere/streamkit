@@ -1,8 +1,10 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { type WebhookAlertPayload, webhookAlertPayloadSchema } from '@streamkit/contracts';
+import type { Redis } from 'ioredis';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { EventsService, type IngestResult } from './events.service';
 
 export const WEBHOOK_TIMESTAMP_HEADER = 'x-streamkit-timestamp';
@@ -15,6 +17,15 @@ export const WEBHOOK_SIGNATURE_HEADER = 'x-streamkit-signature';
  */
 const MAX_CLOCK_SKEW_SECONDS = 300;
 
+/**
+ * Не чаще одной записи аудита об отказе на источник и причину за это время.
+ *
+ * Эндпоинт открыт, и каждая неверная подпись без потолка была бы строкой в
+ * журнале: таблицу раздувал бы любой, кто знает адрес вебхука. Для разбора
+ * «почему интеграция не работает» хватает одной записи в минуту.
+ */
+const REJECTION_AUDIT_WINDOW_SECONDS = 60;
+
 @Injectable()
 export class WebhookService {
   constructor(
@@ -22,6 +33,7 @@ export class WebhookService {
     private readonly crypto: CryptoService,
     private readonly events: EventsService,
     private readonly audit: AuditService,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
   /**
@@ -119,10 +131,12 @@ export class WebhookService {
 
     const skewSeconds = Math.abs(Date.now() / 1000 - sentAt);
     if (skewSeconds > MAX_CLOCK_SKEW_SECONDS) {
-      await this.audit.record('webhook.replay_rejected', userId, {
-        ...context,
-        metadata: { sourceId, skewSeconds: Math.round(skewSeconds) },
-      });
+      if (await this.shouldAudit(sourceId, 'replay')) {
+        await this.audit.record('webhook.replay_rejected', userId, {
+          ...context,
+          metadata: { sourceId, skewSeconds: Math.round(skewSeconds) },
+        });
+      }
       throw new UnauthorizedException('Подпись недействительна');
     }
   }
@@ -131,6 +145,9 @@ export class WebhookService {
    * Пишет причину отказа в аудит и возвращает исключение, которое вызывающий код
    * бросает сам (`throw await this.invalid(...)`). Возврат, а не бросок изнутри,
    * нужен чтобы TypeScript видел прерывание потока и корректно сужал типы.
+   *
+   * Отказ без известного источника в журнал не идёт: он ничей, разбирать его
+   * некому, а записать можно было бы сколько угодно строк с любого адреса.
    */
   private async invalid(
     sourceId: string,
@@ -138,11 +155,25 @@ export class WebhookService {
     context: AuditContext,
     reason: string,
   ): Promise<UnauthorizedException> {
-    await this.audit.record('webhook.signature.invalid', userId, {
-      ...context,
-      metadata: { sourceId, reason },
-    });
+    if (userId && (await this.shouldAudit(sourceId, reason))) {
+      await this.audit.record('webhook.signature.invalid', userId, {
+        ...context,
+        metadata: { sourceId, reason },
+      });
+    }
     return new UnauthorizedException('Подпись недействительна');
+  }
+
+  /** Первый отказ этой причины по источнику за окно — остальные только отвечают 401. */
+  private async shouldAudit(sourceId: string, reason: string): Promise<boolean> {
+    const set = await this.redis.set(
+      `webhook:rejected:${sourceId}:${reason}`,
+      '1',
+      'EX',
+      REJECTION_AUDIT_WINDOW_SECONDS,
+      'NX',
+    );
+    return set === 'OK';
   }
 }
 

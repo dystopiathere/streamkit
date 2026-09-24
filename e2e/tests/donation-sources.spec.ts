@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openProfileSection } from './navigation';
 
 /**
  * Подключение DonationAlerts в настоящем браузере.
@@ -21,7 +22,7 @@ test('стример подключает DonationAlerts и отключает �
   await expect(page).toHaveURL(/\/widgets$/);
   await page.getByRole('button', { name: 'Только необходимые' }).click();
 
-  await page.getByRole('link', { name: 'Источники' }).click();
+  await openProfileSection(page, 'Источники');
   await expect(page.getByRole('heading', { name: 'DonationAlerts' })).toBeVisible();
   await expect(page.getByText('Не подключён', { exact: true })).toBeVisible();
 
@@ -29,7 +30,7 @@ test('стример подключает DonationAlerts и отключает �
 
   // Возврат: API принял код, завёл источник и вернул браузер на страницу.
   await expect(page.getByText('DonationAlerts подключён', { exact: false })).toBeVisible();
-  await expect(page).toHaveURL(/\/sources$/);
+  await expect(page).toHaveURL(/\/account\/sources$/);
   await expect(page.getByText('Подключён', { exact: true })).toBeVisible();
   await expect(page.getByText('E2E Стример DA')).toBeVisible();
   await expect(page.getByText('Донатов пока не было')).toBeVisible();

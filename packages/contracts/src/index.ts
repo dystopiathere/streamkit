@@ -8,6 +8,7 @@
  */
 export * from './common.js';
 export * from './analytics.js';
+export * from './analytics-insights.js';
 export * from './events.js';
 export * from './donation-sources.js';
 export * from './chat.js';

@@ -78,7 +78,14 @@ export function LoginPage(): React.JSX.Element {
             </div>
 
             <div>
-              <Label htmlFor="password">{t('auth.password')}</Label>
+              <div className="flex items-baseline justify-between gap-2">
+                <Label htmlFor="password">{t('auth.password')}</Label>
+                {/* Ссылка рядом с полем, а не под кнопкой: забытый пароль
+                    обнаруживают, глядя на пустое поле пароля. */}
+                <Link to="/forgot-password" className="text-xs text-muted hover:text-fg">
+                  {t('auth.forgotLink')}
+                </Link>
+              </div>
               <Input
                 id="password"
                 type="password"

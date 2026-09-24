@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { generateSync } from 'otplib';
+import { logout, openProfileSection } from './navigation';
 
 /**
  * Двухфакторный вход через интерфейс дашборда.
@@ -23,7 +24,7 @@ test('стример включает двухфакторный вход, вх�
   await expect(page).toHaveURL(/\/widgets$/);
   await page.getByRole('button', { name: 'Только необходимые' }).click();
 
-  await page.getByRole('link', { name: 'Приватность' }).click();
+  await openProfileSection(page, 'Безопасность');
   await expect(page.getByRole('heading', { name: 'Двухфакторный вход' })).toBeVisible();
   await expect(page.getByText('Выключен', { exact: true })).toBeVisible();
 
@@ -38,25 +39,36 @@ test('стример включает двухфакторный вход, вх�
   await page.getByRole('button', { name: 'Подтвердить и включить' }).click();
   await expect(page.getByText('Неверный код подтверждения')).toBeVisible();
 
-  await page.getByLabel('Код из приложения').fill(generateSync({ secret }));
+  // Каждый код принимается один раз: включение, вход и выключение берут коды
+  // соседних шагов — допуск часов принимает все три.
+  const step = (offset: number) =>
+    generateSync({ secret, epoch: Math.floor(Date.now() / 1000) + offset * 30 });
+  await page.getByLabel('Код из приложения').fill(step(-1));
   await page.getByRole('button', { name: 'Подтвердить и включить' }).click();
   await expect(page.getByText('Двухфакторный вход включён')).toBeVisible();
   await expect(page.getByText('Включён', { exact: true })).toBeVisible();
 
   // Вход теперь требует код.
-  await page.getByRole('button', { name: 'Выйти' }).click();
+  await logout(page);
   await page.goto('/login');
   await page.getByLabel('Электронная почта').fill(email);
   await page.getByLabel('Пароль').fill(PASSWORD);
   await page.getByRole('button', { name: 'Войти' }).click();
-  await page.getByLabel('Код из приложения').fill(generateSync({ secret }));
+  await page.getByLabel('Код из приложения').fill(step(0));
   await page.getByRole('button', { name: 'Войти' }).click();
   await expect(page).toHaveURL(/\/widgets$/);
 
-  await page.getByRole('link', { name: 'Приватность' }).click();
+  await openProfileSection(page, 'Безопасность');
   await expect(page.getByText('Включён', { exact: true })).toBeVisible();
-  await page.getByLabel('Текущий пароль').first().fill(PASSWORD);
-  await page.getByRole('button', { name: 'Выключить двухфакторный вход' }).click();
+  // На странице две карточки с «Текущим паролем»: смена пароля и второй фактор.
+  const twoFactor = page.getByRole('region', { name: 'Двухфакторный вход' });
+  await twoFactor.getByLabel('Текущий пароль').fill(PASSWORD);
+  // Без кода из приложения выключить второй фактор нельзя: одного пароля мало.
+  await expect(
+    twoFactor.getByRole('button', { name: 'Выключить двухфакторный вход' }),
+  ).toBeDisabled();
+  await twoFactor.getByLabel('Код из приложения').fill(step(1));
+  await twoFactor.getByRole('button', { name: 'Выключить двухфакторный вход' }).click();
   await expect(page.getByText('Двухфакторный вход выключен')).toBeVisible();
   await expect(page.getByText('Выключен', { exact: true })).toBeVisible();
 });

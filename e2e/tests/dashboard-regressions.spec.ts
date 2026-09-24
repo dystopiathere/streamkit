@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Redis } from 'ioredis';
 import { connectTwitch } from './platforms';
+import { logout, mainNav, openProfileSection } from './navigation';
 
 /**
  * Три бага, найденные владельцем вручную, — каждый воспроизведён до исправления.
@@ -39,16 +40,16 @@ test('тестовый алерт с вкладки виджетов виден 
   await dismissBanner(page);
 
   // Сначала открываем события: история попадает в кэш как «свежая».
-  await page.getByRole('link', { name: 'События' }).click();
+  await mainNav(page).getByRole('link', { name: 'События', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'События' })).toBeVisible();
 
   // Алерт отправляется с ДРУГОЙ вкладки — ровно так, как устроен интерфейс:
   // кнопка «Тестовый алерт» живёт на странице виджетов.
-  await page.getByRole('link', { name: 'Виджеты' }).click();
+  await mainNav(page).getByRole('link', { name: 'Виджеты', exact: true }).click();
   await page.getByRole('button', { name: 'Тестовый алерт' }).click();
   await expect(page.getByText('Тестовый алерт отправлен')).toBeVisible();
 
-  await page.getByRole('link', { name: 'События' }).click();
+  await mainNav(page).getByRole('link', { name: 'События', exact: true }).click();
   await expect(page.getByText('Тестовый зритель')).toBeVisible({ timeout: 5_000 });
 });
 
@@ -59,7 +60,7 @@ test('стример обнуляет историю донатов, и подв
   await page.getByRole('button', { name: 'Тестовый алерт' }).click();
   await expect(page.getByText('Тестовый алерт отправлен')).toBeVisible();
 
-  await page.getByRole('link', { name: 'Аналитика', exact: true }).click();
+  await mainNav(page).getByRole('link', { name: 'Аналитика', exact: true }).click();
   // Подвал стоит и в дашборде: реквизиты продавца находятся с любой страницы.
   await expect(page.getByTestId('seller-requisites')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Версия сайта на английском' })).toBeVisible();
@@ -69,7 +70,7 @@ test('стример обнуляет историю донатов, и подв
   await page.getByRole('dialog').getByRole('button', { name: 'Обнулить историю' }).click();
   await expect(page.getByText(/Удалено 1 событие/)).toBeVisible();
 
-  await page.getByRole('link', { name: 'События' }).click();
+  await mainNav(page).getByRole('link', { name: 'События', exact: true }).click();
   await expect(page.getByText('Тестовый зритель')).toHaveCount(0);
 });
 
@@ -77,7 +78,7 @@ test('«Принять все» в баннере отражается в раз
   await registerStreamer(page, 'e2e-cookies');
 
   await page.getByRole('button', { name: 'Принять все' }).click();
-  await page.getByRole('link', { name: 'Приватность' }).click();
+  await openProfileSection(page, 'Приватность');
 
   const row = page.getByRole('listitem').filter({ hasText: 'Статистика посещений (cookie)' });
   await expect(row).toContainText('Принято');
@@ -105,7 +106,7 @@ test('оверлей чата переезжает на новый канал, �
   await dismissBanner(page);
   const first = await connectTwitch(page);
 
-  await page.getByRole('link', { name: 'Виджеты', exact: true }).click();
+  await mainNav(page).getByRole('link', { name: 'Виджеты', exact: true }).click();
   await page.getByPlaceholder('Название виджета').fill('Чат');
   await page.getByLabel('Тип виджета').selectOption('chat');
   await page.getByRole('button', { name: 'Новый виджет' }).click();
@@ -125,7 +126,7 @@ test('оверлей чата переезжает на новый канал, �
 
   // Другой аккаунт: отключить прежний и войти заново — фальшивый Twitch
   // выдаёт на каждый вход новый канал.
-  await page.getByRole('link', { name: 'Аналитика', exact: true }).click();
+  await openProfileSection(page, 'Площадки');
   await page
     .getByRole('button', { name: /^Отключить/ })
     .first()
@@ -182,7 +183,7 @@ test('согласие на cookie не переходит к следующем
   await page.getByRole('button', { name: 'Принять все' }).click();
   await expect(page.getByRole('button', { name: 'Принять все' })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Выйти' }).click();
+  await logout(page);
   await expect(page).toHaveURL(/\/login$/);
 
   // Без перезагрузки страницы — ровно так, как это делает человек у общего
@@ -198,7 +199,7 @@ test('на телефоне меню дашборда свёрнуто и зак
   await registerStreamer(page, 'e2e-mobile');
   await dismissBanner(page);
 
-  const nav = page.getByRole('navigation', { name: 'Разделы' });
+  const nav = mainNav(page);
   await expect(nav).toBeHidden();
 
   await page.getByRole('button', { name: 'Открыть меню' }).click();

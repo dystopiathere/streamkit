@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { buyPlan } from './plans';
 import { connectYouTube } from './platforms';
+import { mainNav } from './navigation';
 
 /**
  * Виджеты, отличные от алертов, доходят до браузер-сорса.
@@ -77,7 +78,7 @@ test('виджет чата настраивается, а оверлей по �
 
   // Хватает одной площадки — здесь только YouTube.
   const youtube = await connectYouTube(page);
-  await page.getByRole('link', { name: 'Виджеты', exact: true }).click();
+  await mainNav(page).getByRole('link', { name: 'Виджеты', exact: true }).click();
   await page.getByPlaceholder('Название виджета').fill('Чат в кадре');
   await page.getByLabel('Тип виджета').selectOption('chat');
   await page.getByRole('button', { name: 'Новый виджет' }).click();

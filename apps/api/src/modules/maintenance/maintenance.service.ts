@@ -56,6 +56,21 @@ export class MaintenanceService {
   }
 
   /**
+   * Ссылки восстановления пароля: истёкшие и использованные уже ничего не
+   * открывают, а строка хранит, кто и когда просил сменить пароль, — это
+   * записано в аудите, второй копии не нужно.
+   */
+  async purgeExpiredPasswordResets(): Promise<number> {
+    const result = await this.prisma.passwordResetToken.deleteMany({
+      where: { OR: [{ expiresAt: { lte: new Date() } }, { usedAt: { not: null } }] },
+    });
+    if (result.count > 0) {
+      this.logger.log({ count: result.count }, 'Удалены отработавшие ссылки восстановления пароля');
+    }
+    return result.count;
+  }
+
+  /**
    * Аудит-лог старше срока хранения.
    *
    * Срок должен совпадать с тем, что заявлен в политике обработки ПДн: хранить

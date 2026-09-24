@@ -18,7 +18,15 @@ describe('лимиты AuthController', () => {
   };
 
   it('держит жёсткий лимит на входе, регистрации, пароле и втором факторе', () => {
-    for (const method of ['login', 'register', 'changePassword', 'confirmTotp', 'disableTotp']) {
+    for (const method of [
+      'login',
+      'register',
+      'changePassword',
+      'forgotPassword',
+      'resetPassword',
+      'confirmTotp',
+      'disableTotp',
+    ]) {
       expect(skipsAuthLimiter(method), method).toBe(false);
     }
   });

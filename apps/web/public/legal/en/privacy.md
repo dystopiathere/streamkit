@@ -1,6 +1,6 @@
 # StreamKit Privacy Policy
 
-Version No. 13 of 23.09.2026
+Version No. 14 of 24.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/privacy?lang=ru); if the two
@@ -54,7 +54,9 @@ as “Card \*4444”. Card details are entered on the YooKassa page and are not
 passed to us.
 
 **Service emails:** the account email address and display name — for emails
-about an upcoming automatic charge.
+about an upcoming automatic charge and for the password recovery email, which is
+sent only on a request from the sign-in page. For a recovery link we store only
+the hash of its token and its expiry time.
 
 **The Operator's employees** (admin panel): the same account data — email
 address, display name, password hash and the encrypted secret of the second
@@ -168,8 +170,8 @@ is when required by law.
 
 5.4. Google access tokens are stored encrypted until the channel is disconnected
 or the account is deleted; metrics are kept for 90 days. Disconnecting the
-channel in the Analytics section immediately deletes the tokens, the channel
-details and all collected metrics. Access can also be revoked on the Google side
+channel in the Platforms section of the profile immediately deletes the tokens,
+the channel details and all collected metrics. Access can also be revoked on the Google side
 at https://myaccount.google.com/permissions.
 
 5.5. StreamKit's use and transfer of information received from Google APIs to
@@ -212,6 +214,7 @@ We do not sell personal data. Data is shared only with:
 | Donation events | Until the account is deleted, then anonymized |
 | Security log (audit), including staff actions | 180 days |
 | Sign-in sessions | Until sign-out or expiry, no more than 30 days |
+| Password recovery link (hash) | One hour; deleted within a day after use or expiry |
 | Platform channel metrics | 90 days |
 | Platform tokens | Until the platform is disconnected or the account is deleted |
 | Saved payment method | Until the account is deleted; earlier if access to it is revoked or the card expires |
@@ -256,8 +259,8 @@ the periods in section 8 — for accounting and dispute resolution.
 
 Passwords are stored as argon2id hashes. Platform tokens, two-factor
 authentication secrets and payment method identifiers are encrypted with
-AES-256-GCM. Session tokens and widget and room links are stored only as
-hashes. Connections are protected with TLS. Access to servers is restricted by
+AES-256-GCM. Session tokens, widget and room links and password recovery
+links are stored only as hashes. Connections are protected with TLS. Access to servers is restricted by
 keys and logged.
 
 The operator's staff work with accounts through the admin panel. Access to it

@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import {
+  type AnalyticsOverview,
   type AnalyticsQuery,
   analyticsQuerySchema,
   type AnalyticsSeries,
@@ -93,6 +94,15 @@ export class AnalyticsController {
     @Req() request: Request,
   ): Promise<void> {
     await this.analytics.disconnect(user.id, id, this.audit.contextFromRequest(request));
+  }
+
+  /** Эфиры, донаты по времени, прирост аудитории и тепловая карта за период. */
+  @Get('analytics/overview')
+  async overview(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query(zodQuery(analyticsQuerySchema)) query: AnalyticsQuery,
+  ): Promise<AnalyticsOverview> {
+    return this.analytics.overview(user.id, query.range, query.timeZone);
   }
 
   /** Донаты за период. Отдельно от канала: они приходят не с площадки. */

@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { Redis } from 'ioredis';
 import { buyPlan } from './plans';
 import { connectTwitch, connectYouTube } from './platforms';
+import { mainNav } from './navigation';
 
 /**
  * Окно эфира в настоящем браузере.
@@ -36,7 +37,7 @@ test('окно эфира показывает чат канала, виджет
   await buyPlan(page, accessToken, 'multistream');
 
   await test.step('без площадок и чата окно объясняет, что подключить', async () => {
-    await page.getByRole('link', { name: 'Эфир', exact: true }).click();
+    await mainNav(page).getByRole('link', { name: 'Эфир', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Эфир', level: 1 })).toBeVisible();
     await expect(page.getByText(/Подключите Twitch или YouTube/)).toBeVisible();
     await expect(page.getByText(/Чата нет/)).toBeVisible();
@@ -49,7 +50,7 @@ test('окно эфира показывает чат канала, виджет
     channel = await connectTwitch(page);
     youtube = await connectYouTube(page);
 
-    await page.getByRole('link', { name: 'Виджеты', exact: true }).click();
+    await mainNav(page).getByRole('link', { name: 'Виджеты', exact: true }).click();
     await page.getByPlaceholder('Название виджета').fill('Алерты');
     await page.getByRole('button', { name: 'Новый виджет' }).click();
     await page.getByRole('link', { name: 'Настроить «Алерты»' }).click();
@@ -63,7 +64,7 @@ test('окно эфира показывает чат канала, виджет
   });
 
   await test.step('окно видит оба канала с состоянием и оверлей в OBS', async () => {
-    await page.getByRole('link', { name: 'Эфир', exact: true }).click();
+    await mainNav(page).getByRole('link', { name: 'Эфир', exact: true }).click();
     await expect(page.getByText(`twitch.tv/${channel} — читаем чат`)).toBeVisible();
     // Чат YouTube есть только у идущего эфира, а воркера в прогоне нет.
     await expect(page.getByText(`${youtube.title} — ждём начала эфира`)).toBeVisible();

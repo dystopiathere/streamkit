@@ -31,7 +31,12 @@
     "openMenu": "Open menu",
     "closeMenu": "Close menu",
     "home": "StreamKit — home",
-    "stream": "Live"
+    "stream": "Live",
+    "platforms": "Platforms",
+    "security": "Security",
+    "profile": "Profile menu",
+    "profileOf": "Profile:",
+    "profileSections": "Profile sections"
   },
   "auth": {
     "loginTitle": "Sign in",
@@ -50,7 +55,24 @@
     "consentPrivacy": "the Privacy Policy",
     "consentPersonalData": "the consent to personal data processing",
     "acceptByRegistering": "By clicking “{{button}}” you accept",
-    "acceptUpdates": "We notify you in the dashboard when a document changes. Nothing has to be accepted again, and if a new version does not suit you, you can delete the account in the Privacy section."
+    "acceptUpdates": "We notify you in the dashboard when a document changes. Nothing has to be accepted again, and if a new version does not suit you, you can delete the account under Profile → Privacy.",
+    "forgotLink": "Forgot your password?",
+    "forgot": {
+      "title": "Password recovery",
+      "description": "Enter the email you signed up with and we will send a link to set a new password.",
+      "submit": "Send the link",
+      "sent": "If there is an account for {{email}}, the link is on its way.",
+      "sentHint": "It works once and for an hour. No email? Check the spam folder or request the link again in a minute.",
+      "toLogin": "Back to sign-in"
+    },
+    "reset": {
+      "title": "New password",
+      "description": "Choose a new password. After saving, every device is signed out.",
+      "submit": "Save password",
+      "done": "Password changed, sign in with the new one",
+      "noToken": "The link is incomplete: open it from the email in full or request a new one.",
+      "requestAgain": "Request a new link"
+    }
   },
   "widgets": {
     "title": "Widgets",
@@ -298,7 +320,7 @@
       "platformYoutube": "YouTube chat: {{channel}}",
       "notConnected": "{{platform}} is not connected.",
       "none": "The widget shows only your own channels' chat. Connect Twitch or YouTube — otherwise OBS stays empty.",
-      "connect": "Connect in Analytics",
+      "connect": "Connect in your profile",
       "youtubeHint": "YouTube chat appears within two minutes after your stream starts and uses the daily YouTube quota shared across the service. Untick it if you don't need it on screen."
     },
     "backgroundFit": {
@@ -520,7 +542,7 @@
       "title": "Twitch events",
       "on": "arriving",
       "off": "not arriving",
-      "lead": "Followers, subscriptions, gifted subs, Bits, raids and Channel Points rewards arrive on their own while Twitch is connected in Analytics. Style them in the alert widget scenarios.",
+      "lead": "Followers, subscriptions, gifted subs, Bits, raids and Channel Points rewards arrive on their own while Twitch is connected under Profile → Platforms. Style them in the alert widget scenarios.",
       "connect": "Connect Twitch",
       "fix": "Reconnect Twitch"
     }
@@ -585,24 +607,6 @@
     "revokeNamed": "Withdraw: {{name}}",
     "grantNamed": "Give consent: {{name}}",
     "renewNamed": "Confirm: {{name}}",
-    "totp": {
-      "title": "Two-factor sign-in",
-      "on": "On",
-      "off": "Off",
-      "description": "When you sign in, you will need a code from an authenticator app in addition to your password. Staff cannot sign in to the admin panel without it.",
-      "enable": "Turn on",
-      "stepApp": "Install an authenticator app: Google Authenticator, Yandex Key or any app that supports TOTP.",
-      "stepScan": "Scan the QR code with the app or enter the key manually.",
-      "stepCode": "Enter the six-digit code the app shows.",
-      "qrAlt": "QR code for the authenticator app",
-      "manual": "Key for manual entry:",
-      "codeHint": "The code changes every 30 seconds.",
-      "confirm": "Confirm and turn on",
-      "enabled": "Two-factor sign-in is on",
-      "enabledDescription": "A code from the app is requested at every sign-in. Enter your password to turn it off.",
-      "disable": "Turn off two-factor sign-in",
-      "disabled": "Two-factor sign-in is off"
-    },
     "deleteWord": "DELETE",
     "documents": {
       "TERMS": "Terms of Service",
@@ -622,25 +626,13 @@
     "moreAbout": "More about cookies and statistics"
   },
   "analytics": {
-    "title": "Platform analytics",
-    "empty": "No platforms connected. Connect a channel and metrics will be collected automatically.",
-    "connectTitle": "Connect a platform",
-    "connect": "Connect {{platform}}",
-    "notConfigured": "This platform has not been set up by the administrator",
-    "connected": "{{platform}} is connected",
-    "connectFailed": "Could not connect the platform. Please try again.",
-    "disconnect": "Disconnect",
+    "title": "Analytics",
+    "empty": "Donations and streams are counted anyway, but viewers and audience growth appear only after you connect a channel.",
     "live": "Live",
     "viewersNow": "Viewers",
-    "subscribers": "Subscribers",
-    "followers": "Followers",
     "liveHours": "Live",
     "hoursSuffix": "h",
     "noValue": "—",
-    "activate": "Make active",
-    "activateNamed": "Make {{name}} the active platform",
-    "inactive": "This platform is not active: your plan runs one at a time. Metrics, chat and events are paused — press “Make active” to switch to it.",
-    "connectPlanLimit": "Your plan allows one platform. Get Multistream or disconnect the platform you already have.",
     "reset": {
       "title": "Reset donation history",
       "text": "Deletes every event: donations, followers, subscriptions, raids. Period totals, the top donors list and goal progress reset with them. Widget settings and goal starting amounts stay.",
@@ -653,14 +645,13 @@
     "noData": "No data yet",
     "noLiveData": "No streams in this period",
     "chartViewers": "Viewers",
-    "chartSubscribers": "Subscribers",
-    "donationsTitle": "Donations in the period",
     "donationsCount_one": "{{count}} donation",
     "donationsCount_other": "{{count}} donations",
     "range": {
       "24h": "Day",
       "7d": "Week",
-      "30d": "Month"
+      "30d": "Month",
+      "90d": "3 months"
     },
     "platform": {
       "twitch": "Twitch",
@@ -673,11 +664,116 @@
     },
     "rangeLabel": "Period",
     "chartSummary": "{{title}}: from {{min}} to {{max}}, latest value {{last}}.",
-    "disconnectNamed": "Disconnect {{name}}",
-    "needsReconnect": "Reconnect Twitch: without the new permissions, Bits and Channel Points alerts will not arrive.",
-    "reconnect": "Reconnect",
-    "disconnectTitle": "Disconnect {{name}}?",
-    "disconnectText": "Tokens, channel details and all collected metrics will be deleted right away and cannot be restored. For Twitch, channel events and chat will stop."
+    "emptyTitle": "No platforms connected",
+    "connectInProfile": "Connect in your profile",
+    "channelNeedsAction": "Metric collection needs attention, see",
+    "channelInactive": "This platform is inactive on your plan, switch it in",
+    "offline": "offline",
+    "peakViewers": "Peak viewers",
+    "youtubeRounding": "YouTube rounds subscriber counts to three significant digits.",
+    "deltaForPeriod": "for the period",
+    "tabs": {
+      "label": "Analytics sections",
+      "summary": "Summary",
+      "charts": "Charts"
+    },
+    "counter": {
+      "followers": "Followers",
+      "subscribers": "Subscribers",
+      "totalViews": "Channel views"
+    },
+    "stats": {
+      "title": "Period totals",
+      "donations": "Donations",
+      "streams": "Streams",
+      "noStreams": "no streams",
+      "averageStream": "Average stream",
+      "perLiveHour": "Donations per live hour",
+      "perLiveHourNote": "received during streams",
+      "liveShare": "Donations during streams",
+      "liveShareNote": "share of the period total",
+      "audience": "Audience growth",
+      "audienceNote": "Twitch followers and YouTube subscribers"
+    },
+    "duration": {
+      "minutes": "{{minutes}} min",
+      "hours": "{{hours}} h",
+      "hoursMinutes": "{{hours}} h {{minutes}} min"
+    },
+    "days": {
+      "title": "Days with and without a stream",
+      "noStreamDays": "No streams in this period, so there is nothing to compare.",
+      "noOffDays": "You streamed every day of the period, so there is nothing to compare.",
+      "withStream": "Stream days ({{count}})",
+      "withoutStream": "Days off ({{count}})",
+      "moreOnStreamDays": "On stream days you get {{ratio}} times more donations on average.",
+      "moreOnOffDays": "On days off you get {{ratio}} times more donations on average than on stream days.",
+      "kind": "Days",
+      "donationsPerDay": "Donations per day",
+      "audiencePerDay": "Growth per day"
+    },
+    "streams": {
+      "title": "Streams",
+      "description": "A stream is time live on at least one platform: a multistream counts once. Donations are those received during the stream.",
+      "empty": "No streams in this period.",
+      "date": "Start",
+      "duration": "Duration",
+      "platforms": "Platforms",
+      "peak": "Peak viewers",
+      "average": "Average",
+      "donations": "Donations",
+      "audience": "Growth",
+      "events": "Events"
+    },
+    "timeline": {
+      "title": "Donations, streams and audience over time",
+      "description": "The charts share one time axis: hover a day and the crosshair lands on it in all three.",
+      "donations": "Donations",
+      "live": "Time live",
+      "audience": "Audience growth",
+      "table": "Show as a table",
+      "period": "Period"
+    },
+    "correlation": {
+      "noStreams": "No streams in this period.",
+      "hours": "Stream length, h",
+      "tooFew": "At least {{min}} streams in the period are needed to judge a relationship.",
+      "constant": "The value did not change from stream to stream, so no relationship shows.",
+      "coefficient": "(Spearman coefficient {{value}}, streams: {{count}})",
+      "strength": {
+        "weak": "weak",
+        "moderate": "noticeable",
+        "strong": "strong"
+      },
+      "donations": {
+        "title": "Stream length and donations",
+        "axis": "Donations",
+        "none": "There is no relationship between stream length and donations in this period.",
+        "positive": "A {{strength}} relationship: the longer the stream, the more donations.",
+        "negative": "A {{strength}} inverse relationship: longer streams bring fewer donations."
+      },
+      "audience": {
+        "title": "Stream length and audience growth",
+        "axis": "Growth",
+        "none": "There is no relationship between stream length and audience growth in this period.",
+        "positive": "A {{strength}} relationship: the longer the stream, the more new followers.",
+        "negative": "A {{strength}} inverse relationship: longer streams bring fewer followers."
+      }
+    },
+    "heatmap": {
+      "title": "When people donate",
+      "description": "Donation totals by weekday and hour in your time zone.",
+      "best": "Most donations: {{day}} from {{from}} to {{to}}, {{amount}}.",
+      "empty": "No donations in this period.",
+      "less": "less",
+      "more": "more",
+      "table": "Show as a table",
+      "slot": "Day and hour"
+    },
+    "events": {
+      "title": "Channel events",
+      "empty": "No events in this period."
+    }
   },
   "rooms": {
     "title": "Private rooms",
@@ -989,7 +1085,9 @@
         "pricing": "Pricing",
         "delivery": "How the service is delivered",
         "payment": "Payment and refunds",
-        "contact": "Contact and language"
+        "contact": "Contact and language",
+        "dashboard": "Dashboard",
+        "account": "Profile"
       },
       "terms": "Terms of Service",
       "offer": "Paid plans offer",
@@ -1053,7 +1151,7 @@
         "ok": "reading chat",
         "waiting": "waiting for the stream to start",
         "quota": "YouTube quota is used up for today — chat returns when Google resets it (midnight Pacific time)",
-        "auth": "access revoked — reconnect the channel in Analytics"
+        "auth": "access revoked, reconnect the channel under Profile → Platforms"
       },
       "channelTwitch": "twitch.tv/{{channel}}"
     },
@@ -1083,5 +1181,71 @@
     "legal": {
       "description": "{{title}} of the StreamKit service — current version."
     }
+  },
+  "security": {
+    "title": "Security",
+    "description": "Password, two-factor sign-in and the devices your account is open on.",
+    "password": {
+      "title": "Password",
+      "description": "After a password change every other device is signed out; this one stays signed in.",
+      "current": "Current password",
+      "new": "New password",
+      "confirm": "Repeat the new password",
+      "submit": "Change password",
+      "changed": "Password changed, other devices were signed out"
+    },
+    "sessions": {
+      "title": "Devices",
+      "description": "Where your account is open now. An unfamiliar device is a reason to sign it out and change your password.",
+      "unknownDevice": "Unknown device",
+      "current": "This device",
+      "lastUsed": "Last active {{date}}",
+      "revoke": "Sign out",
+      "revokeNamed": "Sign out on {{name}}",
+      "revoked": "The device will be signed out within a few minutes"
+    },
+    "totp": {
+      "title": "Two-factor sign-in",
+      "on": "On",
+      "off": "Off",
+      "description": "When you sign in, you will need a code from an authenticator app in addition to your password. Staff cannot sign in to the admin panel without it.",
+      "enable": "Turn on",
+      "stepApp": "Install an authenticator app: Google Authenticator, Yandex Key or any app that supports TOTP.",
+      "stepScan": "Scan the QR code with the app or enter the key manually.",
+      "stepCode": "Enter the six-digit code the app shows.",
+      "qrAlt": "QR code for the authenticator app",
+      "manual": "Key for manual entry:",
+      "codeHint": "The code changes every 30 seconds.",
+      "confirm": "Confirm and turn on",
+      "enabled": "Two-factor sign-in is on",
+      "enabledDescription": "A code from the app is requested at every sign-in. Enter your password to turn it off.",
+      "disable": "Turn off two-factor sign-in",
+      "disabled": "Two-factor sign-in is off"
+    }
+  },
+  "platforms": {
+    "title": "Platforms",
+    "description": "Twitch and YouTube channels connected by signing in to the platform. Chat, Twitch events, the live window and analytics depend on them.",
+    "emptyTitle": "No platform connected",
+    "empty": "Connect a channel: metrics start collecting, and chat and events arrive on their own.",
+    "donationsHint": "Donation services are connected in",
+    "connectTitle": "Connect a platform",
+    "connect": "Connect {{platform}}",
+    "notConfigured": "The administrator has not set up this platform",
+    "connected": "{{platform}} is connected",
+    "connectFailed": "Could not connect the platform. Please try again.",
+    "connectPlanLimit": "Your plan includes one platform. Get Multistream or disconnect the connected platform.",
+    "active": "Active",
+    "inactiveShort": "Inactive",
+    "lastSynced": "data from {{date}}",
+    "activate": "Make active",
+    "activateNamed": "Make {{name}} active",
+    "inactive": "This platform is inactive: your plan runs one at a time. Metrics are not collected, chat and events do not arrive. Press “Make active” to switch to it.",
+    "disconnect": "Disconnect",
+    "disconnectNamed": "Disconnect {{name}}",
+    "disconnectTitle": "Disconnect {{name}}?",
+    "disconnectText": "Tokens, channel details and all collected metrics are deleted at once and cannot be restored. For Twitch, channel events and chat stop arriving.",
+    "needsReconnect": "Reconnect Twitch: without the new permissions, Bits and Channel Points alerts will not arrive.",
+    "reconnect": "Reconnect"
   }
 }

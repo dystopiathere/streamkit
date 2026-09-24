@@ -154,7 +154,7 @@ export function WidgetsPage(): React.JSX.Element {
             {limitReached ? (
               <>
                 {' '}
-                <Link to="/billing" className="underline hover:text-fg">
+                <Link to="/account/billing" className="underline hover:text-fg">
                   {t('widgets.limitAction')}
                 </Link>
               </>

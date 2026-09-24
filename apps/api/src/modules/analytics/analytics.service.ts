@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Channel as PrismaChannel } from '@prisma/client';
 import {
+  type AnalyticsOverview,
   type AnalyticsPoint,
   type AnalyticsRange,
   type AnalyticsSeries,
@@ -8,17 +9,29 @@ import {
   type ChannelStats,
   type ChannelSummary,
   type DonationTotal,
+  overviewBucket,
+  type Platform,
   rangeBucket,
   rangeToMs,
 } from '@streamkit/contracts';
 import type { AuditContext } from '../../common/audit/audit.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { toContractEventType } from '../events/event.mappers';
+import { findPrimaryCurrency } from '../events/primary-currency';
 import { PlatformConnectionService } from '../integrations/platform-connection.service';
 import {
   ANALYTICS_PLATFORMS,
   toContractChannel,
   toContractPlatform,
 } from '../integrations/platform.mappers';
+import {
+  audienceCounter,
+  buildOverview,
+  type ChannelAudienceBucket,
+  type ChannelSession,
+  type MinuteSum,
+  STREAM_BREAK_MS,
+} from './overview-builder';
 
 /**
  * Максимальный промежуток между снимками, который засчитывается во время эфира.
@@ -36,6 +49,42 @@ interface SeriesRow {
   followers: number | null;
   subscribers: number | null;
   live_share: number | null;
+}
+
+interface SessionRow {
+  channel_id: string;
+  platform: string;
+  started_at: Date;
+  ended_at: Date;
+  peak_viewers: number | null;
+  avg_viewers: number | null;
+  followers_first: number | null;
+  followers_last: number | null;
+  subscribers_first: number | null;
+  subscribers_last: number | null;
+}
+
+interface AudienceRow {
+  channel_id: string;
+  platform: string;
+  at: Date;
+  followers_first: number | null;
+  followers_last: number | null;
+  subscribers_first: number | null;
+  subscribers_last: number | null;
+}
+
+interface MinuteRow {
+  at: Date;
+  amount: bigint | null;
+  count: number;
+}
+
+interface HeatRow {
+  weekday: number;
+  hour: number;
+  amount: bigint;
+  count: number;
 }
 
 interface LiveStatsRow {
@@ -172,6 +221,192 @@ export class AnalyticsService {
   }
 
   /**
+   * Сводка по эфирам и донатам: корзины времени, эфиры, тепловая карта.
+   *
+   * Каждый запрос считает агрегат в СУБД, а в память приходят минуты и
+   * отрезки, а не строки событий: за девяносто дней у крупного канала это
+   * десятки тысяч донатов. Склейка эфиров разных площадок и раскладка по
+   * корзинам — в `buildOverview`, без базы.
+   *
+   * Границы корзин режет PostgreSQL в зоне браузера — тем же `date_trunc`, что
+   * и ряды графиков, — поэтому сутки на графике донатов и сутки на графике
+   * зрителей одни и те же, включая переход на летнее время.
+   */
+  async overview(
+    userId: string,
+    range: AnalyticsRange,
+    timeZone: string,
+  ): Promise<AnalyticsOverview> {
+    const bucket = overviewBucket(range);
+    const now = new Date();
+    const since = new Date(now.getTime() - rangeToMs(range));
+    const currency = await findPrimaryCurrency(this.prisma, userId);
+
+    const [boundaries, donations, events, sessions, audience, heat, eventCounts, donationTotals] =
+      await Promise.all([
+        this.prisma.$queryRaw<{ at: Date }[]>`
+          SELECT gs AT TIME ZONE ${timeZone} AS at
+          FROM generate_series(
+            date_trunc(${bucket}, ${since}::timestamptz AT TIME ZONE ${timeZone}),
+            date_trunc(${bucket}, ${now}::timestamptz AT TIME ZONE ${timeZone}),
+            ('1 ' || ${bucket})::interval
+          ) gs
+          ORDER BY 1
+        `,
+        this.prisma.$queryRaw<MinuteRow[]>`
+          SELECT date_trunc('minute', "createdAt") AS at,
+            SUM("amountMinor")::bigint AS amount, COUNT(*)::int AS count
+          FROM "AlertEvent"
+          WHERE "userId" = ${userId}::uuid AND "isTest" = false AND "createdAt" >= ${since}
+            AND "amountMinor" IS NOT NULL AND "currency" = ${currency}
+          GROUP BY 1
+        `,
+        this.prisma.$queryRaw<MinuteRow[]>`
+          SELECT date_trunc('minute', "createdAt") AS at, NULL::bigint AS amount,
+            COUNT(*)::int AS count
+          FROM "AlertEvent"
+          WHERE "userId" = ${userId}::uuid AND "isTest" = false AND "createdAt" >= ${since}
+            AND "amountMinor" IS NULL
+          GROUP BY 1
+        `,
+        this.channelSessions(userId, since),
+        this.audienceBuckets(userId, since, bucket, timeZone),
+        this.prisma.$queryRaw<HeatRow[]>`
+          SELECT EXTRACT(ISODOW FROM local)::int AS weekday, EXTRACT(HOUR FROM local)::int AS hour,
+            SUM("amountMinor")::bigint AS amount, COUNT(*)::int AS count
+          FROM (
+            SELECT "createdAt" AT TIME ZONE 'UTC' AT TIME ZONE ${timeZone} AS local, "amountMinor"
+            FROM "AlertEvent"
+            WHERE "userId" = ${userId}::uuid AND "isTest" = false AND "createdAt" >= ${since}
+              AND "amountMinor" IS NOT NULL AND "currency" = ${currency}
+          ) donations
+          GROUP BY 1, 2
+        `,
+        this.prisma.alertEvent.groupBy({
+          by: ['type'],
+          where: { userId, isTest: false, createdAt: { gte: since } },
+          _count: { _all: true },
+        }),
+        this.donations(userId, range),
+      ]);
+
+    const toMinutes = (rows: MinuteRow[]): MinuteSum[] =>
+      rows.map((row) => ({ at: row.at, amountMinor: Number(row.amount ?? 0), count: row.count }));
+
+    const built = buildOverview({
+      boundaries: boundaries.map((row) => row.at),
+      now,
+      donations: toMinutes(donations),
+      events: toMinutes(events),
+      sessions,
+      audience,
+    });
+
+    return {
+      range,
+      bucket,
+      currency,
+      donationTotals,
+      ...built,
+      eventCounts: eventCounts
+        .map((row) => ({ type: toContractEventType(row.type), count: row._count._all }))
+        .sort((a, b) => b.count - a.count),
+      heatmap: heat.map((row) => ({
+        weekday: row.weekday,
+        hour: row.hour,
+        amountMinor: Number(row.amount),
+        count: row.count,
+      })),
+    };
+  }
+
+  /**
+   * Непрерывные эфиры каждого канала — «острова» снимков в эфире.
+   *
+   * Новый остров начинается, когда до предыдущего снимка в эфире больше
+   * `STREAM_BREAK_MS`: снимки вне эфира между ними не считаются, иначе обрыв
+   * трансляции на пять минут делил бы вечер на два эфира. Счётчики аудитории —
+   * первое и последнее известное значение острова.
+   */
+  private async channelSessions(userId: string, since: Date): Promise<ChannelSession[]> {
+    const breakSeconds = STREAM_BREAK_MS / 1000;
+    const rows = await this.prisma.$queryRaw<SessionRow[]>`
+      WITH live AS (
+        SELECT a."channelId", c."platform"::text AS platform, a."capturedAt", a."viewers",
+          a."followers", a."subscribers",
+          LAG(a."capturedAt") OVER (PARTITION BY a."channelId" ORDER BY a."capturedAt") AS prev_at
+        FROM "AnalyticsSnapshot" a
+        JOIN "Channel" c ON c."id" = a."channelId"
+        WHERE c."userId" = ${userId}::uuid AND a."isLive" AND a."capturedAt" >= ${since}
+          AND c."platform" IN ('TWITCH', 'YOUTUBE')
+      ), runs AS (
+        SELECT *, SUM(
+          CASE WHEN prev_at IS NOT NULL
+            AND EXTRACT(EPOCH FROM ("capturedAt" - prev_at)) <= ${breakSeconds} THEN 0 ELSE 1 END
+        ) OVER (PARTITION BY "channelId" ORDER BY "capturedAt") AS run
+        FROM live
+      )
+      SELECT "channelId" AS channel_id, platform,
+        MIN("capturedAt") AS started_at, MAX("capturedAt") AS ended_at,
+        MAX("viewers")::int AS peak_viewers, AVG("viewers")::float8 AS avg_viewers,
+        (ARRAY_AGG("followers" ORDER BY "capturedAt") FILTER (WHERE "followers" IS NOT NULL))[1] AS followers_first,
+        (ARRAY_AGG("followers" ORDER BY "capturedAt" DESC) FILTER (WHERE "followers" IS NOT NULL))[1] AS followers_last,
+        (ARRAY_AGG("subscribers" ORDER BY "capturedAt") FILTER (WHERE "subscribers" IS NOT NULL))[1] AS subscribers_first,
+        (ARRAY_AGG("subscribers" ORDER BY "capturedAt" DESC) FILTER (WHERE "subscribers" IS NOT NULL))[1] AS subscribers_last
+      FROM runs
+      GROUP BY "channelId", platform, run
+    `;
+
+    return rows.map((row) => {
+      const platform = toPlatform(row.platform);
+      const followers = audienceCounter(platform) === 'followers';
+      return {
+        channelId: row.channel_id,
+        platform,
+        startedAt: row.started_at,
+        endedAt: row.ended_at,
+        peakViewers: row.peak_viewers,
+        avgViewers: row.avg_viewers,
+        audienceFirst: followers ? row.followers_first : row.subscribers_first,
+        audienceLast: followers ? row.followers_last : row.subscribers_last,
+      };
+    });
+  }
+
+  /** Счётчик аудитории каждого канала в начале и в конце каждой корзины. */
+  private async audienceBuckets(
+    userId: string,
+    since: Date,
+    bucket: 'hour' | 'day',
+    timeZone: string,
+  ): Promise<ChannelAudienceBucket[]> {
+    const rows = await this.prisma.$queryRaw<AudienceRow[]>`
+      SELECT a."channelId" AS channel_id, c."platform"::text AS platform,
+        date_trunc(${bucket}, a."capturedAt" AT TIME ZONE 'UTC' AT TIME ZONE ${timeZone})
+          AT TIME ZONE ${timeZone} AS at,
+        (ARRAY_AGG(a."followers" ORDER BY a."capturedAt") FILTER (WHERE a."followers" IS NOT NULL))[1] AS followers_first,
+        (ARRAY_AGG(a."followers" ORDER BY a."capturedAt" DESC) FILTER (WHERE a."followers" IS NOT NULL))[1] AS followers_last,
+        (ARRAY_AGG(a."subscribers" ORDER BY a."capturedAt") FILTER (WHERE a."subscribers" IS NOT NULL))[1] AS subscribers_first,
+        (ARRAY_AGG(a."subscribers" ORDER BY a."capturedAt" DESC) FILTER (WHERE a."subscribers" IS NOT NULL))[1] AS subscribers_last
+      FROM "AnalyticsSnapshot" a
+      JOIN "Channel" c ON c."id" = a."channelId"
+      WHERE c."userId" = ${userId}::uuid AND a."capturedAt" >= ${since}
+        AND c."platform" IN ('TWITCH', 'YOUTUBE')
+      GROUP BY 1, 2, 3
+    `;
+
+    return rows.map((row) => {
+      const followers = audienceCounter(toPlatform(row.platform)) === 'followers';
+      return {
+        channelId: row.channel_id,
+        at: row.at,
+        first: followers ? row.followers_first : row.subscribers_first,
+        last: followers ? row.followers_last : row.subscribers_last,
+      };
+    });
+  }
+
+  /**
    * Включение и выключение площадки — через сервис подключений: там же лежит
    * правило «активной может быть одна» и рассылка каналов чата.
    */
@@ -274,6 +509,10 @@ function toContractStats(
     category: row.category,
     liveSince: liveSince?.toISOString() ?? null,
   };
+}
+
+function toPlatform(value: string): Platform {
+  return value === 'YOUTUBE' ? 'youtube' : 'twitch';
 }
 
 function toPoint(row: SeriesRow): AnalyticsPoint {

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { mainNav } from './navigation';
 
 /**
  * Сквозной сценарий, ради которого существует продукт:
@@ -58,7 +59,7 @@ test('донат доходит от дашборда до оверлея', asyn
   });
 
   await test.step('тестовый алерт доходит до оверлея', async () => {
-    await page.getByRole('link', { name: 'Виджеты' }).click();
+    await mainNav(page).getByRole('link', { name: 'Виджеты', exact: true }).click();
     await page.getByRole('button', { name: 'Тестовый алерт' }).click();
 
     const card = overlayPage.getByTestId('alert-card');
@@ -72,7 +73,7 @@ test('донат доходит от дашборда до оверлея', asyn
   });
 
   await test.step('событие попало в историю', async () => {
-    await page.getByRole('link', { name: 'События' }).click();
+    await mainNav(page).getByRole('link', { name: 'События', exact: true }).click();
     await expect(page.getByText('Тестовый зритель')).toBeVisible();
     await expect(page.getByText('тест', { exact: true })).toBeVisible();
   });
@@ -111,7 +112,7 @@ test('отозванная ссылка перестаёт работать', as
   await expect(page.getByText('Ссылок пока нет')).toBeVisible();
 
   // Алерт после отзыва до оверлея дойти не должен.
-  await page.getByRole('link', { name: 'Виджеты' }).click();
+  await mainNav(page).getByRole('link', { name: 'Виджеты', exact: true }).click();
   await page.getByRole('button', { name: 'Тестовый алерт' }).click();
 
   await overlayPage.waitForTimeout(3000);

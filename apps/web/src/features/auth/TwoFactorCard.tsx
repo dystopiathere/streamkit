@@ -29,18 +29,25 @@ const groupSecret = (secret: string): string => secret.match(/.{1,4}/g)?.join(' 
 export function TwoFactorCard(): React.JSX.Element | null {
   const { t } = useTranslation();
   const user = useCurrentUser();
+  const titleId = useId();
   if (!user) return null;
 
+  // Именованная область: на странице «Безопасность» два поля «Текущий пароль»,
+  // и область говорит, к какой карточке относится каждое.
   return (
-    <Card className="space-y-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <h2 className="font-medium">{t('privacy.totp.title')}</h2>
-        <StatusPill tone={user.isTotpEnabled ? 'success' : 'neutral'}>
-          {user.isTotpEnabled ? t('privacy.totp.on') : t('privacy.totp.off')}
-        </StatusPill>
-      </div>
-      {user.isTotpEnabled ? <DisableForm /> : <EnableFlow />}
-    </Card>
+    <section aria-labelledby={titleId}>
+      <Card className="space-y-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h2 id={titleId} className="font-medium">
+            {t('security.totp.title')}
+          </h2>
+          <StatusPill tone={user.isTotpEnabled ? 'success' : 'neutral'}>
+            {user.isTotpEnabled ? t('security.totp.on') : t('security.totp.off')}
+          </StatusPill>
+        </div>
+        {user.isTotpEnabled ? <DisableForm /> : <EnableFlow />}
+      </Card>
+    </section>
   );
 }
 
@@ -55,7 +62,7 @@ function EnableFlow(): React.JSX.Element {
   if (!setup) {
     return (
       <>
-        <p className="text-sm text-muted">{t('privacy.totp.description')}</p>
+        <p className="text-sm text-muted">{t('security.totp.description')}</p>
         <Button
           variant="secondary"
           isLoading={begin.isPending}
@@ -65,7 +72,7 @@ function EnableFlow(): React.JSX.Element {
             })
           }
         >
-          {t('privacy.totp.enable')}
+          {t('security.totp.enable')}
         </Button>
       </>
     );
@@ -82,22 +89,22 @@ function EnableFlow(): React.JSX.Element {
       }}
     >
       <ol className="list-decimal space-y-1 pl-5 text-sm text-muted">
-        <li>{t('privacy.totp.stepApp')}</li>
-        <li>{t('privacy.totp.stepScan')}</li>
-        <li>{t('privacy.totp.stepCode')}</li>
+        <li>{t('security.totp.stepApp')}</li>
+        <li>{t('security.totp.stepScan')}</li>
+        <li>{t('security.totp.stepCode')}</li>
       </ol>
 
       <div className="flex flex-wrap items-start gap-4">
         {/* Белая подложка: на тёмной теме приложения камера QR не распознаёт. */}
         <img
           src={setup.qrDataUrl}
-          alt={t('privacy.totp.qrAlt')}
+          alt={t('security.totp.qrAlt')}
           width={176}
           height={176}
           className="rounded-lg bg-white p-2"
         />
         <div className="min-w-0 text-sm">
-          <p className="text-muted">{t('privacy.totp.manual')}</p>
+          <p className="text-muted">{t('security.totp.manual')}</p>
           <code className="mt-1 block font-mono break-all tabular-nums">
             {groupSecret(setup.secret)}
           </code>
@@ -117,13 +124,13 @@ function EnableFlow(): React.JSX.Element {
           onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}
           {...describeField(codeId, { hint: true, error: codeError })}
         />
-        <FieldHint id={codeId}>{t('privacy.totp.codeHint')}</FieldHint>
+        <FieldHint id={codeId}>{t('security.totp.codeHint')}</FieldHint>
         <FieldError id={codeId} message={codeError} />
       </div>
 
       <div className="flex flex-wrap gap-2">
         <Button type="submit" isLoading={confirm.isPending} disabled={code.length !== 6}>
-          {t('privacy.totp.confirm')}
+          {t('security.totp.confirm')}
         </Button>
         <Button
           variant="ghost"
@@ -144,18 +151,20 @@ function DisableForm(): React.JSX.Element {
   const { t } = useTranslation();
   const disable = useDisableTotp();
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
   const passwordId = useId();
-  const passwordError = disable.error ? errorText(disable.error, t('common.error')) : undefined;
+  const codeId = useId();
+  const error = disable.error ? errorText(disable.error, t('common.error')) : undefined;
 
   return (
     <form
       className="space-y-3"
       onSubmit={(event) => {
         event.preventDefault();
-        disable.mutate(password);
+        disable.mutate({ password, code });
       }}
     >
-      <p className="text-sm text-muted">{t('privacy.totp.enabledDescription')}</p>
+      <p className="text-sm text-muted">{t('security.totp.enabledDescription')}</p>
       <div className="max-w-xs">
         <Label htmlFor={passwordId}>{t('privacy.deletePasswordLabel')}</Label>
         <Input
@@ -165,17 +174,30 @@ function DisableForm(): React.JSX.Element {
           value={password}
           required
           onChange={(event) => setPassword(event.target.value)}
-          {...describeField(passwordId, { error: passwordError })}
         />
-        <FieldError id={passwordId} message={passwordError} />
+      </div>
+      <div className="max-w-xs">
+        <Label htmlFor={codeId}>{t('auth.totpCode')}</Label>
+        <Input
+          id={codeId}
+          value={code}
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          pattern="\d{6}"
+          maxLength={6}
+          required
+          onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}
+          {...describeField(codeId, { error })}
+        />
+        <FieldError id={codeId} message={error} />
       </div>
       <Button
         type="submit"
         variant="secondary"
         isLoading={disable.isPending}
-        disabled={password.length === 0}
+        disabled={password.length === 0 || code.length !== 6}
       >
-        {t('privacy.totp.disable')}
+        {t('security.totp.disable')}
       </Button>
     </form>
   );

@@ -234,7 +234,12 @@ describe('Админка (feature)', () => {
       await request(server())
         .post('/api/auth/totp/disable')
         .set(auth(admin.token))
-        .send({ password: PASSWORD })
+        // Код входа в админку уже израсходован — берём код следующего шага,
+        // который допуск часов принимает уже сейчас.
+        .send({
+          password: PASSWORD,
+          code: generateSync({ secret: admin.secret, epoch: Math.floor(Date.now() / 1000) + 30 }),
+        })
         .expect(204);
 
       await request(server()).get('/api/admin/users').set(auth(admin.adminToken)).expect(401);
@@ -525,7 +530,7 @@ describe('Админка (feature)', () => {
       const invite = await request(server())
         .post(`/api/rooms/${room.body.id}/invites`)
         .set(auth(target.token))
-        .send({ label: 'Гость' })
+        .send({ label: 'для Васи Пупкина' })
         .expect(201);
 
       const list = await request(server())
@@ -533,6 +538,8 @@ describe('Админка (feature)', () => {
         .set(auth(support.adminToken))
         .expect(200);
       expect(list.body).toHaveLength(1);
+      // Пометка — имя гостя, данные по поручению стримера: сотруднику не видна.
+      expect(JSON.stringify(list.body)).not.toContain('Пупкин');
 
       await request(server())
         .delete(`/api/admin/rooms/${room.body.id}/invites/${invite.body.id}`)

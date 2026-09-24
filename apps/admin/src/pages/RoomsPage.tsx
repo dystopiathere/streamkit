@@ -152,7 +152,12 @@ export function RoomInvites({ room }: { room: Pick<AdminRoom, 'id' | 'name'> }) 
           rowKey={(row) => row.id}
           empty={<EmptyState title={t('rooms.noInvites')} />}
           columns={[
-            { key: 'label', header: t('rooms.inviteLabel'), cell: (row) => row.label },
+            {
+              key: 'created',
+              header: t('rooms.created'),
+              cell: (row) => formatDateTime(row.createdAt),
+              className: 'whitespace-nowrap',
+            },
             {
               key: 'state',
               header: t('widgets.state'),
@@ -179,7 +184,7 @@ export function RoomInvites({ room }: { room: Pick<AdminRoom, 'id' | 'name'> }) 
                 row.revokedAt ? null : (
                   <Button
                     variant="secondary"
-                    aria-label={t('rooms.revokeNamed', { label: row.label })}
+                    aria-label={t('rooms.revokeNamed', { created: formatDateTime(row.createdAt) })}
                     onClick={() => confirm.open(row)}
                   >
                     {t('rooms.revoke')}
@@ -191,7 +196,9 @@ export function RoomInvites({ room }: { room: Pick<AdminRoom, 'id' | 'name'> }) 
       ) : null}
       <Confirm
         open={confirm.target !== null}
-        title={t('rooms.revokeTitle', { label: confirm.target?.label ?? '' })}
+        title={t('rooms.revokeTitle', {
+          created: confirm.target ? formatDateTime(confirm.target.createdAt) : '',
+        })}
         confirmLabel={t('rooms.revoke')}
         isPending={revoke.isPending}
         onClose={confirm.close}

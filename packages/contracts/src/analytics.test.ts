@@ -18,6 +18,7 @@ describe('диапазоны аналитики', () => {
     // Месяц минутных снимков — это под сорок тысяч точек. Часовые корзины
     // оставили бы 720 штук на график шириной в тысячу пикселей.
     expect(rangeBucket('30d')).toBe('day');
+    expect(rangeBucket('90d')).toBe('day');
     expect(rangeBucket('7d')).toBe('hour');
     expect(rangeBucket('24h')).toBe('hour');
   });
@@ -27,7 +28,7 @@ describe('диапазоны аналитики', () => {
   });
 
   it('отклоняет произвольный диапазон', () => {
-    expect(analyticsQuerySchema.safeParse({ range: '90d' }).success).toBe(false);
+    expect(analyticsQuerySchema.safeParse({ range: '1y' }).success).toBe(false);
   });
 });
 

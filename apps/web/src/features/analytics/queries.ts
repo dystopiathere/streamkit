@@ -1,11 +1,12 @@
 import {
+  ANALYTICS_RANGES,
+  type AnalyticsOverview,
   type AnalyticsRange,
   type AnalyticsSeries,
   type AuthorizeResponse,
   type AvailablePlatform,
   type Channel,
   type ChannelSummary,
-  type DonationTotal,
   type EventsResetResult,
   type Platform,
   SOCKET_EVENTS,
@@ -13,6 +14,7 @@ import {
 } from '@streamkit/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { useDashboardSocket } from '@/lib/useDashboardSocket';
 
@@ -30,8 +32,52 @@ export const analyticsKeys = {
   summary: (id: string, range: AnalyticsRange) => ['channels', id, 'summary', range] as const,
   series: (id: string, range: AnalyticsRange) =>
     ['channels', id, 'series', range, TIME_ZONE] as const,
-  donations: (range: AnalyticsRange) => ['analytics', 'donations', range] as const,
+  overview: (range: AnalyticsRange) => ['analytics', 'overview', range, TIME_ZONE] as const,
 };
+
+/**
+ * Диапазон аналитики живёт в адресе (`?range=30d`), а не в состоянии страницы.
+ *
+ * У раздела две вкладки — «Сводка» и «Графики», — и период общий: переход на
+ * соседнюю вкладку не должен молча возвращать неделю. Заодно ссылку на месяц
+ * можно сохранить в закладки.
+ */
+export function useAnalyticsRange(): [AnalyticsRange, (range: AnalyticsRange) => void] {
+  const [params, setParams] = useSearchParams();
+  const raw = params.get('range');
+  const range = (ANALYTICS_RANGES as readonly string[]).includes(raw ?? '')
+    ? (raw as AnalyticsRange)
+    : '7d';
+  const setRange = useCallback(
+    (next: AnalyticsRange) => {
+      setParams(
+        (current) => {
+          const updated = new URLSearchParams(current);
+          if (next === '7d') updated.delete('range');
+          else updated.set('range', next);
+          return updated;
+        },
+        { replace: true },
+      );
+    },
+    [setParams],
+  );
+  return [range, setRange];
+}
+
+/** Эфиры, донаты по времени и тепловая карта — одним запросом на период. */
+export function useAnalyticsOverview(range: AnalyticsRange) {
+  return useQuery({
+    queryKey: analyticsKeys.overview(range),
+    queryFn: () =>
+      api.get<AnalyticsOverview>(
+        `/analytics/overview?range=${range}&timeZone=${encodeURIComponent(TIME_ZONE)}`,
+      ),
+    // Смена периода держит прежнюю картину, пока едет новая: без этого страница
+    // схлопывалась до «загрузка» и прыгала на каждое нажатие переключателя.
+    placeholderData: (previous) => previous,
+  });
+}
 
 export function useChannels() {
   return useQuery({
@@ -61,13 +107,6 @@ export function useChannelSeries(channelId: string, range: AnalyticsRange) {
       api.get<AnalyticsSeries>(
         `/channels/${channelId}/series?range=${range}&timeZone=${encodeURIComponent(TIME_ZONE)}`,
       ),
-  });
-}
-
-export function useDonationTotals(range: AnalyticsRange) {
-  return useQuery({
-    queryKey: analyticsKeys.donations(range),
-    queryFn: () => api.get<DonationTotal[]>(`/analytics/donations?range=${range}`),
   });
 }
 
@@ -136,7 +175,7 @@ export function useResetDonations() {
     mutationFn: () => api.post<EventsResetResult>('/events/reset'),
     onSuccess: async () => {
       await Promise.all(
-        [['analytics', 'donations'], ['events'], ['stream', 'overview'], ['widgets']].map((key) =>
+        [['analytics'], ['events'], ['stream', 'overview'], ['widgets']].map((key) =>
           client.invalidateQueries({ queryKey: key }),
         ),
       );

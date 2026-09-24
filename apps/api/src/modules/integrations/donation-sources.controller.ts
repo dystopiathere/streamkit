@@ -127,6 +127,6 @@ export class DonationSourcesController {
 
   private dashboardUrl(service: string, status: 'connected' | 'cancelled' | 'failed'): string {
     const base = this.config.webBaseUrl.replace(/\/+$/, '');
-    return `${base}/sources?service=${encodeURIComponent(service)}&status=${status}`;
+    return `${base}/account/sources?service=${encodeURIComponent(service)}&status=${status}`;
   }
 }

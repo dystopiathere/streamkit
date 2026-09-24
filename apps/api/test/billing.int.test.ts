@@ -16,7 +16,7 @@ import {
 } from '@streamkit/contracts';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PlatformAuthError } from '../src/common/http/platform-errors';
+import { PlatformAuthError, PlatformError } from '../src/common/http/platform-errors';
 import { MAILER, type MailMessage, type Mailer } from '../src/common/mail/mailer';
 import { BillingService } from '../src/modules/billing/billing.service';
 import { MaintenanceModule } from '../src/modules/maintenance/maintenance.module';
@@ -32,6 +32,7 @@ import {
   type ProviderPayment,
 } from '../src/modules/billing/payment-gateway';
 import { ROOM_MEDIA_SERVER, type RoomMediaServer } from '../src/modules/rooms/livekit.service';
+import { TokenService } from '../src/modules/auth/token.service';
 import { WidgetsService } from '../src/modules/widgets/widgets.service';
 import { createHarness, registrationPayload, type TestHarness } from './harness';
 
@@ -50,6 +51,8 @@ class FakeGateway implements PaymentGateway {
   failCreate = false;
   /** Отказ ЮKassa (4xx), а не сбой связи: так отвечает боевой магазин без автоплатежей. */
   rejectCreate = false;
+  /** Код отказа ЮKassa на списание по сохранённому способу (4xx), если задан. */
+  rejectCharge: number | null = null;
   /** Чем ответит следующее списание по сохранённому способу. */
   chargeOutcome: { status: 'succeeded' } | { status: 'canceled'; reason: string } = {
     status: 'succeeded',
@@ -83,6 +86,13 @@ class FakeGateway implements PaymentGateway {
 
   async chargeSaved(request: ChargeSavedRequest): Promise<ProviderPayment> {
     this.charged.push(request);
+    if (this.rejectCharge !== null) {
+      throw new PlatformError(
+        'yookassa',
+        this.rejectCharge,
+        `ЮKassa ответила ${this.rejectCharge}`,
+      );
+    }
     const existing = this.byIdempotenceKey(request.paymentId);
     if (existing) return { ...existing };
     const id = `yk-${++this.sequence}`;
@@ -145,6 +155,7 @@ class FakeGateway implements PaymentGateway {
     this.failGet = false;
     this.failCreate = false;
     this.rejectCreate = false;
+    this.rejectCharge = null;
     this.chargeOutcome = { status: 'succeeded' };
   }
 }
@@ -289,7 +300,7 @@ describe('Подписка на платформу (feature)', () => {
       customerEmail: owner.email,
       amountMinor: PLAN_PRICES.pro.year.amountMinor,
     });
-    expect(gateway.created[0]!.returnUrl).toContain(`/billing?payment=${payment.id}`);
+    expect(gateway.created[0]!.returnUrl).toContain(`/account/billing?payment=${payment.id}`);
 
     const consent = await harness.prisma.consent.findFirstOrThrow({
       where: { userId: owner.userId, document: 'SUBSCRIPTION_OFFER' },
@@ -1290,6 +1301,110 @@ describe('Подписка на платформу (feature)', () => {
     expect(row.paymentMethodEncrypted).toBeTruthy();
   });
 
+  it('отказ ЮKassa магазину не считается отказом карты: продление откладывается на час', async () => {
+    const { userId } = await dueSoon();
+    // Неверные ключи магазина: так отвечали бы все продления разом.
+    gateway.rejectCharge = 401;
+
+    for (let tick = 0; tick <= MAX_RENEWAL_ATTEMPTS; tick += 1) {
+      await billing.renewDue(new Date(Date.now() + tick * 2 * 60 * 60 * 1000));
+    }
+
+    let row = await harness.prisma.subscription.findUniqueOrThrow({ where: { userId } });
+    expect(gateway.charged).toHaveLength(MAX_RENEWAL_ATTEMPTS + 1);
+    expect(row).toMatchObject({ renewalFailures: 0, autoRenew: true });
+    expect(row.paymentMethodEncrypted).toBeTruthy();
+    // Платежа у ЮKassa не было — ни висящих, ни отменённых записей.
+    expect(await harness.prisma.payment.count({ where: { userId, kind: 'RENEWAL' } })).toBe(0);
+
+    // Ключи починили — продление проходит по расписанию.
+    gateway.rejectCharge = null;
+    await billing.renewDue(new Date(Date.now() + 9 * 60 * 60 * 1000));
+    row = await harness.prisma.subscription.findUniqueOrThrow({ where: { userId } });
+    expect(
+      await harness.prisma.payment.count({
+        where: { userId, kind: 'RENEWAL', status: 'SUCCEEDED' },
+      }),
+    ).toBe(1);
+    expect(row.renewalFailures).toBe(0);
+  });
+
+  it('отказ ЮKassa в самом запросе по-прежнему считается неудачной попыткой', async () => {
+    const { userId } = await dueSoon();
+    gateway.rejectCharge = 400;
+
+    await billing.renewDue();
+
+    const row = await harness.prisma.subscription.findUniqueOrThrow({ where: { userId } });
+    expect(row.renewalFailures).toBe(1);
+    const renewal = await harness.prisma.payment.findFirstOrThrow({
+      where: { userId, kind: 'RENEWAL' },
+    });
+    expect(renewal).toMatchObject({ status: 'CANCELED', cancellationReason: 'gateway_rejected' });
+  });
+
+  it('после льготных дней продление не списывается, даже если письмо ушло поздно', async () => {
+    const { userId, end } = await dueSoon();
+    // Почта лежала: письмо ушло во второй льготный день, и три дня с него
+    // истекают уже после льготных.
+    await harness.prisma.subscription.update({
+      where: { userId },
+      data: { renewalNoticeSentAt: new Date(end.getTime() + 2 * DAY_MS) },
+    });
+
+    await billing.renewDue(new Date(end.getTime() + 5.1 * DAY_MS));
+    expect(gateway.charged).toHaveLength(0);
+  });
+
+  it('оформление на кончившейся подписке сбрасывает старое письмо и автопродление', async () => {
+    const { userId } = await dueSoon();
+    const owner = await harness.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    // Подписка кончилась за льготными днями, а автопродление и свежее письмо остались.
+    const ended = new Date(Date.now() - 3.5 * DAY_MS);
+    await harness.prisma.subscription.update({
+      where: { userId },
+      data: { currentPeriodEnd: ended, renewalNoticeFor: ended },
+    });
+    const token = await harness.app
+      .get(TokenService)
+      .issueAccessToken({ id: userId, email: owner.email });
+
+    // Выбрал «Про» на год и бросил страницу оплаты.
+    const { payment } = await checkout(token, 'year');
+    gateway.cancel(payment.providerPaymentId!, 'expired_on_confirmation');
+    await notify(payment.providerPaymentId!).expect(200);
+
+    const row = await harness.prisma.subscription.findUniqueOrThrow({ where: { userId } });
+    expect(row).toMatchObject({ autoRenew: false, renewalNoticeFor: null });
+    await billing.renewDue();
+    expect(gateway.charged).toHaveLength(0);
+  });
+
+  it('на кончившейся подписке автопродление не включить — льготные дни так не получить', async () => {
+    const owner = await streamer();
+    await subscribed(owner.token);
+    await request(server())
+      .patch('/api/billing/subscription')
+      .set(auth(owner.token))
+      .send({ autoRenew: false })
+      .expect(200);
+    await harness.prisma.subscription.update({
+      where: { userId: owner.userId },
+      data: { currentPeriodEnd: new Date(Date.now() - DAY_MS) },
+    });
+
+    await request(server())
+      .patch('/api/billing/subscription')
+      .set(auth(owner.token))
+      .send({ autoRenew: true, acceptOffer: true })
+      .expect(409);
+    const view = await request(server())
+      .get('/api/billing/subscription')
+      .set(auth(owner.token))
+      .expect(200);
+    expect(view.body).toMatchObject({ status: 'expired', plan: 'free', autoRenew: false });
+  });
+
   it('отозванный доступ к карте выключает продление сразу и стирает способ оплаты', async () => {
     const { userId } = await dueSoon();
     gateway.chargeOutcome = { status: 'canceled', reason: 'permission_revoked' };
@@ -1511,6 +1626,39 @@ describe('Подписка на платформу (feature)', () => {
       .set(auth(owner.token))
       .expect(200);
     expect(history.body[0]).toMatchObject({ refundedAmountMinor: 30_000 });
+  });
+
+  it('возврат закрывает доступ и тогда, когда поверх периода подарены дни', async () => {
+    const owner = await streamer();
+    const paymentId = await subscribed(owner.token);
+    const payment = await harness.prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+    await billing.extend(owner.userId, 10, 'pro');
+
+    gateway.refunds.set(payment.providerPaymentId!, payment.amountMinor);
+    await notifyRefund(payment.providerPaymentId!).expect(200);
+
+    const view = await request(server())
+      .get('/api/billing/subscription')
+      .set(auth(owner.token))
+      .expect(200);
+    expect(view.body).toMatchObject({ status: 'expired', plan: 'free', giftedDays: 0 });
+  });
+
+  it('возврат прошлого периода не закрывает уже оплаченный следующий', async () => {
+    const { userId } = await dueSoon();
+    await billing.renewDue();
+    const initial = await harness.prisma.payment.findFirstOrThrow({
+      where: { userId, kind: 'INITIAL' },
+    });
+    const renewed = await harness.prisma.subscription.findUniqueOrThrow({ where: { userId } });
+
+    // Возврат за последние полсуток первого месяца.
+    gateway.refunds.set(initial.providerPaymentId!, 1_000);
+    await notifyRefund(initial.providerPaymentId!).expect(200);
+
+    const row = await harness.prisma.subscription.findUniqueOrThrow({ where: { userId } });
+    expect(row.currentPeriodEnd!.getTime()).toBe(renewed.currentPeriodEnd!.getTime());
+    expect(row.autoRenew).toBe(true);
   });
 
   it('уведомление о возврате по чужому или неоплаченному платежу не идёт в ЮKassa', async () => {

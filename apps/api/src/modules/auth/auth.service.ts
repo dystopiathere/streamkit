@@ -161,17 +161,22 @@ export class AuthService {
   /**
    * Смена пароля гасит все сессии, включая текущую: если пароль меняют из-за
    * подозрения на компрометацию, оставлять чужую активную сессию бессмысленно.
+   * Устройству, с которого сменили пароль, выдаётся новая сессия — новым
+   * семейством, а не продлением погашенного.
+   *
+   * Неверный текущий пароль — 400, а не 401: 401 клиент понимает как протухший
+   * access-токен, обновляет его и повторяет запрос, а человек просто ошибся.
    */
   async changePassword(
     userId: string,
     currentPassword: string,
     newPassword: string,
     context: AuditContext = {},
-  ): Promise<void> {
+  ): Promise<AuthResult & { refreshToken: string }> {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     const valid = await this.passwords.verify(user.passwordHash, currentPassword);
     if (!valid) {
-      throw new UnauthorizedException('Текущий пароль указан неверно');
+      throw new BadRequestException('Текущий пароль указан неверно');
     }
     if (await this.passwords.verify(user.passwordHash, newPassword)) {
       throw new BadRequestException('Новый пароль совпадает с текущим');
@@ -183,6 +188,14 @@ export class AuthService {
     });
     await this.tokens.revokeAllForUser(userId);
     await this.audit.record('auth.password.changed', userId, context);
+
+    const issued = await this.tokens.startSession(user, context);
+    return {
+      accessToken: issued.accessToken,
+      expiresIn: issued.expiresIn,
+      refreshToken: issued.refreshToken,
+      user: toPublicUser(user),
+    };
   }
 
   /** Шаг 1 подключения 2FA: выдаём секрет и QR, но ещё не включаем. */
@@ -207,7 +220,9 @@ export class AuthService {
     if (!user.totpSecretEncrypted) {
       throw new BadRequestException('Сначала запросите секрет');
     }
-    if (!this.verifyTotpFor(user, code)) {
+    // Код подтверждения расходуется, как код входа: иначе тот же код ещё
+    // полторы минуты открывал бы вход с только что включённым вторым фактором.
+    if (!this.verifyTotpFor(user, code) || !(await this.totp.consume(userId, code))) {
       throw new BadRequestException('Неверный код подтверждения');
     }
 
@@ -215,10 +230,28 @@ export class AuthService {
     await this.audit.record('auth.totp.enabled', userId, context);
   }
 
-  async disableTotp(userId: string, password: string, context: AuditContext = {}): Promise<void> {
+  /**
+   * Выключение второго фактора — паролем и кодом из приложения.
+   *
+   * 400, а не 401, на неверный пароль или код: 401 клиент понимает как
+   * протухший access-токен и уходит его обновлять, а человек просто ошибся.
+   */
+  async disableTotp(
+    userId: string,
+    password: string,
+    code: string,
+    context: AuditContext = {},
+  ): Promise<void> {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     if (!(await this.passwords.verify(user.passwordHash, password))) {
-      throw new UnauthorizedException('Пароль указан неверно');
+      throw new BadRequestException('Пароль указан неверно');
+    }
+    if (
+      user.isTotpEnabled &&
+      (!this.verifyTotpFor(user, code) || !(await this.totp.consume(userId, code)))
+    ) {
+      await this.audit.record('auth.totp.disable_failed', userId, context);
+      throw new BadRequestException('Неверный код подтверждения');
     }
     await this.prisma.user.update({
       where: { id: userId },

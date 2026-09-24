@@ -1,9 +1,15 @@
 import { randomUUID } from 'node:crypto';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import type { ConsentDocument } from '@prisma/client';
+import type { Redis } from 'ioredis';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
+import { markUserBlocked } from '../../common/auth/access-token';
+import { RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { PasswordService } from '../../common/crypto/password.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { REDIS_CLIENT } from '../../common/redis/redis.module';
+import { AppConfig } from '../../config/app-config.service';
+import { ADMIN_ACCESS_TTL_SECONDS } from '../auth/token.service';
 import { RoomEviction } from '../rooms/room-eviction.service';
 import { PlatformTokenService } from '../integrations/platform-token.service';
 import { WidgetsService } from '../widgets/widgets.service';
@@ -45,6 +51,9 @@ export class PrivacyService {
     private readonly widgets: WidgetsService,
     private readonly rooms: RoomEviction,
     private readonly platformTokens: PlatformTokenService,
+    private readonly bus: RealtimeBus,
+    private readonly config: AppConfig,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
   /**
@@ -342,6 +351,9 @@ export class PrivacyService {
           isTotpEnabled: false,
           totpSecretEncrypted: null,
           anonymizedAt: new Date(),
+          // Роль обезличенному не нужна: сотрудник, ушедший так, не должен
+          // сохранить вход в админку.
+          role: 'USER',
         },
       });
 
@@ -399,6 +411,18 @@ export class PrivacyService {
       });
     });
 
+    // Выданные access-токены живут до своего срока, а refresh-токены погашены
+    // выше. Без отметки вторая вкладка или устройство ещё четверть часа
+    // работали бы от имени удалённого аккаунта: подключили бы источник донатов
+    // заново и начали собирать данные донатеров, удалить которые уже некому.
+    await markUserBlocked(
+      this.redis,
+      userId,
+      Math.max(this.config.accessTtlSeconds, ADMIN_ACCESS_TTL_SECONDS),
+    );
+    // Сообщение шины то же, что у блокировки: оба значат «сокеты дашборда
+    // этого человека закрыть».
+    await this.bus.publish({ kind: 'user-suspended', userId });
     await this.audit.record('privacy.account.anonymized', userId, context);
 
     await this.widgets.disconnectOverlays(userId, overlayTokenIds, 'token-revoked');

@@ -33,6 +33,8 @@ export const MESSAGES_EN: Readonly<Record<string, string>> = {
   'Пароль не может состоять из одного символа':
     'The password cannot be a single repeated character',
   'Код из 6 цифр': 'A 6-digit code',
+  'Ссылка недействительна или устарела': 'This link is invalid or has expired',
+  'Пароли не совпадают': 'The passwords do not match',
 
   // Общее
   'Ошибка валидации': 'Some fields are filled in incorrectly',
@@ -109,6 +111,8 @@ export const MESSAGES_EN: Readonly<Record<string, string>> = {
   'Подарочные дни уже истекли': 'The gifted days have already expired',
   'Нет сохранённого способа оплаты — оформите подписку заново':
     'No saved payment method — please subscribe again',
+  'Подписка закончилась — оформите её заново':
+    'Your subscription has ended — please subscribe again',
   'Включение автопродления требует согласия на списания':
     'Turning on auto-renewal requires consent to recurring charges',
 

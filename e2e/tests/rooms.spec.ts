@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { buyPlan } from './plans';
+import { mainNav } from './navigation';
 
 /**
  * Приватная комната целиком, через настоящий LiveKit.
@@ -46,7 +47,7 @@ async function registerStreamer(page: Page): Promise<string> {
 
 /** Комната с одним приглашением. Стример остаётся на странице комнаты. */
 async function roomWithInvite(page: Page): Promise<{ roomId: string; inviteUrl: string }> {
-  await page.getByRole('link', { name: 'Комнаты' }).click();
+  await mainNav(page).getByRole('link', { name: 'Комнаты', exact: true }).click();
   await page.getByPlaceholder('Название комнаты').fill('Вечерний эфир');
   await page.getByRole('button', { name: 'Новая комната' }).click();
   await page.getByRole('link', { name: 'Открыть' }).click();
@@ -81,7 +82,7 @@ test('гость входит по ссылке, оверлей показыва
   await registerStreamer(page);
 
   // Комната и приглашение.
-  await page.getByRole('link', { name: 'Комнаты' }).click();
+  await mainNav(page).getByRole('link', { name: 'Комнаты', exact: true }).click();
   await page.getByPlaceholder('Название комнаты').fill('Вечерний эфир');
   await page.getByRole('button', { name: 'Новая комната' }).click();
   await page.getByRole('link', { name: 'Открыть' }).click();
@@ -93,7 +94,7 @@ test('гость входит по ссылке, оверлей показыва
   const inviteUrl = await inviteField.inputValue();
 
   // Виджет гостей с этой комнатой и ссылка OBS на него.
-  await page.getByRole('link', { name: 'Виджеты' }).click();
+  await mainNav(page).getByRole('link', { name: 'Виджеты', exact: true }).click();
   await page.getByPlaceholder('Название виджета').fill('Гости');
   await page.getByLabel('Тип виджета').selectOption('guests');
   await page.getByRole('button', { name: 'Новый виджет' }).click();
@@ -301,7 +302,7 @@ test('виджет, созданный со страницы комнаты, с�
   await expect(page.getByRole('combobox', { name: 'Комната' })).toHaveValue(/[0-9a-f-]{36}/);
   await expect(page.getByRole('alert').filter({ hasText: 'Комната не выбрана' })).toHaveCount(0);
 
-  await page.getByRole('link', { name: 'Комнаты' }).click();
+  await mainNav(page).getByRole('link', { name: 'Комнаты', exact: true }).click();
   await page.getByRole('link', { name: 'Открыть' }).click();
   // Сначала дождаться страницы комнаты: список комнат — тоже список, и строка
   // «Вечерний эфир» нашлась бы в нём. Адреса мало — пока грузится чанк
@@ -317,7 +318,7 @@ test('виджет, созданный со страницы комнаты, с�
     .getByRole('link');
   const widgetPath = await widgetLink.getAttribute('href');
   page.on('dialog', (dialog) => void dialog.accept());
-  await page.getByRole('link', { name: 'Комнаты' }).click();
+  await mainNav(page).getByRole('link', { name: 'Комнаты', exact: true }).click();
   await page.getByRole('button', { name: 'Удалить' }).click();
   await expect(page.getByRole('link', { name: 'Открыть' })).toHaveCount(0);
   await page.goto(widgetPath!);
