@@ -85,9 +85,10 @@ function Lazy({ children }: { children: React.ReactNode }): React.JSX.Element {
 /**
  * Переадресация со старого адреса раздела с сохранением строки запроса.
  *
- * `/billing` и `/privacy` переехали в профиль, но на них ведут письма о
- * продлении, уже лежащие в ящиках, и возврат ЮKassa по платежам, оформленным
- * до выкатки: `?payment=` обязан доехать до страницы тарифа.
+ * `/billing`, `/privacy` и `/sources` переехали в профиль, но на них ведут
+ * письма о продлении, уже лежащие в ящиках, возврат ЮKassa по платежам,
+ * оформленным до выкатки, и закладки: `?payment=` обязан доехать до страницы
+ * тарифа.
  */
 function MovedTo({ to }: { to: string }): React.JSX.Element {
   const { search } = useLocation();
@@ -175,14 +176,15 @@ export function App(): React.JSX.Element {
                   </Lazy>
                 }
               />
-              <Route path="/sources" element={<SourcesPage />} />
               <Route path="/account" element={<AccountLayout />}>
                 <Route index element={<Navigate to="platforms" replace />} />
                 <Route path="platforms" element={<PlatformsPage />} />
+                <Route path="sources" element={<SourcesPage />} />
                 <Route path="security" element={<SecurityPage />} />
                 <Route path="billing" element={<BillingPage />} />
                 <Route path="privacy" element={<PrivacyPage />} />
               </Route>
+              <Route path="/sources" element={<MovedTo to="/account/sources" />} />
               <Route path="/billing" element={<MovedTo to="/account/billing" />} />
               <Route path="/privacy" element={<MovedTo to="/account/privacy" />} />
             </Route>

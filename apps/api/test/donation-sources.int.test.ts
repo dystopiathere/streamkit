@@ -209,7 +209,7 @@ describe('Донат-сервисы: DonationAlerts (feature)', () => {
       isConnected: false,
     });
 
-    expect(await connect()).toContain('/sources?service=donationalerts&status=connected');
+    expect(await connect()).toContain('/account/sources?service=donationalerts&status=connected');
 
     const after = await request(server())
       .get('/api/integrations/donations')

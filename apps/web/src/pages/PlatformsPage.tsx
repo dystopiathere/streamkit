@@ -55,7 +55,7 @@ export function PlatformsPage(): React.JSX.Element {
 
       <p className="text-sm text-muted">
         {t('platforms.donationsHint')}{' '}
-        <Link to="/sources" className="underline hover:text-fg">
+        <Link to="/account/sources" className="underline hover:text-fg">
           {t('nav.sources')}
         </Link>
       </p>

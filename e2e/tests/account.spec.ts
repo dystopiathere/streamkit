@@ -30,6 +30,7 @@ test('стример меняет пароль в профиле и остаёт
   const menu = await openProfileMenu(page);
   await expect(menu.getByRole('link')).toHaveText([
     'Площадки',
+    'Источники',
     'Безопасность',
     'Тариф',
     'Приватность',
