@@ -19,6 +19,7 @@ const EVENT_TYPE_TO_PRISMA: Record<AlertEventType, PrismaEventType> = {
   gift: PrismaEventType.GIFT,
   resubscription: PrismaEventType.RESUBSCRIPTION,
   cheer: PrismaEventType.CHEER,
+  kicks: PrismaEventType.KICKS,
   raid: PrismaEventType.RAID,
   reward: PrismaEventType.REWARD,
 };
@@ -30,6 +31,7 @@ const EVENT_TYPE_FROM_PRISMA: Record<PrismaEventType, AlertEventType> = {
   GIFT: 'gift',
   RESUBSCRIPTION: 'resubscription',
   CHEER: 'cheer',
+  KICKS: 'kicks',
   RAID: 'raid',
   REWARD: 'reward',
 };
@@ -39,6 +41,7 @@ const PROVIDER_TO_PRISMA: Record<EventProvider, PrismaProvider> = {
   donatepay: PrismaProvider.DONATEPAY,
   twitch: PrismaProvider.TWITCH,
   youtube: PrismaProvider.YOUTUBE,
+  kick: PrismaProvider.KICK,
   webhook: PrismaProvider.WEBHOOK,
   manual: PrismaProvider.MANUAL,
 };
@@ -48,6 +51,7 @@ const PROVIDER_FROM_PRISMA: Record<PrismaProvider, EventProvider> = {
   DONATEPAY: 'donatepay',
   TWITCH: 'twitch',
   YOUTUBE: 'youtube',
+  KICK: 'kick',
   WEBHOOK: 'webhook',
   MANUAL: 'manual',
 };

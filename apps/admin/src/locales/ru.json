@@ -83,7 +83,8 @@
   },
   "platform": {
     "twitch": "Twitch",
-    "youtube": "YouTube"
+    "youtube": "YouTube",
+    "kick": "Kick"
   },
   "syncState": {
     "ok": "В порядке",
@@ -96,6 +97,7 @@
     "donatepay": "DonatePay",
     "twitch": "Twitch",
     "youtube": "YouTube",
+    "kick": "Kick",
     "webhook": "Вебхук",
     "manual": "Вручную"
   },

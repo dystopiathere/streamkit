@@ -363,6 +363,7 @@ enum EventProvider {
   DONATEPAY
   TWITCH
   YOUTUBE
+  KICK
   WEBHOOK
   MANUAL
 }
@@ -375,6 +376,8 @@ enum AlertEventType {
   GIFT
   RESUBSCRIPTION
   CHEER
+  /// KICKs — подарок в валюте Kick; `count` — сколько KICKs.
+  KICKS
   RAID
   REWARD
 }
@@ -449,6 +452,7 @@ enum Platform {
   YOUTUBE
   VKPLAY
   TROVO
+  KICK
 }
 
 /// Состояние сбора метрик. Отдельное поле, а не «последняя ошибка строкой»:

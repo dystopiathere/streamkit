@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { currencySchema, isoDateSchema, uuidSchema } from './common.js';
-import { alertEventTypeSchema } from './events.js';
+import { ALERT_EVENT_TYPES, type AlertEventType, alertEventTypeSchema } from './events.js';
 
 /* ------------------------------------------------------------------ */
 /* Площадки                                                            */
@@ -12,7 +12,7 @@ import { alertEventTypeSchema } from './events.js';
  * Список короче, чем enum `Platform` в схеме БД: там уже заведены VKPLAY и
  * TROVO под будущие коннекторы, но контракт описывает то, что реально работает.
  */
-export const PLATFORMS = ['twitch', 'youtube'] as const;
+export const PLATFORMS = ['twitch', 'youtube', 'kick'] as const;
 export const platformSchema = z.enum(PLATFORMS);
 export type Platform = z.infer<typeof platformSchema>;
 
@@ -33,11 +33,16 @@ export type ChannelCounter = 'followers' | 'subscribers' | 'totalViews';
  * бесплатное «следить за каналом». Платные подписчики Twitch — другое, их
  * немного и не у всех: они есть только у компаньонов и партнёров, поэтому
  * `optional` — без значения карточка их не показывает вовсе.
+ *
+ * У Kick счётчика аудитории нет вовсе: публичный API не отдаёт число
+ * фолловеров, только платных подписчиков своего канала. Подставить их вместо
+ * аудитории значило бы назвать ростом аудитории рост платных подписок —
+ * поэтому `audience: null`, и прирост аудитории считается без Kick.
  */
 export const PLATFORM_COUNTERS: Record<
   Platform,
   {
-    audience: ChannelCounter;
+    audience: ChannelCounter | null;
     counters: readonly ChannelCounter[];
     optional: readonly ChannelCounter[];
   }
@@ -48,7 +53,45 @@ export const PLATFORM_COUNTERS: Record<
     optional: ['subscribers'],
   },
   youtube: { audience: 'subscribers', counters: ['subscribers', 'totalViews'], optional: [] },
+  kick: { audience: null, counters: ['subscribers'], optional: [] },
 };
+
+/**
+ * Площадки, от которых приходит событие сценария оповещения; `null` — событие
+ * не привязано к площадке (донат идёт из донат-сервисов и вебхука).
+ *
+ * Сценарий без подключённой площадки редактор не показывает: настроить
+ * «рейд» без Twitch — значит оформить оповещение, которое никогда не
+ * сработает. Общее событие нескольких площадок (подписка есть у всех трёх)
+ * показывается, если подключена хотя бы одна. Настройки скрытого сценария
+ * остаются в конфиге: отключение площадки не должно их стирать.
+ */
+export const ALERT_SCENARIO_PLATFORMS: Record<AlertEventType, readonly Platform[] | null> = {
+  donation: null,
+  follow: ['twitch', 'kick'],
+  subscription: ['twitch', 'youtube', 'kick'],
+  gift: ['twitch', 'youtube', 'kick'],
+  resubscription: ['twitch', 'youtube', 'kick'],
+  cheer: ['twitch'],
+  kicks: ['kick'],
+  raid: ['twitch'],
+  reward: ['twitch', 'kick'],
+};
+
+/**
+ * Сценарии, доступные при этих подключённых площадках, в порядке
+ * `ALERT_EVENT_TYPES`.
+ *
+ * @param connected площадки, подключённые стримером (повторы допустимы)
+ * @returns типы событий, которые хотя бы одна из площадок может прислать
+ */
+export function availableAlertScenarios(connected: readonly Platform[]): AlertEventType[] {
+  const have = new Set(connected);
+  return ALERT_EVENT_TYPES.filter((type) => {
+    const platforms = ALERT_SCENARIO_PLATFORMS[type];
+    return platforms === null || platforms.some((platform) => have.has(platform));
+  });
+}
 
 /**
  * Состояние сбора метрик по каналу.

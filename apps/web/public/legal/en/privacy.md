@@ -1,6 +1,6 @@
 # StreamKit Privacy Policy
 
-Version No. 14 of 24.09.2026
+Version No. 15 of 25.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/privacy?lang=ru); if the two
@@ -33,14 +33,14 @@ secret, if it is enabled.
 - the consent log: which document, which version, and when it was accepted or
   withdrawn.
 
-**Connected platforms** (Twitch, YouTube, DonationAlerts): access tokens issued
+**Connected platforms** (Twitch, YouTube, Kick, DonationAlerts): access tokens issued
 by these services (stored encrypted and not shown even to the owner), the
 channel ID, handle, name and image, channel metrics (viewers, subscribers, total
 views, whether the channel is live), the title, category and start time of the
-current stream, and for DonationAlerts, the account ID and name. From Twitch the
-service also receives channel events for alerts — follows, subscriptions, gifted
-subscriptions, Bits, raids and Channel Points rewards — and from Twitch and
-YouTube, the channel's chat messages while the user has a chat widget or the
+current stream, and for DonationAlerts, the account ID and name. From Twitch and
+Kick the service also receives channel events for alerts — follows, subscriptions,
+gifted subscriptions, Channel Points rewards, from Twitch also Bits and
+raids, and from Kick gifts in KICKs — and from Twitch, YouTube and Kick, the channel's chat messages while the user has a chat widget or the
 stream window open; we process the data of their authors on behalf of the user
 (section 4). We do not store or use
 the email address of the platform account. DonationAlerts sends it together with
@@ -102,16 +102,16 @@ Article 6 of Federal Law No. 152-FZ):
 
 - **event participants** from the services and platforms connected by the user
   (donations; follows, subscriptions, gifted subscriptions, Bits, raids and
-  Channel Points rewards on Twitch; memberships, member milestones, gifted
+  Channel Points rewards on Twitch and Kick, KICKs gifts on Kick; memberships, member milestones, gifted
   memberships, Super Chats and Super Stickers on YouTube): name or nickname, message text, amount and currency or a
-  quantity (Bits, raid viewers, months subscribed, number of gifts), time. For a
+  quantity (Bits, KICKs, raid viewers, months subscribed, number of gifts), time. For a
   voice donation we receive a link to the recording instead of text: the
   recording stays with the service the donation was made through, we neither
   copy nor store it and only play it on the widget page. Stored in the user's event history. The Top donors widget shows names on
   the widget page, which the user adds to the stream;
-- **Twitch and YouTube chat viewers** on the channels the user has connected to
-  the service: username or name, for YouTube the author's channel ID, and message
-  text. Pass through the service
+- **Twitch, YouTube and Kick chat viewers** on the channels the user has connected to
+  the service: username or name, for YouTube and Kick the author's ID on the
+  platform, and message text. Pass through the service
   in real time and are **not stored**. The exception is YouTube events:
   memberships and paid support arrive as lines of the same chat, but they are
   events and are stored in the user's event history just like donations;
@@ -198,9 +198,11 @@ We do not sell personal data. Data is shared only with:
   (Yandex Cloud Postbox), on the Operator's behalf, in the Russian Federation;
 - **YooMoney NCO LLC** (YooKassa) — processing payments and refunds: payment
   amount, email address for the receipt;
-- **Twitch and Google (YouTube)** — only if the user has connected the platform:
+- **Twitch, Google (YouTube) and Kick** — only if the user has connected the platform:
   the service calls their APIs with the tokens these platforms issued to the
-  user in order to obtain channel metrics, events and chat messages. These companies' servers are located
+  user in order to obtain channel metrics, events and chat messages; Kick sends
+  events and chat messages to the service's address while the service is
+  subscribed to them. These companies' servers are located
   outside the Russian Federation; we do not share any other user data with them.
   How we handle data received from Google is described in section 5;
 - authorized public authorities on request — in cases expressly provided for by
@@ -224,7 +226,7 @@ We do not sell personal data. Data is shared only with:
 | Visit statistics | 13 months |
 | Consent log of visitors without an account | 3 years from the date of consent |
 | Guest image, sound and name | Not stored |
-| Twitch and YouTube chat messages | Not stored |
+| Twitch, YouTube and Kick chat messages | Not stored |
 | YouTube membership and paid support events | Same as donation events |
 | Roulette spin history | Last 20, until the event history is cleared |
 | Names and labels typed in by the user | Until the setting changes or the account is deleted |

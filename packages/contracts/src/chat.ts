@@ -26,8 +26,19 @@ export const youtubeChannelIdSchema = z
   .string()
   .regex(/^UC[A-Za-z0-9_-]{22}$/, 'Идентификатор канала YouTube: UC и 22 символа');
 
+/**
+ * Идентификатор пользователя Kick — число, которое площадка отдаёт в
+ * `user_id` и `broadcaster_user_id`.
+ *
+ * Канал чата Kick адресуется им, а не адресом `kick.com/<slug>`: адрес канал
+ * вправе сменить, а подписка на события у Kick оформляется по id.
+ */
+export const kickUserIdSchema = z
+  .string()
+  .regex(/^[1-9][0-9]{0,19}$/, 'Идентификатор пользователя Kick: только цифры');
+
 /** Площадки, чат которых умеет читать сервис. */
-export const CHAT_PLATFORMS = ['twitch', 'youtube'] as const;
+export const CHAT_PLATFORMS = ['twitch', 'youtube', 'kick'] as const;
 export const chatPlatformSchema = z.enum(CHAT_PLATFORMS);
 export type ChatPlatform = z.infer<typeof chatPlatformSchema>;
 
@@ -39,10 +50,11 @@ export type ChatPlatform = z.infer<typeof chatPlatformSchema>;
 export const chatChannelRefSchema = z.discriminatedUnion('platform', [
   z.object({ platform: z.literal('twitch'), channel: twitchLoginSchema }),
   z.object({ platform: z.literal('youtube'), channel: youtubeChannelIdSchema }),
+  z.object({ platform: z.literal('kick'), channel: kickUserIdSchema }),
 ]);
 export type ChatChannelRef = z.infer<typeof chatChannelRefSchema>;
 
-/** Ключ канала для множеств и отметок: `twitch:shroud`, `youtube:UC…`. */
+/** Ключ канала для множеств и отметок: `twitch:shroud`, `youtube:UC…`, `kick:123`. */
 export function chatChannelKey(ref: { platform: string; channel: string }): string {
   return `${ref.platform}:${ref.channel}`;
 }
@@ -115,8 +127,8 @@ const chatMessageBase = {
 /**
  * Сообщение чата любой площадки.
  *
- * `login` — постоянный идентификатор автора: логин Twitch или id канала
- * YouTube. По нему, а не по имени, работает дедупликация и ключи; список
+ * `login` — постоянный идентификатор автора: логин Twitch, id канала
+ * YouTube или id пользователя Kick. По нему, а не по имени, работает дедупликация и ключи; список
  * скрытых сверяется и с ним, и с именем — боты YouTube узнаются по имени.
  */
 export const chatMessageSchema = z.discriminatedUnion('platform', [
@@ -131,6 +143,12 @@ export const chatMessageSchema = z.discriminatedUnion('platform', [
     platform: z.literal('youtube'),
     channel: youtubeChannelIdSchema,
     login: youtubeChannelIdSchema,
+  }),
+  z.object({
+    ...chatMessageBase,
+    platform: z.literal('kick'),
+    channel: kickUserIdSchema,
+    login: kickUserIdSchema,
   }),
 ]);
 export type ChatMessage = z.infer<typeof chatMessageSchema>;

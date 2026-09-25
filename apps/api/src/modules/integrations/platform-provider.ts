@@ -50,8 +50,17 @@ export interface PlatformProvider {
    */
   readonly statsQuotaCost: number;
 
-  buildAuthorizeUrl(state: string): string;
-  exchangeCode(code: string): Promise<OAuthTokens>;
+  /**
+   * Требует ли площадка PKCE. Kick без `code_challenge` вход не начинает, а
+   * без `code_verifier` код не меняет — даже у приложения с секретом. Twitch и
+   * Google обходятся секретом, и им пара не передаётся.
+   */
+  readonly usesPkce: boolean;
+
+  /** `codeChallenge` передаётся только площадке с `usesPkce`. */
+  buildAuthorizeUrl(state: string, codeChallenge?: string): string;
+  /** `codeVerifier` — пара к `codeChallenge` из ссылки, только при `usesPkce`. */
+  exchangeCode(code: string, codeVerifier?: string): Promise<OAuthTokens>;
   refreshTokens(refreshToken: string): Promise<OAuthTokens>;
   fetchIdentity(accessToken: string): Promise<ChannelIdentity>;
   fetchStats(accessToken: string, identity: ChannelIdentity): Promise<ChannelStats>;

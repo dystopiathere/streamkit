@@ -114,6 +114,7 @@ export function normalizeStats(input: {
 export class YouTubeProvider implements PlatformProvider {
   readonly platform = 'youtube' as const;
   readonly title = 'YouTube';
+  readonly usesPkce = false;
   readonly statsQuotaCost = STATS_QUOTA_COST;
   private readonly logger = new Logger(YouTubeProvider.name);
 

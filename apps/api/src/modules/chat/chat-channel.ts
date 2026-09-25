@@ -5,7 +5,7 @@ import type { PrismaService } from '../../common/prisma/prisma.service';
 export type ConnectedChat = ChatChannelRef & {
   /** Название канала у площадки: id YouTube человеку ничего не скажет. */
   title: string;
-  /** Площадка отозвала доступ. Чат YouTube без токена не читается. */
+  /** Площадка отозвала доступ. Чат YouTube и Kick без токена не читается. */
   authExpired: boolean;
 };
 
@@ -18,7 +18,9 @@ export type ConnectedChat = ChatChannelRef & {
  * шли через платформу без ведома того стримера.
  *
  * Twitch — по логину: он и есть имя IRC-канала. YouTube — по id канала `UC…`,
- * а не по адресу `@handle`, который канал вправе сменить.
+ * а не по адресу `@handle`, который канал вправе сменить. Kick — по id
+ * пользователя: подписка на чат у Kick оформляется по нему, а адрес
+ * `kick.com/<slug>` канал тоже вправе сменить.
  *
  * Каждый идентификатор проверяется схемой, хотя пришёл от площадки: логин
  * Twitch уходит в команду IRC `JOIN #<логин>`, и перевод строки в нём был бы
@@ -35,8 +37,12 @@ export async function chatChannels(
     // Только включённые: выключенная площадка не работает нигде — ни в опросе
     // метрик, ни в событиях, ни в чате. На тарифе с одной площадкой их две, и
     // чат второй идти не должен.
-    where: { userId: { in: userIds }, isEnabled: true, platform: { in: ['TWITCH', 'YOUTUBE'] } },
-    // Twitch раньше YouTube, внутри площадки — по времени подключения: порядок
+    where: {
+      userId: { in: userIds },
+      isEnabled: true,
+      platform: { in: ['TWITCH', 'YOUTUBE', 'KICK'] },
+    },
+    // По площадке, внутри площадки — по времени подключения: порядок
     // подписей в окне эфира не должен прыгать от запроса к запросу.
     orderBy: [{ platform: 'asc' }, { createdAt: 'asc' }],
     select: {
@@ -53,7 +59,7 @@ export async function chatChannels(
     const ref = chatChannelRefSchema.safeParse(
       row.platform === 'TWITCH'
         ? { platform: 'twitch', channel: row.login }
-        : { platform: 'youtube', channel: row.externalId },
+        : { platform: row.platform === 'KICK' ? 'kick' : 'youtube', channel: row.externalId },
     );
     if (!ref.success) continue;
     const list = result.get(row.userId) ?? [];
@@ -61,7 +67,7 @@ export async function chatChannels(
       ...ref.data,
       title: row.displayName,
       // Чат Twitch читается анонимно — отозванный токен ему не помеха.
-      authExpired: ref.data.platform === 'youtube' && row.syncState === 'AUTH_EXPIRED',
+      authExpired: ref.data.platform !== 'twitch' && row.syncState === 'AUTH_EXPIRED',
     });
     result.set(row.userId, list);
   }

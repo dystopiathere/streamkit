@@ -492,6 +492,10 @@ export const alertScenariosSchema = z.object({
     titleTemplateSchema.default('{username} — {count} битов'),
     messageTemplateSchema.default('{message}'),
   ),
+  kicks: alertScenarioSchema(
+    titleTemplateSchema.default('{username} — {count} KICKs'),
+    messageTemplateSchema.default('{message}'),
+  ),
   raid: alertScenarioSchema(
     titleTemplateSchema.default('Рейд от {username}: {count} зрителей'),
     messageTemplateSchema.default(''),
@@ -899,6 +903,7 @@ export const LATEST_DEFAULT_TEMPLATES: Record<AlertEventType, string> = {
   gift: '{username} × {count}',
   resubscription: '{username} · {count}',
   cheer: '{username} — {count}',
+  kicks: '{username} — {count}',
   raid: '{username} · {count}',
   reward: '{username} — {message}',
 };

@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   analyticsQuerySchema,
+  availableAlertScenarios,
+  PLATFORMS,
   channelStatsSchema,
   donationTotalSchema,
   rangeBucket,
   rangeToMs,
 } from './analytics.js';
+import { ALERT_EVENT_TYPES } from './events.js';
 
 describe('диапазоны аналитики', () => {
   it('переводит диапазон в миллисекунды', () => {
@@ -108,5 +111,40 @@ describe('часовой пояс в запросе ряда', () => {
     // запроса, то есть пятисоткой вместо внятного 400.
     expect(analyticsQuerySchema.safeParse({ timeZone: 'Europe/Мосва' }).success).toBe(false);
     expect(analyticsQuerySchema.safeParse({ timeZone: "'; DROP TABLE" }).success).toBe(false);
+  });
+});
+
+describe('сценарии оповещений по площадкам', () => {
+  it('без площадок остаётся только донат', () => {
+    expect(availableAlertScenarios([])).toEqual(['donation']);
+  });
+
+  it('общее событие открывает любая из его площадок', () => {
+    expect(availableAlertScenarios(['youtube'])).toEqual([
+      'donation',
+      'subscription',
+      'gift',
+      'resubscription',
+    ]);
+    expect(availableAlertScenarios(['kick'])).toEqual([
+      'donation',
+      'follow',
+      'subscription',
+      'gift',
+      'resubscription',
+      'kicks',
+      'reward',
+    ]);
+  });
+
+  it('биты и рейды — только с Twitch, KICKs — только с Kick', () => {
+    const twitch = availableAlertScenarios(['twitch']);
+    expect(twitch).toContain('cheer');
+    expect(twitch).toContain('raid');
+    expect(twitch).not.toContain('kicks');
+  });
+
+  it('все площадки открывают все сценарии', () => {
+    expect(availableAlertScenarios([...PLATFORMS])).toEqual([...ALERT_EVENT_TYPES]);
   });
 });

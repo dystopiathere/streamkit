@@ -94,6 +94,8 @@ export const envSchema = z.object({
   TWITCH_CLIENT_SECRET: optionalValue(),
   YOUTUBE_CLIENT_ID: optionalValue(),
   YOUTUBE_CLIENT_SECRET: optionalValue(),
+  KICK_CLIENT_ID: optionalValue(),
+  KICK_CLIENT_SECRET: optionalValue(),
 
   /**
    * Суточный бюджет запросов к YouTube Data API.
@@ -149,6 +151,22 @@ export const envSchema = z.object({
    * конфигурация с этим флагом не стартует: токен стримера ушёл бы открытым текстом.
    */
   YOUTUBE_CHAT_GRPC_INSECURE: optionalValue(),
+
+  /**
+   * Адреса Kick: вход (OAuth, `id.kick.com`) и публичный API. Переопределяются
+   * только в тестах — прогоны поднимают поддельный Kick, как поддельный Twitch.
+   */
+  KICK_AUTH_URL: optionalValue(),
+  KICK_API_URL: optionalValue(),
+  /**
+   * Открытый ключ, которым сверяется подпись вебхуков Kick (PEM).
+   *
+   * По умолчанию — ключ из документации Kick, зашитый в код: запрашивать его у
+   * площадки на каждом старте значит не принять ни одного события, пока она
+   * недоступна. Переменная нужна тестам, которые подписывают вебхук своим
+   * ключом, и на случай, если Kick ключ сменит.
+   */
+  KICK_WEBHOOK_PUBLIC_KEY: optionalValue(),
 
   /**
    * Приложение DonationAlerts (`donationalerts.com/application/clients`).

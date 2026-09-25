@@ -16,7 +16,7 @@ export interface PlatformRequest {
   url: string;
   /** Токен пользователя. В логи не попадает ни при каком исходе. */
   accessToken?: string;
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'POST' | 'DELETE';
   headers?: Record<string, string>;
   /** Тело формы — так требуют оба токен-эндпоинта, и Twitch, и Google. */
   form?: Record<string, string>;

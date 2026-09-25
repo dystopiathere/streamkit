@@ -30,6 +30,7 @@ import { triggerTitle } from '@/features/widgets/AlertTriggers';
 import { isChanged } from '@/features/widgets/config-changes';
 import { WidgetPreview } from '@/features/widgets/WidgetPreview';
 import { TypeMark } from '@/features/widgets/TypeMark';
+import { useAlertScenarios, visibleScenario } from '@/features/widgets/useAlertScenarios';
 import { WidgetStateControls } from '@/features/widgets/WidgetStateControls';
 import { ApiError } from '@/lib/api';
 import { localizedResolver } from '@/lib/form-errors';
@@ -56,7 +57,11 @@ export function WidgetEditorPage(): React.JSX.Element {
   const type = widget.data?.type ?? 'alerts';
   const state = useWidgetState(id, Boolean(widget.data) && hasWidgetState(type));
   // Открытый сценарий оповещений: его поля в форме и его же пример в предпросмотре.
-  const [alertScenario, setAlertScenario] = useState<AlertEventType>('donation');
+  const [chosenScenario, setAlertScenario] = useState<AlertEventType>('donation');
+  // Сценарий площадки, которую отключили, не показывается — редактор и
+  // предпросмотр переходят на донат, а выбор ждёт возвращения площадки.
+  const availability = useAlertScenarios();
+  const alertScenario = visibleScenario(chosenScenario, availability.scenarios);
   // Триггер, чей вид правят разделы. Сбрасывается сменой сценария: у фолловера
   // триггеров доната нет.
   const [alertTrigger, setAlertTrigger] = useState<string | null>(null);
@@ -215,7 +220,8 @@ export function WidgetEditorPage(): React.JSX.Element {
             {/* Настройки всего виджета — здесь, а не в разделах: раздел
                 принадлежит сценарию, и настройка виджета повторялась бы в
                 каждом из них. */}
-            {type === 'alerts' ? (
+            {/* Без подключённого YouTube галочка ничего бы не включала. */}
+            {type === 'alerts' && availability.platforms.includes('youtube') ? (
               <div className="mt-4 border-t border-border pt-4">
                 <YouTubeEvents form={form} />
               </div>

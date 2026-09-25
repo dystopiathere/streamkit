@@ -335,8 +335,8 @@ export class PrivacyService {
 
     // Доступ к площадкам отзывается у них самих, пока токены ещё у нас: после
     // транзакции отзывать было бы нечем, а разрешение приложения осталось бы в
-    // аккаунте Google или Twitch человека, который удалил аккаунт у нас.
-    for (const platform of ['youtube', 'twitch'] as const) {
+    // аккаунте Google, Twitch или Kick человека, который удалил аккаунт у нас.
+    for (const platform of ['youtube', 'twitch', 'kick'] as const) {
       await this.platformTokens.revoke(userId, platform);
     }
 

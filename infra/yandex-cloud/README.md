@@ -129,6 +129,8 @@ yc lockbox secret add-version --id <external_secret_id> --payload '[
   {"key": "TWITCH_CLIENT_SECRET","text_value": "..."},
   {"key": "YOUTUBE_CLIENT_ID",   "text_value": "..."},
   {"key": "YOUTUBE_CLIENT_SECRET","text_value": "..."},
+  {"key": "KICK_CLIENT_ID",      "text_value": "..."},
+  {"key": "KICK_CLIENT_SECRET",  "text_value": "..."},
   {"key": "DONATIONALERTS_CLIENT_ID",    "text_value": "..."},
   {"key": "DONATIONALERTS_CLIENT_SECRET","text_value": "..."}
 ]'
@@ -346,6 +348,17 @@ failed». Администратор входит на ВМ как `ops`.
 - **Twitch** и **Google Cloud (YouTube)**: redirect URI
   `https://api.stream-kit.ru/api/integrations/twitch/callback` и
   `https://api.stream-kit.ru/api/integrations/youtube/callback`.
+- **Kick** — `kick.com` → Settings → Developer → «Create App»:
+  1. Redirect URL `https://api.stream-kit.ru/api/integrations/kick/callback`,
+     права `user:read`, `channel:read`, `events:subscribe`.
+  2. Включить вебхуки и указать адрес
+     `https://api.stream-kit.ru/api/integrations/kick/webhook`. События и чат
+     Kick присылает только туда: без адреса вход и метрики работают, а
+     оповещения и чат молчат.
+  3. ID и секрет — в `streamkit-external` (`KICK_CLIENT_ID`,
+     `KICK_CLIENT_SECRET`) и выкатка. Публичный ключ подписи вебхука вшит в
+     код; если Kick его сменит, новый кладётся в `KICK_WEBHOOK_PUBLIC_KEY`
+     (PEM, переводы строк — `\n`).
 - **DonationAlerts** — без приложения кнопки «Подключить DonationAlerts» на
   странице «Источники» нет:
   1. `https://www.donationalerts.com/application/clients` → «Создать

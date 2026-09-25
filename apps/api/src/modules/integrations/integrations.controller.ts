@@ -13,6 +13,7 @@ import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import {
   type AuthorizeResponse,
   type AvailablePlatform,
+  type Platform,
   platformSchema,
 } from '@streamkit/contracts';
 import type { Request, Response } from 'express';
@@ -71,7 +72,7 @@ export class IntegrationsController {
   @Post(':platform/authorize')
   async authorize(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('platform', new ZodValidationPipe(platformSchema)) platform: 'twitch' | 'youtube',
+    @Param('platform', new ZodValidationPipe(platformSchema)) platform: Platform,
     @Res({ passthrough: true }) response: Response,
   ): Promise<AuthorizeResponse> {
     const { url, state } = await this.connections.buildAuthorizeUrl(user.id, platform);
@@ -94,7 +95,7 @@ export class IntegrationsController {
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Get(':platform/callback')
   async callback(
-    @Param('platform', new ZodValidationPipe(platformSchema)) platform: 'twitch' | 'youtube',
+    @Param('platform', new ZodValidationPipe(platformSchema)) platform: Platform,
     @Query(zodQuery(callbackSchema)) query: z.infer<typeof callbackSchema>,
     @Req() request: Request,
     @Res() response: Response,

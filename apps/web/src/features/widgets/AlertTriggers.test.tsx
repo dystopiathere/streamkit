@@ -6,6 +6,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { type AlertEventType, defaultWidgetConfig } from '@streamkit/contracts';
 import { type SectionId, WidgetConfigForm } from './WidgetConfigForm';
 import { triggerSampleAmount } from './WidgetPreview';
+import { analyticsKeys } from '@/features/analytics/queries';
 import i18n from '@/lib/i18n';
 
 beforeAll(async () => {
@@ -57,6 +58,8 @@ function Editor({ triggers = [] }: { triggers?: unknown[] }): React.JSX.Element 
 
 function renderEditor(triggers?: unknown[]): void {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // Сценарии площадок видны, только когда площадка подключена.
+  client.setQueryData(analyticsKeys.channels, [{ id: 'channel-1', platform: 'twitch' }]);
   render(
     <QueryClientProvider client={client}>
       <Editor triggers={triggers} />

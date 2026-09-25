@@ -1,6 +1,6 @@
 # Consent to Personal Data Processing
 
-Version No. 5 of 23.09.2026
+Version No. 6 of 25.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/personal-data?lang=ru); if the
@@ -56,7 +56,7 @@ I agree to the transfer of the data necessary for these purposes to:
 
 The data is stored on servers located in the Russian Federation.
 
-If I connect Twitch or YouTube to the service myself, the service will call these
+If I connect Twitch, YouTube or Kick to the service myself, the service will call these
 platforms' servers outside the Russian Federation with the access tokens the
 platforms issued to me, in order to obtain my channel's metrics. I agree to such
 transfer of tokens for these purposes. Without connected platforms, no
@@ -76,8 +76,8 @@ anonymized or deleted within the periods set out in the Privacy Policy
 
 ## 7. Third-party data
 
-Information about event participants (name, message, amount), Twitch and YouTube
-chat viewers' messages, and private room guests' names, images and voices are not
+Information about event participants (name, message, amount), Twitch, YouTube and
+Kick chat viewers' messages, and private room guests' names, images and voices are not
 covered by this consent. I am their operator, and the Operator processes them on
 my behalf under section 13 of the Terms of Service
 (https://stream-kit.ru/legal/terms). When putting private room guests on stream,

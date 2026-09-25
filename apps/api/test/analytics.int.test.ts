@@ -324,7 +324,7 @@ describe('Аналитика каналов (feature)', () => {
 
     // В тестовом окружении client id площадок не заданы — кнопки подключения
     // быть не должно, но и падать приложение не имеет права.
-    expect(response.body).toHaveLength(2);
+    expect(response.body).toHaveLength(3);
     expect(response.body.every((item: { isConfigured: boolean }) => !item.isConfigured)).toBe(true);
   });
 
