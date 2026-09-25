@@ -1261,7 +1261,11 @@
     "disconnectNamed": "Disconnect {{name}}",
     "disconnectTitle": "Disconnect {{name}}?",
     "disconnectText": "The channel’s stats will be deleted for good, and its chat and events will stop arriving.",
-    "needsReconnect": "Reconnect Twitch: without the new permissions, Bits and Channel Points alerts will not arrive.",
+    "needsReconnect": {
+      "twitch": "Reconnect Twitch: without the new permissions, Bits and Channel Points alerts will not arrive.",
+      "youtube": "Reconnect YouTube: without the new permissions, channel data will not update.",
+      "kick": "Reconnect Kick: without the new permissions, channel alerts and chat will not arrive."
+    },
     "reconnect": "Reconnect"
   }
 }

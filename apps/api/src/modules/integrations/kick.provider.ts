@@ -25,9 +25,8 @@ export const KICK_SCOPES = ['user:read', 'channel:read', 'events:subscribe'];
 /**
  * События канала, на которые подписываются оповещения и сигнал эфира.
  *
- * `kicks.gifted` здесь нет, и это не забывчивость: KICKs — валюта площадки, а
- * не биты, и сценарий «{count} битов» назвал бы её неправдой. Отдельный тип
- * оповещения — отдельное решение. `chat.message.sent` тоже нет: на чат
+ * KICKs идут своим сценарием, а не битами: это валюта площадки, и «{count}
+ * битов» в кадре назвал бы её неправдой. `chat.message.sent` здесь нет: на чат
  * подписывается источник чата и только пока чат кто-то показывает.
  */
 export const KICK_ALERT_EVENTS = [
@@ -99,6 +98,9 @@ export function normalizeKickTokens(raw: KickTokenResponse): OAuthTokens {
   const expiresIn = Number(raw.expires_in);
   return normalizeTokens({
     ...raw,
+    // Без `scope` ответ значит «выдано ровно то, что просили» (RFC 6749, 5.1).
+    // Пустой список прав вместо этого навсегда требовал бы переподключения.
+    scope: raw.scope || KICK_SCOPES,
     expires_in: Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn : undefined,
   });
 }
