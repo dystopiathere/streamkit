@@ -17,14 +17,15 @@ resource "yandex_compute_instance" "app" {
   allow_stopping_for_update = true
 
   resources {
-    cores  = var.app_vm.cores
-    memory = var.app_vm.memory_gb
+    cores         = var.app_vm.cores
+    memory        = var.app_vm.memory_gb
+    core_fraction = var.app_vm.core_fraction
   }
 
   boot_disk {
     initialize_params {
       image_id = data.yandex_compute_image.ubuntu.id
-      type     = "network-ssd"
+      type     = var.app_vm.disk_type
       size     = var.app_vm.disk_gb
     }
   }
@@ -73,14 +74,15 @@ resource "yandex_compute_instance" "livekit" {
   allow_stopping_for_update = true
 
   resources {
-    cores  = var.livekit_vm.cores
-    memory = var.livekit_vm.memory_gb
+    cores         = var.livekit_vm.cores
+    memory        = var.livekit_vm.memory_gb
+    core_fraction = var.livekit_vm.core_fraction
   }
 
   boot_disk {
     initialize_params {
       image_id = data.yandex_compute_image.ubuntu.id
-      type     = "network-ssd"
+      type     = var.livekit_vm.disk_type
       size     = var.livekit_vm.disk_gb
     }
   }

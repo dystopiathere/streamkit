@@ -24,20 +24,6 @@ WORKDIR /app
 
 FROM base AS build
 ARG APP=web
-# VITE_-переменные попадают в бандл на этапе сборки, а не читаются в рантайме.
-# Значит, для другого домена API нужен пересобранный образ — это ограничение
-# любой статики, и лучше знать о нём здесь, чем искать причину в проде.
-#
-# Значение — ORIGIN API без `/api` (`https://api.stream-kit.ru`), а пустое —
-# «тот же хост». Раньше по умолчанию стояло `/api`: клиент дописывает префикс
-# сам, и образ, собранный без аргумента, ходил на `/api/api`, а сокет — в
-# namespace `/api`. Спасало только то, что compose всегда передавал адрес явно.
-ARG VITE_API_URL=""
-ENV VITE_API_URL=$VITE_API_URL
-# Только админке: ссылка на интерфейс статистики посещений. Пусто — ссылки нет.
-ARG VITE_STATS_URL=""
-ENV VITE_STATS_URL=$VITE_STATS_URL
-
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/config/package.json packages/config/
 COPY packages/contracts/package.json packages/contracts/
@@ -64,6 +50,24 @@ RUN for attempt in 1 2 3 4 5; do \
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     --mount=type=cache,id=pnpm-metadata,target=/root/.cache/pnpm \
     pnpm install --frozen-lockfile --filter "@streamkit/${APP}..."
+
+# VITE_-переменные попадают в бандл на этапе сборки, а не читаются в рантайме.
+# Значит, для другого домена API нужен пересобранный образ — это ограничение
+# любой статики, и лучше знать о нём здесь, чем искать причину в проде.
+#
+# Значение — ORIGIN API без `/api` (`https://api.stream-kit.ru`), а пустое —
+# «тот же хост». Раньше по умолчанию стояло `/api`: клиент дописывает префикс
+# сам, и образ, собранный без аргумента, ходил на `/api/api`, а сокет — в
+# namespace `/api`. Спасало только то, что compose всегда передавал адрес явно.
+#
+# Объявлены ПОСЛЕ установки зависимостей: ENV входит в ключ кэша каждого
+# следующего слоя, и адрес API выше установки делал слой node_modules своим
+# для каждого адреса — сборка в пулреквесте не попадала в кэш выпуска.
+ARG VITE_API_URL=""
+ENV VITE_API_URL=$VITE_API_URL
+# Только админке: ссылка на интерфейс статистики посещений. Пусто — ссылки нет.
+ARG VITE_STATS_URL=""
+ENV VITE_STATS_URL=$VITE_STATS_URL
 
 COPY packages/ packages/
 COPY apps/${APP}/ apps/${APP}/

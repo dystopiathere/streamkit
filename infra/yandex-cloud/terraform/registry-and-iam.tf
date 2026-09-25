@@ -59,3 +59,43 @@ resource "yandex_container_registry_iam_binding" "pushers" {
   role        = "container-registry.images.pusher"
   members     = ["serviceAccount:${yandex_iam_service_account.ci_pusher.id}"]
 }
+
+# Уборка образов выпусков. Каждый выпуск кладёт пять образов с тегом-sha, и
+# без уборки реестр хранил бы их вечно — место в нём оплачивается. Хранятся
+# последние выпуски, а не последние дни: откат выкаткой берёт образ из реестра,
+# и после месяца без выпусков он всё равно должен найтись.
+#
+# Репозитории появляются в реестре при первом push, а не из Terraform, поэтому
+# здесь они читаются источником данных. До первого выпуска их нет, и plan
+# падал бы — для этого registry_cleanup = null.
+locals {
+  released_images = var.registry_cleanup == null ? toset([]) : toset(["api", "migrate", "web", "overlay", "admin"])
+}
+
+data "yandex_container_repository" "release" {
+  for_each = local.released_images
+  name     = "${yandex_container_registry.main.id}/streamkit-${each.key}"
+}
+
+resource "yandex_container_repository_lifecycle_policy" "release" {
+  for_each      = local.released_images
+  name          = "keep-last-releases"
+  status        = "active"
+  repository_id = data.yandex_container_repository.release[each.key].id
+
+  # Теги выпусков — полный sha. Зеркала сторонних образов (mirror/*) помечены
+  # версиями и в эти репозитории не попадают.
+  rule {
+    description   = "Старше суток, кроме последних выпусков"
+    tag_regexp    = "^[0-9a-f]{40}$"
+    retained_top  = var.registry_cleanup
+    expire_period = "24h"
+  }
+
+  # Слои без тега: остаются после перезаписи и никому не нужны.
+  rule {
+    description   = "Без тега"
+    untagged      = true
+    expire_period = "24h"
+  }
+}

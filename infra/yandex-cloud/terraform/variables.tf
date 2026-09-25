@@ -59,34 +59,66 @@ variable "deploy_ssh_public_key" {
   type        = string
 }
 
+# core_fraction — гарантированная доля vCPU: 20, 50 или 100. Доля 50 стоит
+# заметно дешевле полной, а процессор до MVP простаивает: API и воркер ждут
+# сеть, а не считают. Поднять — правкой tfvars и `apply`; ВМ перезапустится
+# (allow_stopping_for_update), простой — минута-две.
+#
+# disk_type у существующей ВМ НЕ менять: тип загрузочного диска меняется только
+# пересозданием ВМ, а с ней пропадут выпущенные сертификаты Caddy и LiveKit.
 variable "app_vm" {
   description = "Размер ВМ приложений: api, worker, web, overlay, Caddy"
   type = object({
-    cores     = number
-    memory_gb = number
-    disk_gb   = number
+    cores         = number
+    memory_gb     = number
+    disk_gb       = number
+    core_fraction = optional(number, 50)
+    disk_type     = optional(string, "network-ssd")
   })
   default = {
     cores     = 2
     memory_gb = 4
     disk_gb   = 30
   }
+
+  validation {
+    condition     = contains([20, 50, 100], var.app_vm.core_fraction)
+    error_message = "app_vm.core_fraction — 20, 50 или 100."
+  }
 }
 
 variable "livekit_vm" {
   description = "Размер ВМ медиасервера. Узкое место SFU — канал, а не процессор (docs/adr/0010)"
   type = object({
-    cores     = number
-    memory_gb = number
-    disk_gb   = number
+    cores         = number
+    memory_gb     = number
+    disk_gb       = number
+    core_fraction = optional(number, 50)
+    disk_type     = optional(string, "network-ssd")
   })
   default = {
     cores     = 2
     memory_gb = 4
     disk_gb   = 20
   }
+
+  # 20 % медиасерверу не годится: при исчерпании доли процессор троттлится
+  # рывками, а в пересылке пакетов рывок — это заикание звука в эфире.
+  validation {
+    condition     = contains([50, 100], var.livekit_vm.core_fraction)
+    error_message = "livekit_vm.core_fraction — 50 или 100."
+  }
 }
 
+# Классы хостов баз — самые дорогие строки счёта. По умолчанию обе базы на
+# burstable-классах (2 vCPU с гарантией 50 %, 4 ГБ): до первых платящих
+# стримеров нагрузки почти нет. У PostgreSQL и Valkey они называются по-разному:
+# b3-c1-m4 есть только у Valkey, у PostgreSQL burstable — b2.medium (Cascade
+# Lake). Рост — сменой класса в tfvars, без переноса данных: для PostgreSQL
+# c3-c2-m4 (те же 4 ГБ, полные ядра), затем s3-c2-m8; для Valkey hm3-c2-m8.
+# Смена класса
+# перезапускает хост кластера из одного хоста — несколько минут простоя,
+# делать в тихое время. Диск только растёт: уменьшить его нельзя.
 variable "postgresql" {
   description = "Управляемый PostgreSQL. Список классов хостов: yc managed-postgresql resource-preset list"
   type = object({
@@ -94,7 +126,7 @@ variable "postgresql" {
     disk_gb            = number
   })
   default = {
-    resource_preset_id = "s3-c2-m8"
+    resource_preset_id = "b2.medium"
     disk_gb            = 20
   }
 }
@@ -107,7 +139,9 @@ variable "valkey" {
     version            = string
   })
   default = {
-    resource_preset_id = "hm3-c2-m8"
+    # Приложению нужны pub/sub, блокировки, счётчики лимитов и ключи
+    # дедупликации — десятки мегабайт, а не восемь гигабайт hm3-c2-m8.
+    resource_preset_id = "b3-c1-m4"
     disk_gb            = 16
     # С суффиксом: API отвечает «version not found» на голое "8.1". Допустимые
     # значения — 7.2-valkey, 8.0-valkey, 8.1-valkey, 9.0-valkey.
@@ -166,5 +200,16 @@ variable "yandex_dkim" {
   validation {
     condition     = var.yandex_dkim == null || (!strcontains(var.yandex_dkim.value, "\"") && startswith(var.yandex_dkim.value, "v=DKIM1"))
     error_message = "yandex_dkim.value — строка Yandex 360 вида v=DKIM1;...;p=..., без кавычек."
+  }
+}
+
+variable "registry_cleanup" {
+  description = "Уборка старых образов выпусков в Container Registry: сколько последних выпусков хранить. null — не убирать (нужно до первого выпуска: репозиториев образов ещё нет)"
+  type        = number
+  default     = 15
+
+  validation {
+    condition     = var.registry_cleanup == null || try(var.registry_cleanup >= 3, false)
+    error_message = "registry_cleanup — не меньше трёх выпусков: откат выкаткой берёт образы из реестра."
   }
 }
