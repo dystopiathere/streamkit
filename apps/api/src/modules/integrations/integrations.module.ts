@@ -5,6 +5,8 @@ import { EventsModule } from '../events/events.module';
 import { ConnectorManager, ConnectorScheduler } from './connector-manager.service';
 import { DonationSourcesController } from './donation-sources.controller';
 import { DonationSourcesService } from './donation-sources.service';
+import { DonatePayApi } from './donatepay.api';
+import { DonatePayConnector } from './donatepay.connector';
 import { DonationAlertsApi } from './donationalerts.api';
 import { DonationAlertsConnector } from './donationalerts.connector';
 import { IntegrationsController } from './integrations.controller';
@@ -40,6 +42,7 @@ import { YouTubeProvider } from './youtube.provider';
     OAuthStateService,
     PlatformConnectionService,
     DonationAlertsApi,
+    DonatePayApi,
     DonationSourcesService,
   ],
   exports: [
@@ -47,6 +50,7 @@ import { YouTubeProvider } from './youtube.provider';
     PlatformTokenService,
     PlatformConnectionService,
     DonationAlertsApi,
+    DonatePayApi,
     TwitchProvider,
     KickProvider,
   ],
@@ -65,6 +69,7 @@ export class IntegrationsModule {}
   imports: [EventsModule, IntegrationsModule],
   providers: [
     DonationAlertsConnector,
+    DonatePayConnector,
     TwitchEventSubConnector,
     KickEventsConnector,
     ConnectorManager,

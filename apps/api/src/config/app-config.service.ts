@@ -222,6 +222,14 @@ export class AppConfig {
     };
   }
 
+  /** Адрес API DonatePay: боевой, в тестах — поддельный сервер. */
+  get donatePayBaseUrl(): string {
+    return (this.config.get<string>('DONATEPAY_BASE_URL') ?? 'https://donatepay.ru').replace(
+      /\/+$/,
+      '',
+    );
+  }
+
   /**
    * Подключение к LiveKit, либо null — комнаты не настроены.
    *

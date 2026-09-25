@@ -11,6 +11,7 @@ const FAKE_YOOKASSA_PORT = process.env.FAKE_YOOKASSA_PORT ?? '3099';
 const FAKE_DONATIONALERTS_PORT = process.env.FAKE_DONATIONALERTS_PORT ?? '3098';
 const FAKE_TWITCH_PORT = process.env.FAKE_TWITCH_PORT ?? '3097';
 const FAKE_YOUTUBE_PORT = process.env.FAKE_YOUTUBE_PORT ?? '3096';
+const FAKE_DONATEPAY_PORT = process.env.FAKE_DONATEPAY_PORT ?? '3095';
 
 /**
  * Сквозные тесты гоняются по СОБРАННЫМ приложениям, а не по dev-серверам.
@@ -89,6 +90,8 @@ export default defineConfig({
         DONATIONALERTS_CLIENT_ID: 'e2e-da-client',
         DONATIONALERTS_CLIENT_SECRET: 'e2e-da-secret',
         DONATIONALERTS_BASE_URL: `http://127.0.0.1:${FAKE_DONATIONALERTS_PORT}`,
+        // DonatePay — фальшивый, ниже: проверка ключа API профилем.
+        DONATEPAY_BASE_URL: `http://127.0.0.1:${FAKE_DONATEPAY_PORT}`,
         // Twitch — фальшивый, ниже: вход и профиль канала. Без подключённого
         // Twitch не создаётся виджет чата и нет чата в окне эфира.
         TWITCH_CLIENT_ID: 'e2e-tw-client',
@@ -124,6 +127,13 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 10_000,
       env: { FAKE_DONATIONALERTS_PORT },
+    },
+    {
+      command: 'node fake-donatepay.mjs',
+      url: `http://127.0.0.1:${FAKE_DONATEPAY_PORT}/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 10_000,
+      env: { FAKE_DONATEPAY_PORT },
     },
     {
       command: 'node fake-yookassa.mjs',

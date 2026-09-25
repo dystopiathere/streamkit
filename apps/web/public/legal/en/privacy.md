@@ -1,6 +1,6 @@
 # StreamKit Privacy Policy
 
-Version No. 15 of 25.09.2026
+Version No. 16 of 25.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/privacy?lang=ru); if the two
@@ -33,11 +33,11 @@ secret, if it is enabled.
 - the consent log: which document, which version, and when it was accepted or
   withdrawn.
 
-**Connected platforms** (Twitch, YouTube, Kick, DonationAlerts): access tokens issued
-by these services (stored encrypted and not shown even to the owner), the
+**Connected platforms** (Twitch, YouTube, Kick, DonationAlerts, DonatePay): access tokens issued
+by these services and the DonatePay API key (stored encrypted and not shown even to the owner), the
 channel ID, handle, name and image, channel metrics (viewers, subscribers, total
 views, whether the channel is live), the title, category and start time of the
-current stream, and for DonationAlerts, the account ID and name. From Twitch and
+current stream, and for DonationAlerts and DonatePay, the account ID and name. From Twitch and
 Kick the service also receives channel events for alerts — follows, subscriptions,
 gifted subscriptions, Channel Points rewards, from Twitch also Bits and
 raids, and from Kick gifts in KICKs — and from Twitch, YouTube and Kick, the channel's chat messages while the user has a chat widget or the
@@ -45,7 +45,8 @@ stream window open; we process the data of their authors on behalf of the user
 (section 4). We do not store or use
 the email address of the platform account. DonationAlerts sends it together with
 the profile, without which donations cannot be connected — we discard it
-immediately without storing it. What exactly we receive from Google and how we
+immediately without storing it. DonatePay sends the account balance together with
+the profile — we do not store it either. What exactly we receive from Google and how we
 use it is described in section 5.
 
 **Payment for the paid plans:** the chosen plan, amount and billing period, payment and refund

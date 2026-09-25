@@ -1,12 +1,25 @@
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import type { DonationServiceView, WebhookSourceView } from '@streamkit/contracts';
+import {
+  type ApiKeyDonationService,
+  apiKeyDonationServiceSchema,
+  type DonationService,
+  type DonationServiceKey,
+  donationServiceKeySchema,
+  type DonationServiceView,
+  type WebhookSourceView,
+} from '@streamkit/contracts';
 import {
   Button,
   Card,
   ConfirmDialog,
+  describeField,
+  FieldError,
+  FieldHint,
   Input,
   Label,
   StatusPill,
@@ -15,17 +28,30 @@ import {
 import { useChannels } from '@/features/analytics/queries';
 import {
   useConnectDonationService,
+  useConnectDonationServiceKey,
   useDisconnectDonationService,
   useDonationSources,
   useRotateWebhookSecret,
 } from '@/features/sources/queries';
 import { ApiError } from '@/lib/api';
 import { API_BASE } from '@/lib/config';
+import { localizedResolver } from '@/lib/form-errors';
 import { intlLocale } from '@/lib/locale';
 import { PLATFORMS_PATH } from '@/components/navigation';
 
 const errorText = (error: unknown, fallback: string): string =>
   error instanceof ApiError ? error.message : fallback;
+
+/** Названия сервисов для сообщения о возврате из OAuth: список источников к этому моменту может ещё грузиться. */
+const SERVICE_TITLES: Record<DonationService, string> = {
+  donationalerts: 'DonationAlerts',
+  donatepay: 'DonatePay',
+};
+
+/** Где стример берёт ключ API. Страница открывается после входа в кабинет сервиса. */
+const API_KEY_PAGES: Record<ApiKeyDonationService, string> = {
+  donatepay: 'https://donatepay.ru/page/api',
+};
 
 const formatDate = (iso: string): string =>
   new Date(iso).toLocaleString(intlLocale(), { dateStyle: 'medium', timeStyle: 'short' });
@@ -33,8 +59,8 @@ const formatDate = (iso: string): string =>
 /**
  * Источники донатов.
  *
- * Донат-сервис подключается кнопкой: вход в сервис, возврат сюда, и воркер сам
- * держит соединение. Вебхук — ниже и свёрнут: он для тех, кто пишет свою
+ * Донат-сервис подключается кнопкой (вход в сервис и возврат сюда) или ключом
+ * API из кабинета сервиса — как тот умеет. Дальше соединение держит воркер. Вебхук — ниже и свёрнут: он для тех, кто пишет свою
  * интеграцию, и без программирования им не воспользоваться.
  */
 export function SourcesPage(): React.JSX.Element {
@@ -114,13 +140,15 @@ function useConnectionResult(): void {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
   const status = params.get('status');
+  const service = params.get('service');
 
   useEffect(() => {
     if (!status) return;
-    if (status === 'connected') toast.success(t('sources.connected'));
+    const title = SERVICE_TITLES[service as DonationService] ?? '';
+    if (status === 'connected') toast.success(t('sources.connected', { service: title }));
     else if (status === 'failed') toast.error(t('sources.connectFailed'));
     setParams(new URLSearchParams(), { replace: true });
-  }, [status, setParams, t]);
+  }, [status, service, setParams, t]);
 }
 
 function ServiceCard({ service }: { service: DonationServiceView }): React.JSX.Element {
@@ -130,85 +158,170 @@ function ServiceCard({ service }: { service: DonationServiceView }): React.JSX.E
   const [confirming, setConfirming] = useState(false);
 
   const state = !service.isConnected ? 'off' : service.isEnabled ? 'on' : 'broken';
+  const parsedKeyService = apiKeyDonationServiceSchema.safeParse(service.service);
+  const keyService =
+    service.connection === 'api_key' && parsedKeyService.success ? parsedKeyService.data : null;
   const onConnect = (): void =>
     connect.mutate(service.service, {
       onError: (error) => toast.error(errorText(error, t('common.error'))),
     });
 
+  const titleId = `${service.service}-title`;
+
   return (
-    <Card className="space-y-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <h2 className="font-medium">{service.title}</h2>
-        <StatusPill tone={state === 'on' ? 'success' : state === 'broken' ? 'warning' : 'neutral'}>
-          {t(`sources.state.${state}`)}
-        </StatusPill>
-      </div>
-
-      {!service.isConfigured ? (
-        <p className="text-sm text-muted">{t('sources.notConfigured')}</p>
-      ) : state === 'off' ? (
-        <>
-          <p className="text-sm text-muted">{t('sources.donationalerts.description')}</p>
-          <Button isLoading={connect.isPending} onClick={onConnect}>
-            {t('sources.connect', { service: service.title })}
-          </Button>
-        </>
-      ) : (
-        <>
-          <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[max-content_1fr]">
-            <dt className="text-muted">{t('sources.account')}</dt>
-            <dd className="m-0">{service.accountName ?? '—'}</dd>
-            <dt className="text-muted">{t('sources.lastEvent')}</dt>
-            <dd className="m-0">
-              {service.lastEventAt ? formatDate(service.lastEventAt) : t('sources.noEvents')}
-            </dd>
-          </dl>
-
-          {state === 'broken' ? (
-            <p role="alert" className="text-sm text-warning">
-              {service.disabledReason ?? t('sources.brokenFallback')}
-            </p>
-          ) : (
-            <p className="text-sm text-muted">{t('sources.donationalerts.check')}</p>
-          )}
-
-          <div className="flex flex-wrap gap-2">
-            {state === 'broken' ? (
-              <Button isLoading={connect.isPending} onClick={onConnect}>
-                {t('sources.reconnect')}
-              </Button>
-            ) : null}
-            <Button
-              variant="secondary"
-              aria-label={t('sources.disconnectNamed', { service: service.title })}
-              onClick={() => setConfirming(true)}
-            >
-              {t('sources.disconnect')}
-            </Button>
-          </div>
-
-          <ConfirmDialog
-            open={confirming}
-            title={t('sources.disconnectTitle', { service: service.title })}
-            confirmLabel={t('sources.disconnect')}
-            cancelLabel={t('common.cancel')}
-            isPending={disconnect.isPending}
-            onClose={() => setConfirming(false)}
-            onConfirm={() =>
-              disconnect.mutate(service.service, {
-                onSuccess: () => {
-                  setConfirming(false);
-                  toast.success(t('sources.disconnected'));
-                },
-                onError: (error) => toast.error(errorText(error, t('common.error'))),
-              })
-            }
+    <section aria-labelledby={titleId}>
+      <Card className="space-y-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h2 id={titleId} className="font-medium">
+            {service.title}
+          </h2>
+          <StatusPill
+            tone={state === 'on' ? 'success' : state === 'broken' ? 'warning' : 'neutral'}
           >
-            {t('sources.disconnectText')}
-          </ConfirmDialog>
-        </>
+            {t(`sources.state.${state}`)}
+          </StatusPill>
+        </div>
+
+        {!service.isConfigured ? (
+          <p className="text-sm text-muted">{t('sources.notConfigured')}</p>
+        ) : state === 'off' ? (
+          <>
+            <p className="text-sm text-muted">{t(`sources.${service.service}.description`)}</p>
+            {keyService ? (
+              <ApiKeyForm service={keyService} title={service.title} />
+            ) : (
+              <Button isLoading={connect.isPending} onClick={onConnect}>
+                {t('sources.connect', { service: service.title })}
+              </Button>
+            )}
+          </>
+        ) : (
+          <>
+            <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[max-content_1fr]">
+              <dt className="text-muted">{t('sources.account')}</dt>
+              <dd className="m-0">{service.accountName ?? '—'}</dd>
+              <dt className="text-muted">{t('sources.lastEvent')}</dt>
+              <dd className="m-0">
+                {service.lastEventAt ? formatDate(service.lastEventAt) : t('sources.noEvents')}
+              </dd>
+            </dl>
+
+            {state === 'broken' ? (
+              <p role="alert" className="text-sm text-warning">
+                {service.disabledReason ?? t('sources.brokenFallback')}
+              </p>
+            ) : (
+              <p className="text-sm text-muted">{t(`sources.${service.service}.check`)}</p>
+            )}
+
+            {state === 'broken' && keyService ? (
+              <ApiKeyForm service={keyService} title={service.title} isReconnect />
+            ) : null}
+
+            <div className="flex flex-wrap gap-2">
+              {state === 'broken' && !keyService ? (
+                <Button isLoading={connect.isPending} onClick={onConnect}>
+                  {t('sources.reconnect')}
+                </Button>
+              ) : null}
+              <Button
+                variant="secondary"
+                aria-label={t('sources.disconnectNamed', { service: service.title })}
+                onClick={() => setConfirming(true)}
+              >
+                {t('sources.disconnect')}
+              </Button>
+            </div>
+
+            <ConfirmDialog
+              open={confirming}
+              title={t('sources.disconnectTitle', { service: service.title })}
+              confirmLabel={t('sources.disconnect')}
+              cancelLabel={t('common.cancel')}
+              isPending={disconnect.isPending}
+              onClose={() => setConfirming(false)}
+              onConfirm={() =>
+                disconnect.mutate(service.service, {
+                  onSuccess: () => {
+                    setConfirming(false);
+                    toast.success(t('sources.disconnected'));
+                  },
+                  onError: (error) => toast.error(errorText(error, t('common.error'))),
+                })
+              }
+            >
+              {t('sources.disconnectText')}
+            </ConfirmDialog>
+          </>
+        )}
+      </Card>
+    </section>
+  );
+}
+
+/**
+ * Ключ API донат-сервиса. Поле пароля: ключ открывает доступ к донатам и
+ * балансу аккаунта, и показывать его в эфире, где стример настраивает
+ * источники, незачем. После подключения ключ не показывается нигде.
+ */
+function ApiKeyForm({
+  service,
+  title,
+  isReconnect = false,
+}: {
+  service: ApiKeyDonationService;
+  title: string;
+  isReconnect?: boolean;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const connect = useConnectDonationServiceKey();
+  const form = useForm<DonationServiceKey>({
+    resolver: localizedResolver(zodResolver(donationServiceKeySchema)),
+    defaultValues: { apiKey: '' },
+  });
+  const error = form.formState.errors.apiKey?.message;
+  const fieldId = `${service}-api-key`;
+
+  return (
+    <form
+      noValidate
+      className="max-w-md space-y-3"
+      onSubmit={form.handleSubmit((values) =>
+        connect.mutate(
+          { service, apiKey: values.apiKey },
+          {
+            onSuccess: () => {
+              form.reset();
+              toast.success(t('sources.connected', { service: title }));
+            },
+            onError: (failure) => toast.error(errorText(failure, t('common.error'))),
+          },
+        ),
       )}
-    </Card>
+    >
+      <div>
+        <Label htmlFor={fieldId}>{t('sources.apiKey.label', { service: title })}</Label>
+        <Input
+          id={fieldId}
+          type="password"
+          autoComplete="off"
+          spellCheck={false}
+          {...describeField(fieldId, { hint: true, error })}
+          {...form.register('apiKey')}
+        />
+        <FieldError id={fieldId} message={error} />
+        <FieldHint id={fieldId}>
+          {t('sources.apiKey.hintBefore')}{' '}
+          <a href={API_KEY_PAGES[service]} target="_blank" rel="noreferrer" className="underline">
+            {t(`sources.${service}.keyPage`)}
+          </a>
+          {t('sources.apiKey.hintAfter')}
+        </FieldHint>
+      </div>
+      <Button type="submit" isLoading={connect.isPending}>
+        {isReconnect ? t('sources.apiKey.replace') : t('sources.connect', { service: title })}
+      </Button>
+    </form>
   );
 }
 

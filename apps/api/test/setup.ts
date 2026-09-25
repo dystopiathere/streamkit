@@ -43,6 +43,7 @@ for (const key of [
   'DONATIONALERTS_CLIENT_SECRET',
   'DONATIONALERTS_BASE_URL',
   'DONATIONALERTS_SOCKET_URL',
+  'DONATEPAY_BASE_URL',
   // ЮKassa — по той же причине: с ключами оплата настроена и комнаты платные,
   // без них бесплатны. Тест оплаты выставляет ключи сам.
   'YOOKASSA_SHOP_ID',

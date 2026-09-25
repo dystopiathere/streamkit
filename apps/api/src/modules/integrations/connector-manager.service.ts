@@ -10,6 +10,7 @@ import { RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { EventsService } from '../events/events.service';
 import type { DonationConnector } from './donation-provider';
+import { DonatePayConnector } from './donatepay.connector';
 import { DonationAlertsConnector } from './donationalerts.connector';
 import { KickEventsConnector } from './kick-events.connector';
 import { PlatformTokenService, type CredentialProvider } from './platform-token.service';
@@ -26,7 +27,7 @@ import { TwitchEventSubConnector } from './twitch-eventsub.connector';
 export const CONNECTOR_TICK_MS = 10_000;
 
 /** Донат-сервисы с живым соединением. Вебхук сюда не входит: он приходит к нам сам. */
-const CONNECTED_PROVIDERS = ['DONATIONALERTS'] as const;
+const CONNECTED_PROVIDERS = ['DONATIONALERTS', 'DONATEPAY'] as const;
 
 interface WantedConnection {
   userId: string;
@@ -66,10 +67,12 @@ export class ConnectorManager implements OnApplicationBootstrap, OnApplicationSh
     private readonly events: EventsService,
     private readonly bus: RealtimeBus,
     donationAlerts: DonationAlertsConnector,
+    donatePay: DonatePayConnector,
     twitch: TwitchEventSubConnector,
     kick: KickEventsConnector,
   ) {
     this.connectors.set(donationAlerts.provider, donationAlerts);
+    this.connectors.set(donatePay.provider, donatePay);
     this.connectors.set(twitch.provider, twitch);
     this.connectors.set(kick.provider, kick);
   }

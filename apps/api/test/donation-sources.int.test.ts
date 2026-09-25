@@ -332,3 +332,264 @@ describe('Донат-сервисы: DonationAlerts (feature)', () => {
     await request(server()).get('/api/integrations/donations').expect(401);
   });
 });
+
+/**
+ * Поддельный DonatePay по поведению боевого API: ключ — параметром
+ * `access_token`, отвергнутый ключ — 200 со `status: "error"`, донаты — от
+ * новых к старым, время — `DateTime` PHP в московской зоне.
+ */
+class FakeDonatePay {
+  readonly server: Server;
+  readonly donations: Array<Record<string, unknown>> = [];
+  readonly requests: URL[] = [];
+  validKey = 'dp-key';
+
+  constructor() {
+    this.server = createServer((req, res) => this.route(req, res));
+  }
+
+  get baseUrl(): string {
+    return `http://127.0.0.1:${(this.server.address() as AddressInfo).port}`;
+  }
+
+  /** Донат, пришедший `agoMs` назад. */
+  add(id: number, overrides: Record<string, unknown> = {}, agoMs = 1_000): void {
+    const moscow = new Date(Date.now() - agoMs + 3 * 3_600_000).toISOString();
+    this.donations.unshift({
+      id,
+      what: 'Донат',
+      sum: '250.50',
+      commission: '0.00',
+      status: 'success',
+      type: 'donation',
+      vars: { name: 'Зритель DP', comment: 'Привет из DonatePay', user_ip: '203.0.113.7' },
+      comment: 'Привет из DonatePay',
+      created_at: {
+        date: `${moscow.slice(0, 10)} ${moscow.slice(11, 19)}.000000`,
+        timezone_type: 3,
+        timezone: 'Europe/Moscow',
+      },
+      ...overrides,
+    });
+  }
+
+  private route(req: IncomingMessage, res: import('node:http').ServerResponse): void {
+    const url = new URL(req.url ?? '/', this.baseUrl);
+    this.requests.push(url);
+    const json = (payload: unknown) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(payload));
+    };
+    const key = url.searchParams.get('access_token');
+    if (!key) return json({ status: 'error', message: 'Empty token' });
+    if (key !== this.validKey) return json({ status: 'error', message: 'Incorrect token' });
+
+    if (req.method === 'GET' && url.pathname === '/api/v1/user') {
+      return json({
+        status: 'success',
+        data: { id: 4242, name: 'Стример DP', avatar: null, balance: 1500, cashout_sum: 0 },
+      });
+    }
+    if (req.method === 'GET' && url.pathname === '/api/v1/transactions') {
+      const limit = Number(url.searchParams.get('limit') ?? 25);
+      const data = this.donations.slice(0, limit);
+      return json({ status: 'success', count: data.length, data });
+    }
+    res.writeHead(404);
+    res.end();
+  }
+}
+
+describe('Донат-сервисы: DonatePay (feature)', () => {
+  const fake = new FakeDonatePay();
+  let harness: TestHarness;
+  let manager: ConnectorManager;
+  let accessToken: string;
+  let userId: string;
+
+  beforeAll(async () => {
+    await new Promise<void>((resolve) => fake.server.listen(0, '127.0.0.1', resolve));
+    process.env.DONATEPAY_BASE_URL = fake.baseUrl;
+    harness = await createHarness([DonationConnectorsModule]);
+    manager = harness.app.get(ConnectorManager);
+  });
+
+  afterAll(async () => {
+    await manager.onApplicationShutdown();
+    await harness.close();
+    await new Promise<void>((resolve) => fake.server.close(() => resolve()));
+    delete process.env.DONATEPAY_BASE_URL;
+  });
+
+  beforeEach(async () => {
+    await manager.onApplicationShutdown();
+    fake.donations.length = 0;
+    fake.requests.length = 0;
+    fake.validKey = 'dp-key';
+    await harness.reset();
+    const registration = await request(server())
+      .post('/api/auth/register')
+      .send(registrationPayload())
+      .expect(201);
+    accessToken = registration.body.accessToken as string;
+    userId = registration.body.user.id as string;
+  });
+
+  const server = () => harness.app.getHttpServer();
+  const auth = () => ({ Authorization: `Bearer ${accessToken}` });
+  const donatePay = async () =>
+    (await request(server()).get('/api/integrations/donations').set(auth()).expect(200)).body
+      .services[1];
+  const transactionPolls = () =>
+    fake.requests.filter((url) => url.pathname === '/api/v1/transactions').length;
+
+  function connect(apiKey = 'dp-key'): request.Test {
+    return request(server())
+      .post('/api/integrations/donations/donatepay/key')
+      .set(auth())
+      .send({ apiKey: `  ${apiKey}  ` });
+  }
+
+  /**
+   * Опрос — раз в двадцать секунд, и ждать его тест не станет: перезапуск
+   * воркера опрашивает сразу, а слот опроса снимается, как если бы шаг прошёл.
+   * Заодно это проверяет, что курсор переживает перезапуск.
+   */
+  async function pollNow(): Promise<void> {
+    await manager.onApplicationShutdown();
+    await harness.redis.del(`streamkit:donatepay:poll:${userId}`);
+    const before = transactionPolls();
+    await manager.reconcile();
+    await until(() => transactionPolls() > before);
+    // Разбор страницы и запись события — после ответа.
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+
+  it('подключается ключом API, показывает аккаунт и хранит ключ только шифротекстом', async () => {
+    expect(await donatePay()).toMatchObject({
+      service: 'donatepay',
+      connection: 'api_key',
+      isConfigured: true,
+      isConnected: false,
+    });
+
+    await connect().expect(204);
+
+    expect(await donatePay()).toMatchObject({
+      isConnected: true,
+      isEnabled: true,
+      accountName: 'Стример DP',
+      disabledReason: null,
+    });
+    const credential = await harness.prisma.integrationCredential.findFirstOrThrow({
+      where: { userId, provider: 'donatepay' },
+    });
+    expect(credential.accessTokenEncrypted).not.toContain('dp-key');
+    const source = await harness.prisma.donationSource.findFirstOrThrow({ where: { userId } });
+    expect(source).toMatchObject({ provider: 'DONATEPAY', externalAccountId: '4242' });
+    // Баланс из профиля не сохраняется.
+    expect(JSON.stringify(source)).not.toContain('1500');
+  });
+
+  it('неверный ключ — 400 с подсказкой, источник не заводится', async () => {
+    const response = await connect('wrong-key').expect(400);
+    expect(response.body.message).toMatch(/не принял ключ API/);
+    await connect('   ').expect(400);
+    expect(await harness.prisma.donationSource.count({ where: { userId } })).toBe(0);
+    expect(await harness.prisma.integrationCredential.count({ where: { userId } })).toBe(0);
+  });
+
+  it('OAuth у DonatePay нет, а ключ не принимается у DonationAlerts', async () => {
+    await request(server())
+      .post('/api/integrations/donations/donatepay/authorize')
+      .set(auth())
+      .expect(400);
+    await request(server())
+      .post('/api/integrations/donations/donationalerts/key')
+      .set(auth())
+      .send({ apiKey: 'dp-key' })
+      .expect(400);
+  });
+
+  it('воркер не показывает историю, а новый донат попадает в ленту один раз', async () => {
+    fake.add(100, {}, 3_600_000);
+    await connect().expect(204);
+
+    await pollNow();
+    expect(await harness.prisma.alertEvent.count({ where: { userId } })).toBe(0);
+
+    fake.add(101);
+    await pollNow();
+    await pollNow();
+
+    const events = await harness.prisma.alertEvent.findMany({ where: { userId } });
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      provider: 'DONATEPAY',
+      externalId: '101',
+      username: 'Зритель DP',
+      message: 'Привет из DonatePay',
+      amountMinor: 25_050,
+      currency: 'RUB',
+    });
+    expect(Math.abs(events[0]!.occurredAt.getTime() - (Date.now() - 1_000))).toBeLessThan(10_000);
+    // Ключ уходит DonatePay параметром — и только туда.
+    expect(fake.requests.every((url) => url.searchParams.get('access_token') === 'dp-key')).toBe(
+      true,
+    );
+  });
+
+  it('донат, ждавший оплаты, показывается, когда станет успешным', async () => {
+    await connect().expect(204);
+    await pollNow();
+
+    fake.add(201, { status: 'wait' });
+    fake.add(202);
+    await pollNow();
+    expect(
+      (await harness.prisma.alertEvent.findMany({ where: { userId } })).map((e) => e.externalId),
+    ).toEqual(['202']);
+
+    fake.donations.find((item) => item.id === 201)!.status = 'success';
+    await pollNow();
+    const ids = (await harness.prisma.alertEvent.findMany({ where: { userId } }))
+      .map((e) => e.externalId)
+      .sort();
+    expect(ids).toEqual(['201', '202']);
+  });
+
+  it('отозванный ключ выключает источник с причиной, новый ключ его чинит', async () => {
+    await connect().expect(204);
+    fake.validKey = 'rotated-key';
+    await pollNow();
+
+    await until(async () => {
+      const source = await harness.prisma.donationSource.findFirst({ where: { userId } });
+      return source?.isEnabled === false;
+    });
+    const broken = await donatePay();
+    expect(broken).toMatchObject({ isConnected: true, isEnabled: false });
+    expect(broken.disabledReason).toMatch(/вставьте новый ключ/);
+    expect(manager.activeCount).toBe(0);
+
+    await connect('rotated-key').expect(204);
+    expect(await donatePay()).toMatchObject({ isEnabled: true, disabledReason: null });
+  });
+
+  it('отключение убирает источник и ключ, воркер перестаёт опрашивать', async () => {
+    await connect().expect(204);
+    await manager.reconcile();
+    expect(manager.activeCount).toBe(1);
+
+    await request(server()).delete('/api/integrations/donations/donatepay').set(auth()).expect(204);
+    await manager.reconcile();
+
+    expect(manager.activeCount).toBe(0);
+    expect(
+      await harness.prisma.integrationCredential.count({
+        where: { userId, provider: 'donatepay' },
+      }),
+    ).toBe(0);
+    expect(await donatePay()).toMatchObject({ isConnected: false });
+  });
+});

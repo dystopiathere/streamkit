@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Delete,
   Get,
@@ -13,8 +14,12 @@ import {
 } from '@nestjs/common';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import {
+  type ApiKeyDonationService,
+  apiKeyDonationServiceSchema,
   type AuthorizeResponse,
   type DonationService,
+  type DonationServiceKey,
+  donationServiceKeySchema,
   type DonationSources,
   donationServiceSchema,
 } from '@streamkit/contracts';
@@ -113,6 +118,32 @@ export class DonationSourcesController {
       this.logger.warn({ err: error, service }, 'Подключение донат-сервиса не завершено');
       response.redirect(this.dashboardUrl(service, 'failed'));
     }
+  }
+
+  /**
+   * Подключение ключом API (DonatePay). Ключ проверяется у сервиса сразу:
+   * неверный отвечает 400 с текстом для стримера, а не оставляет источник,
+   * который выключится на первом опросе.
+   *
+   * Лимит — чтобы ручку нельзя было превратить в проверялку чужих ключей
+   * DonatePay нашими запросами.
+   */
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Post(':service/key')
+  async connectWithKey(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('service', new ZodValidationPipe(apiKeyDonationServiceSchema))
+    service: ApiKeyDonationService,
+    @Body(new ZodValidationPipe(donationServiceKeySchema)) body: DonationServiceKey,
+    @Req() request: Request,
+  ): Promise<void> {
+    await this.sources.connectWithKey(
+      user.id,
+      service,
+      body.apiKey,
+      this.audit.contextFromRequest(request),
+    );
   }
 
   @HttpCode(HttpStatus.NO_CONTENT)

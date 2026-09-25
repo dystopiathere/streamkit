@@ -1,10 +1,33 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import type { DonationService, DonationSources } from '@streamkit/contracts';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import type {
+  ApiKeyDonationService,
+  DonationService,
+  DonationServiceView,
+  DonationSources,
+} from '@streamkit/contracts';
+import type { DonationSource, EventProvider } from '@prisma/client';
+import type { Redis } from 'ioredis';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
+import { PlatformAuthError } from '../../common/http/platform-errors';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { REDIS_CLIENT } from '../../common/redis/redis.module';
+import { DonatePayApi, type DonatePayProfile } from './donatepay.api';
+import { donatePayCursorKey } from './donatepay.connector';
 import { DonationAlertsApi } from './donationalerts.api';
 import { OAuthStateService } from './oauth-state.service';
 import { PlatformTokenService } from './platform-token.service';
+
+/** Строка источника в БД для каждого сервиса. */
+const SERVICE_PROVIDERS = {
+  donationalerts: 'DONATIONALERTS',
+  donatepay: 'DONATEPAY',
+} as const satisfies Record<DonationService, EventProvider>;
 
 /**
  * Донат-сервисы стримера: что подключено, подключение и отключение.
@@ -20,6 +43,8 @@ export class DonationSourcesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly donationAlerts: DonationAlertsApi,
+    private readonly donatePay: DonatePayApi,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly tokens: PlatformTokenService,
     private readonly state: OAuthStateService,
     private readonly audit: AuditService,
@@ -27,21 +52,22 @@ export class DonationSourcesService {
 
   async list(userId: string): Promise<DonationSources> {
     const sources = await this.prisma.donationSource.findMany({ where: { userId } });
-    const alerts = sources.find((source) => source.provider === 'DONATIONALERTS');
-    const webhook = sources.find((source) => source.provider === 'WEBHOOK');
+    const find = (provider: EventProvider): DonationSource | undefined =>
+      sources.find((source) => source.provider === provider);
+    const webhook = find('WEBHOOK');
 
     return {
       services: [
-        {
-          service: 'donationalerts',
-          title: 'DonationAlerts',
-          isConfigured: this.donationAlerts.isConfigured,
-          isConnected: alerts !== undefined,
-          isEnabled: alerts?.isEnabled ?? false,
-          accountName: alerts?.accountName ?? null,
-          disabledReason: alerts?.disabledReason ?? null,
-          lastEventAt: alerts?.lastEventAt?.toISOString() ?? null,
-        },
+        serviceView(
+          'donationalerts',
+          'DonationAlerts',
+          'oauth',
+          this.donationAlerts.isConfigured,
+          find('DONATIONALERTS'),
+        ),
+        // Приложение у DonatePay регистрировать не нужно: стример приносит свой
+        // ключ, поэтому сервис настроен всегда.
+        serviceView('donatepay', 'DonatePay', 'api_key', true, find('DONATEPAY')),
       ],
       webhook: webhook
         ? {
@@ -116,14 +142,72 @@ export class DonationSourcesService {
     this.logger.log({ platform: service, userId: state.userId }, 'Донат-сервис подключён');
   }
 
-  /** Отключение: источник и токены уходят вместе, воркер закроет сокет на такте. */
+  /**
+   * Подключение ключом API: ключ проверяется профилем владельца и хранится
+   * шифротекстом там же, где OAuth-токены других сервисов.
+   *
+   * Новый ключ — это и починка выключенного источника, как повторный вход у
+   * DonationAlerts. Курсор опроса сбрасывается: подключение показывает только
+   * донаты, пришедшие после него, а не историю аккаунта.
+   */
+  async connectWithKey(
+    userId: string,
+    service: ApiKeyDonationService,
+    apiKey: string,
+    context: AuditContext = {},
+  ): Promise<void> {
+    let profile: DonatePayProfile;
+    try {
+      profile = await this.donatePay.fetchProfile(apiKey);
+    } catch (error) {
+      if (error instanceof PlatformAuthError) {
+        throw new BadRequestException(
+          'DonatePay не принял ключ API — скопируйте его заново на странице API в кабинете DonatePay',
+        );
+      }
+      this.logger.warn({ err: error, service }, 'DonatePay не проверил ключ API');
+      throw new ServiceUnavailableException(
+        'DonatePay не смог проверить ключ — попробуйте через минуту',
+      );
+    }
+
+    await this.tokens.save(userId, service, {
+      accessToken: apiKey,
+      refreshToken: null,
+      scopes: [],
+      expiresAt: null,
+    });
+    await this.prisma.donationSource.upsert({
+      where: { userId_provider: { userId, provider: SERVICE_PROVIDERS[service] } },
+      create: {
+        userId,
+        provider: SERVICE_PROVIDERS[service],
+        externalAccountId: profile.id,
+        accountName: profile.name,
+      },
+      update: {
+        externalAccountId: profile.id,
+        accountName: profile.name,
+        isEnabled: true,
+        disabledReason: null,
+      },
+    });
+    await this.redis.del(donatePayCursorKey(userId, profile.id));
+    await this.audit.record('integration.connected', userId, {
+      ...context,
+      metadata: { platform: service, externalId: profile.id },
+    });
+    this.logger.log({ platform: service, userId }, 'Донат-сервис подключён');
+  }
+
+  /** Отключение: источник и токены уходят вместе, воркер закроет соединение на такте. */
   async disconnect(
     userId: string,
     service: DonationService,
     context: AuditContext = {},
   ): Promise<void> {
     await this.prisma.donationSource.deleteMany({
-      where: { userId, provider: 'DONATIONALERTS' },
+      where: { userId, provider: SERVICE_PROVIDERS[service] },
     });
     await this.tokens.remove(userId, service);
     await this.audit.record('integration.disconnected', userId, {
@@ -131,4 +215,24 @@ export class DonationSourcesService {
       metadata: { platform: service },
     });
   }
+}
+
+function serviceView(
+  service: DonationService,
+  title: string,
+  connection: DonationServiceView['connection'],
+  isConfigured: boolean,
+  source: DonationSource | undefined,
+): DonationServiceView {
+  return {
+    service,
+    title,
+    connection,
+    isConfigured,
+    isConnected: source !== undefined,
+    isEnabled: source?.isEnabled ?? false,
+    accountName: source?.accountName ?? null,
+    disabledReason: source?.disabledReason ?? null,
+    lastEventAt: source?.lastEventAt?.toISOString() ?? null,
+  };
 }
