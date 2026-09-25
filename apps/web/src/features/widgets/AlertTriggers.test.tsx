@@ -135,8 +135,8 @@ describe('триггеры доната', () => {
     const items = within(screen.getByRole('list', { name: 'Триггеры по приоритету' })).getAllByRole(
       'listitem',
     );
-    expect(items[0]!.textContent).not.toMatch(/поймает триггер выше/);
-    expect(items[1]!.textContent).toMatch(/поймает триггер выше — «от 500/);
+    expect(items[0]!.textContent).not.toMatch(/заберёт триггер выше/);
+    expect(items[1]!.textContent).toMatch(/заберёт триггер выше — «от 500/);
   });
 
   it('настройка всего виджета не повторяется в разделах сценария', () => {

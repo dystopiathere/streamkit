@@ -120,7 +120,7 @@ test('оверлей чата переезжает на новый канал, �
   await overlay.goto(await field.inputValue());
   // Оверлей должен успеть подключиться ДО смены канала.
   await page.reload();
-  await expect(page.getByText('Последняя активность: не подключалась')).toHaveCount(0, {
+  await expect(page.getByText('Последнее подключение: ещё не подключалась')).toHaveCount(0, {
     timeout: 15_000,
   });
 

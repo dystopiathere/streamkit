@@ -101,7 +101,7 @@ test('гость входит по ссылке, оверлей показыва
   await page.getByRole('link', { name: 'Настроить' }).first().click();
   // Виджет без комнаты подключался и молча оставался пустым — так выглядела
   // первая ручная проверка. Теперь пустое поле подсвечено прямо в редакторе.
-  const roomMissing = page.getByRole('alert').filter({ hasText: 'Комната не выбрана' });
+  const roomMissing = page.getByRole('alert').filter({ hasText: 'Выберите комнату и сохраните' });
   await expect(roomMissing).toBeVisible();
   await page.getByRole('combobox', { name: 'Комната' }).selectOption({ label: 'Вечерний эфир' });
   await expect(roomMissing).toHaveCount(0);
@@ -300,7 +300,9 @@ test('виджет, созданный со страницы комнаты, с�
   await page.getByRole('button', { name: 'Создать виджет для этой комнаты' }).click();
   await expect(page).toHaveURL(/\/widgets\/[0-9a-f-]{36}$/);
   await expect(page.getByRole('combobox', { name: 'Комната' })).toHaveValue(/[0-9a-f-]{36}/);
-  await expect(page.getByRole('alert').filter({ hasText: 'Комната не выбрана' })).toHaveCount(0);
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Выберите комнату и сохраните' }),
+  ).toHaveCount(0);
 
   await mainNav(page).getByRole('link', { name: 'Комнаты', exact: true }).click();
   await page.getByRole('link', { name: 'Открыть' }).click();
@@ -322,9 +324,7 @@ test('виджет, созданный со страницы комнаты, с�
   await page.getByRole('button', { name: 'Удалить' }).click();
   await expect(page.getByRole('link', { name: 'Открыть' })).toHaveCount(0);
   await page.goto(widgetPath!);
-  await expect(
-    page.getByRole('alert').filter({ hasText: 'Комната этого виджета удалена' }),
-  ).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'Эта комната удалена' })).toBeVisible();
 });
 
 test('гость, удалённый с отзывом ссылки, не входит обратно сохранённым токеном', async ({
