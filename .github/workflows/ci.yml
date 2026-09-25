@@ -15,6 +15,9 @@ on:
       - '!apps/web/.impeccable/**'
       - 'apps/*/public/**'
   pull_request:
+    # ready_for_review — чтобы черновик, переведённый в готовые, получил прогон:
+    # пока пулреквест черновик, CI не идёт (см. задание gate).
+    types: [opened, synchronize, reopened, ready_for_review]
     # Тот же список, повторённый, а не вынесенный якорем YAML: Actions якоря
     # понимает, а actionlint, которым workflow проверяют перед пушем, — нет.
     paths:
@@ -54,12 +57,18 @@ jobs:
   gate:
     name: Проверено в пулреквесте
     runs-on: ubuntu-latest
+    # Черновик пулреквеста не проверяется: каждый пуш в него стоил бы полного
+    # прогона, а нужен он только перед слиянием. Перевод в «готов» запускает CI
+    # (ready_for_review выше). Пропущенные ворота пропускают и всё остальное.
+    if: github.event.pull_request.draft != true
     permissions:
       contents: read
       actions: read
       pull-requests: read
     outputs:
       verified: ${{ steps.static.outputs.only == 'true' || steps.lookup.outputs.verified == 'true' }}
+      images: ${{ steps.static.outputs.images }}
+      lockfile: ${{ steps.static.outputs.lockfile }}
     steps:
       # Глубина 2 — чтобы у слияния пулреквеста был первый родитель, main.
       - uses: actions/checkout@v7
@@ -76,22 +85,44 @@ jobs:
             base=HEAD^1
           elif [[ "$BEFORE" =~ ^0+$ ]] || ! git fetch --quiet --depth=1 origin "$BEFORE"; then
             echo "Нет предыдущего коммита для сравнения — CI идёт целиком."
-            echo "only=false" >> "$GITHUB_OUTPUT"
+            { echo "only=false"; echo "images=true"; echo "lockfile=true"; } >> "$GITHUB_OUTPUT"
             exit 0
           else
             base=$BEFORE
           fi
           only=true
+          images=false
+          lockfile=false
+          # Весь список, без выхода на первом не-статическом файле: по нему же
+          # решается, собирать ли образы и сохранять ли кэш зависимостей.
           while IFS= read -r file; do
             case "$file" in
-              apps/web/public/legal/*) only=false ;;
-              *.md | apps/*/public/* | apps/web/.impeccable/* | packages/ui/fonts/*.woff2) ;;
-              *) only=false ;;
+              apps/web/public/legal/*) static=false ;;
+              *.md | apps/*/public/* | apps/web/.impeccable/* | packages/ui/fonts/*.woff2) static=true ;;
+              *) static=false ;;
             esac
-            [[ "$only" == true ]] || { echo "Не статика: $file"; break; }
+            if [[ "$static" == false && "$only" == true ]]; then
+              echo "Не статика: $file"
+              only=false
+            fi
+            # Что может сломать сборку образа, не сломав сборку в `checks`:
+            # Dockerfile'ы и конфиги nginx, состав воркспейса и зависимостей,
+            # схема Prisma (её генерирует образ), базовый tsconfig и сами
+            # workflow сборки. Правку одного исходного кода `pnpm build` в
+            # `checks` проверяет тем же сборщиком.
+            case "$file" in
+              infra/docker/* | .dockerignore | pnpm-lock.yaml | pnpm-workspace.yaml | package.json | \
+                */package.json | apps/api/prisma/* | apps/api/prisma.config.ts | packages/config/* | \
+                .github/workflows/ci.yml | .github/workflows/release.yml) images=true ;;
+            esac
+            if [[ "$file" == pnpm-lock.yaml ]]; then lockfile=true; fi
           done < <(git diff --name-only "$base" HEAD)
-          [[ "$only" == true ]] && echo "Изменена только статика — проверки пропускаются."
-          echo "only=$only" >> "$GITHUB_OUTPUT"
+          if [[ "$only" == true ]]; then
+            echo "Изменена только статика — проверки пропускаются."
+          else
+            echo "Сборка образов в пулреквесте: $images. Изменился lockfile: $lockfile."
+          fi
+          { echo "only=$only"; echo "images=$images"; echo "lockfile=$lockfile"; } >> "$GITHUB_OUTPUT"
 
       # Дерево пишется только за настоящую проверку: пропущенный прогон не
       # должен потом засчитываться воротами на main как проверенный.
@@ -137,11 +168,14 @@ jobs:
   # Кэш зависимостей для новых веток. Ветка читает кэш main, а main при
   # пропуске проверок иначе ничего бы не сохранял: первая сборка каждой новой
   # ветки ставила бы зависимости с нуля.
+  #
+  # Только когда lockfile изменился: ключ кэша — его хэш, и с прежним lockfile
+  # кэш main уже есть, а задание оплачивалось минутой ради одного «cache hit».
   cache:
     name: Кэш зависимостей
     runs-on: ubuntu-latest
     needs: gate
-    if: needs.gate.outputs.verified == 'true' && github.event_name == 'push'
+    if: needs.gate.outputs.verified == 'true' && github.event_name == 'push' && needs.gate.outputs.lockfile == 'true'
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -216,6 +250,21 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Локальный кэш turbo между прогонами: сборка, типы и юнит-тесты пакетов,
+      # чьи исходники не менялись, берутся из кэша. Правка одного дашборда не
+      # пересобирает и не перепроверяет contracts, ui, app-kit и API.
+      #
+      # Ключ — sha прогона, восстановление — по префиксу: кэш turbo адресуется
+      # хэшами содержимого, и устаревшая запись просто не совпадёт. Чужие
+      # файлы, которые читают тесты (workflow, соседние index.html), объявлены
+      # во входах задач в turbo.json пакетов — иначе их правка не сбросила бы
+      # кэш и тест прошёл бы по старому результату.
+      - uses: actions/cache@v4
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-
+
       # Prisma Client — сгенерированный код, в репозитории его нет. Без этого
       # шага падает проверка типов всего, что трогает БД, а интеграционные
       # тесты — ещё на импорте: энумы приезжают undefined, и ошибка выглядит как
@@ -269,7 +318,24 @@ jobs:
             livekit/livekit-server:v1.13.6 --dev --bind 0.0.0.0 --node-ip 127.0.0.1
           curl --silent --retry 20 --retry-delay 1 --retry-connrefused http://127.0.0.1:7880/
 
-      - run: pnpm --filter @streamkit/e2e exec playwright install --with-deps chromium
+      # Браузер Playwright — из кэша по версии пакета: скачивание Chromium
+      # занимало треть шага. Системные библиотеки ставятся всегда: они живут
+      # вне кэша, в образе раннера.
+      - name: Версия Playwright
+        id: playwright
+        run: echo "version=$(pnpm --filter @streamkit/e2e exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @streamkit/e2e exec playwright install --with-deps chromium
+
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @streamkit/e2e exec playwright install-deps chromium
 
       - name: Сквозной сценарий
         env:
@@ -279,6 +345,13 @@ jobs:
         run: |
           pnpm --filter @streamkit/api exec prisma migrate deploy
           pnpm --filter @streamkit/e2e test:e2e
+
+      # Кэш turbo сохраняется целиком, вместе с восстановленным, и без уборки
+      # рос бы с каждым прогоном. Запись, которую неделю никто не перезаписал,
+      # удаляется; понадобится снова — пересоберётся один раз.
+      - name: Уборка кэша turbo
+        if: always()
+        run: find .turbo/cache -type f -mtime +7 -delete 2>/dev/null || true
 
       - uses: actions/upload-artifact@v7
         if: failure()
@@ -361,78 +434,107 @@ jobs:
             -v "$PWD/infra/yandex-cloud/app/Caddyfile:/etc/caddy/Caddyfile:ro" \
             caddy:2.10.0 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
-  # Образы собираются ПАРАЛЛЕЛЬНО, по раннеру на образ, и у каждого СВОЙ
-  # кэш. Раньше они шли одним заданием подряд и писали в общий scope кэша
-  # GitHub Actions: образ, собранный последним, затирал кэш предыдущего. В
-  # логах все три импортировали один и тот же манифест, попаданий в кэш не
-  # было, а выгрузка заведомо бесполезного кэша занимала больше половины из
-  # восьми минут задания.
+  # Образы — одним заданием, шаг за шагом, в одном сборщике buildx.
   #
-  # Только в пулреквесте. На main те же пять образов тут же собирает «Выпуск
-  # образов» — уже для публикации, — и сборка здесь была бы второй из того же
-  # коммита: восемь оплаченных минут на каждый пуш. Сломанный образ на main
-  # незамеченным не пройдёт: упадёт выпуск, и выкатывать будет нечего.
-  # Образ API на уязвимости выпуск проверяет сам.
+  # Раньше каждый образ собирался на своём раннере, и каждое из пяти заданий
+  # округлялось до минуты отдельно и заново поднимало buildx и тянуло общий
+  # базовый слой: десять оплаченных минут на прогон при двух с половиной
+  # минутах работы. В одном задании общая стадия `base` собирается один раз.
+  # Кэш GitHub Actions у каждого образа по-прежнему СВОЙ: общий scope уже
+  # подводил — образ, собранный последним, затирал кэш предыдущего.
+  #
+  # Только в пулреквесте и только когда правка может сломать сборку образа, не
+  # сломав `pnpm build` выше: Dockerfile'ы, зависимости, схема Prisma, базовый
+  # tsconfig, workflow (список — в воротах). На main те же образы собирает
+  # «Выпуск образов», и сломанный образ незамеченным не пройдёт: упадёт выпуск,
+  # и выкатывать будет нечего. Образ API на уязвимости выпуск проверяет сам.
   docker:
-    name: Сборка образов (${{ matrix.image }})
+    name: Сборка образов
     runs-on: ubuntu-latest
-    needs: checks
-    if: github.event_name == 'pull_request'
-    strategy:
-      # Сломанный образ дашборда не должен прятать результат сборки API.
-      fail-fast: false
-      matrix:
-        include:
-          - image: api
-            file: infra/docker/api.Dockerfile
-            target: runtime
-            build-args: ''
-          # Образ миграций — отдельно: без этой сборки поломка в нём нашлась бы
-          # только на выкатке, когда миграции уже нужны.
-          - image: migrate
-            file: infra/docker/api.Dockerfile
-            target: migrate
-            build-args: ''
-          - image: web
-            file: infra/docker/web.Dockerfile
-            target: runtime
-            build-args: APP=web
-          - image: overlay
-            file: infra/docker/web.Dockerfile
-            target: runtime
-            build-args: APP=overlay
-          - image: admin
-            file: infra/docker/web.Dockerfile
-            target: runtime
-            build-args: APP=admin
+    needs: [gate, checks]
+    if: github.event_name == 'pull_request' && needs.gate.outputs.images == 'true'
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
 
-      - name: Сборка
+      # mode=max, а не min: самый дорогой шаг — установка зависимостей — живёт
+      # в промежуточной стадии, и min его бы не сохранил. Второй источник —
+      # кэш выпуска образов на main: ветка его читает.
+      #
+      # В локальный Docker загружается только API: его сканирует trivy.
+      - name: Образ api
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ${{ matrix.file }}
-          target: ${{ matrix.target }}
-          build-args: ${{ matrix.build-args }}
+          file: infra/docker/api.Dockerfile
+          target: runtime
           push: false
-          # В локальный Docker загружается только API: его сканирует trivy.
-          # Загрузка остальных стоила бы времени, которое никто не использует.
-          load: ${{ matrix.image == 'api' }}
-          tags: streamkit-${{ matrix.image }}:ci
-          # mode=max, а не min: самый дорогой шаг — установка зависимостей — живёт
-          # в промежуточной стадии, и min его бы не сохранил.
-          # Второй источник — кэш выпуска образов на main: ветка его читает, а
-          # свой кэш CI на main при пропуске проверок не обновляется.
+          load: true
+          tags: streamkit-api:ci
           cache-from: |
-            type=gha,scope=${{ matrix.image }}
-            type=gha,scope=release-${{ matrix.image }}
-          cache-to: type=gha,scope=${{ matrix.image }},mode=max
+            type=gha,scope=api
+            type=gha,scope=release-api
+          cache-to: type=gha,scope=api,mode=max
+
+      # Образ миграций — отдельно: без этой сборки поломка в нём нашлась бы
+      # только на выкатке, когда миграции уже нужны.
+      - name: Образ migrate
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: infra/docker/api.Dockerfile
+          target: migrate
+          push: false
+          tags: streamkit-migrate:ci
+          cache-from: |
+            type=gha,scope=migrate
+            type=gha,scope=release-migrate
+          cache-to: type=gha,scope=migrate,mode=max
+
+      - name: Образ web
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: infra/docker/web.Dockerfile
+          target: runtime
+          build-args: APP=web
+          push: false
+          tags: streamkit-web:ci
+          cache-from: |
+            type=gha,scope=web
+            type=gha,scope=release-web
+          cache-to: type=gha,scope=web,mode=max
+
+      - name: Образ overlay
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: infra/docker/web.Dockerfile
+          target: runtime
+          build-args: APP=overlay
+          push: false
+          tags: streamkit-overlay:ci
+          cache-from: |
+            type=gha,scope=overlay
+            type=gha,scope=release-overlay
+          cache-to: type=gha,scope=overlay,mode=max
+
+      - name: Образ admin
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: infra/docker/web.Dockerfile
+          target: runtime
+          build-args: APP=admin
+          push: false
+          tags: streamkit-admin:ci
+          cache-from: |
+            type=gha,scope=admin
+            type=gha,scope=release-admin
+          cache-to: type=gha,scope=admin,mode=max
 
       # Уязвимости в образе: базовый образ и системные пакеты pnpm audit не видит.
       - name: Сканирование образа API
-        if: matrix.image == 'api'
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: streamkit-api:ci

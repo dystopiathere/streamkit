@@ -35,3 +35,11 @@ deploy_ssh_public_key = "ssh-ed25519 AAAA... github-actions-deploy"
 # DMARC (README, раздел «Почта на домене»). Ящик для отчётов должен существовать
 # в Яндекс 360 — отчёты на несуществующий адрес просто теряются.
 # dmarc = "v=DMARC1; p=none; rua=mailto:dmarc@stream-kit.ru"
+
+# Размеры — README, раздел «Стоимость и рост». Не задано — значения по умолчанию
+# из variables.tf (burstable-базы, ВМ с долей vCPU 50 %).
+# postgresql = { resource_preset_id = "s3-c2-m8", disk_gb = 20 }
+# app_vm     = { cores = 2, memory_gb = 4, disk_gb = 30, core_fraction = 100 }
+
+# Сколько последних выпусков хранить в реестре. null — до первого выпуска.
+# registry_cleanup = 15
