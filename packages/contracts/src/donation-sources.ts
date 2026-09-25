@@ -1,10 +1,32 @@
 import { z } from 'zod';
 import { isoDateSchema, uuidSchema } from './common.js';
 
-/** Донат-сервисы, которые подключаются кнопкой. Вебхук — отдельно: он для разработчиков. */
-export const DONATION_SERVICES = ['donationalerts'] as const;
+/** Донат-сервисы, которые подключает сам стример. Вебхук — отдельно: он для разработчиков. */
+export const DONATION_SERVICES = ['donationalerts', 'donatepay'] as const;
 export const donationServiceSchema = z.enum(DONATION_SERVICES);
 export type DonationService = z.infer<typeof donationServiceSchema>;
+
+/**
+ * Как сервис подключается: входом в сервис (OAuth) или ключом API, который
+ * стример копирует из кабинета сервиса. У DonatePay OAuth для сторонних
+ * приложений нет — только личный ключ.
+ */
+export const DONATION_SERVICE_CONNECTIONS = ['oauth', 'api_key'] as const;
+export const donationServiceConnectionSchema = z.enum(DONATION_SERVICE_CONNECTIONS);
+export type DonationServiceConnection = z.infer<typeof donationServiceConnectionSchema>;
+
+/** Сервисы, которые подключаются ключом API. */
+export const apiKeyDonationServiceSchema = z.enum(['donatepay']);
+export type ApiKeyDonationService = z.infer<typeof apiKeyDonationServiceSchema>;
+
+/**
+ * Ключ API донат-сервиса. Хранится только шифротекстом и наружу не отдаётся —
+ * ни в списке источников, ни сотруднику.
+ */
+export const donationServiceKeySchema = z.object({
+  apiKey: z.string().trim().min(1, 'Вставьте ключ API').max(256, 'Ключ API длиннее, чем бывает'),
+});
+export type DonationServiceKey = z.infer<typeof donationServiceKeySchema>;
 
 /**
  * Донат-сервис на странице «Источники».
@@ -16,6 +38,7 @@ export type DonationService = z.infer<typeof donationServiceSchema>;
 export const donationServiceViewSchema = z.object({
   service: donationServiceSchema,
   title: z.string(),
+  connection: donationServiceConnectionSchema,
   /** false — приложение сервиса не настроено на сервере, подключать нечем. */
   isConfigured: z.boolean(),
   isConnected: z.boolean(),

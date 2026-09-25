@@ -519,6 +519,17 @@
       "description": "Sign in to DonationAlerts and allow access. We never see your DonationAlerts password.",
       "check": "To check, send yourself a test donation on DonationAlerts. It will appear in the event feed."
     },
+    "donatepay": {
+      "description": "Copy the API key from your DonatePay account and paste it here. Your DonatePay password is not needed.",
+      "keyPage": "API page of your DonatePay account",
+      "check": "Donations show up in alerts within seconds, and back-to-back donations up to 20 seconds apart: DonatePay does not allow asking more often. Check the connection with a test donation from your DonatePay dashboard. Donations made before connecting are not added to the feed."
+    },
+    "apiKey": {
+      "label": "{{service}} API key",
+      "hintBefore": "You will find the key on the",
+      "hintAfter": ".",
+      "replace": "Save the new key"
+    },
     "connect": "Connect {{service}}",
     "reconnect": "Reconnect",
     "disconnect": "Disconnect",
@@ -526,7 +537,7 @@
     "disconnectTitle": "Disconnect {{service}}?",
     "disconnectText": "New donations will stop reaching your alerts. Donations already received stay in the event feed.",
     "disconnected": "Service disconnected",
-    "connected": "DonationAlerts is connected. New donations will show up in alerts.",
+    "connected": "{{service}} is connected. New donations will show up in alerts.",
     "connectFailed": "Could not connect the service. Please try again.",
     "lastEvent": "Last donation",
     "lastEventAt": "Last event: {{date}}",

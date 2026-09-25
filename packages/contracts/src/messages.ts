@@ -71,6 +71,12 @@ export const MESSAGES_EN: Readonly<Record<string, string>> = {
   'Ссылка подключения недействительна, начните заново':
     'The connection link is no longer valid, please start over',
   'DonationAlerts не настроен на этом сервере': 'DonationAlerts is not configured on this server',
+  'Вставьте ключ API': 'Paste the API key',
+  'Ключ API длиннее, чем бывает': 'The API key is longer than a real one',
+  'DonatePay не принял ключ API — скопируйте его заново на странице API в кабинете DonatePay':
+    'DonatePay did not accept the API key. Copy it again from the API page in your DonatePay account',
+  'DonatePay не смог проверить ключ — попробуйте через минуту':
+    'DonatePay could not check the key. Try again in a minute',
   'Виджет чата показывает чат ваших каналов — сначала подключите Twitch, YouTube или Kick в разделе «Аналитика»':
     'The chat widget shows the chat of your own channels — connect Twitch, YouTube or Kick in Analytics first',
 

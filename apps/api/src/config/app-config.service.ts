@@ -222,6 +222,19 @@ export class AppConfig {
     };
   }
 
+  /** Адреса DonatePay: боевые, в тестах — поддельный сервер. */
+  get donatePay(): { baseUrl: string; socketUrl: string } {
+    return {
+      baseUrl: (this.config.get<string>('DONATEPAY_BASE_URL') ?? 'https://donatepay.ru').replace(
+        /\/+$/,
+        '',
+      ),
+      socketUrl:
+        this.config.get<string>('DONATEPAY_SOCKET_URL') ??
+        'wss://centrifugo.donatepay.ru:443/connection/websocket',
+    };
+  }
+
   /**
    * Подключение к LiveKit, либо null — комнаты не настроены.
    *

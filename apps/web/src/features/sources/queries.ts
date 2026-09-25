@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AuthorizeResponse, DonationService, DonationSources } from '@streamkit/contracts';
+import type {
+  ApiKeyDonationService,
+  AuthorizeResponse,
+  DonationService,
+  DonationServiceKey,
+  DonationSources,
+} from '@streamkit/contracts';
 import { api } from '@/lib/api';
 
 export const sourcesKeys = { all: ['donation-sources'] as const };
@@ -23,6 +29,16 @@ export function useConnectDonationService() {
       );
       window.location.href = url;
     },
+  });
+}
+
+/** Подключение ключом API: сервер проверяет ключ у сервиса и сразу отвечает, подошёл ли он. */
+export function useConnectDonationServiceKey() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ service, apiKey }: { service: ApiKeyDonationService } & DonationServiceKey) =>
+      api.post<void>(`/integrations/donations/${service}/key`, { apiKey }),
+    onSuccess: () => client.invalidateQueries({ queryKey: sourcesKeys.all }),
   });
 }
 
