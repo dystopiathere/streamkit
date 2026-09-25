@@ -39,7 +39,7 @@ test('донат доходит от дашборда до оверлея', asyn
 
   await test.step('выпуск ссылки для OBS', async () => {
     await page.getByRole('link', { name: 'Настроить' }).first().click();
-    await expect(page.getByText('Ссылки для браузер-сорса')).toBeVisible();
+    await expect(page.getByText('Ссылки для OBS', { exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: 'Создать ссылку' }).click();
 

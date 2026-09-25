@@ -107,7 +107,7 @@ test('виджет чата настраивается, а оверлей по �
   // сервер обязан отметить подключение: значит, токен принят и оверлей вступил
   // в комнату канала.
   await page.reload();
-  await expect(page.getByText('Последняя активность: не подключалась')).toHaveCount(0, {
+  await expect(page.getByText('Последнее подключение: ещё не подключалась')).toHaveCount(0, {
     timeout: 15_000,
   });
   await overlayPage.close();

@@ -45,7 +45,7 @@
     "password": "Password",
     "displayName": "Display name",
     "totpCode": "Code from the app",
-    "totpRequired": "Enter your two-factor authentication code",
+    "totpRequired": "Enter the code from your authenticator app",
     "submitLogin": "Sign in",
     "submitRegister": "Create account",
     "toRegister": "No account? Sign up",
@@ -55,38 +55,38 @@
     "consentPrivacy": "the Privacy Policy",
     "consentPersonalData": "the consent to personal data processing",
     "acceptByRegistering": "By clicking “{{button}}” you accept",
-    "acceptUpdates": "We notify you in the dashboard when a document changes. Nothing has to be accepted again, and if a new version does not suit you, you can delete the account under Profile → Privacy.",
+    "acceptUpdates": "If the documents change, we will let you know in your dashboard.",
     "forgotLink": "Forgot your password?",
     "forgot": {
       "title": "Password recovery",
-      "description": "Enter the email you signed up with and we will send a link to set a new password.",
+      "description": "Enter your account email and we will send you a link to set a new password.",
       "submit": "Send the link",
       "sent": "If there is an account for {{email}}, the link is on its way.",
-      "sentHint": "It works once and for an hour. No email? Check the spam folder or request the link again in a minute.",
+      "sentHint": "The link works for one hour. No email? Check your spam folder or request a new link in a minute.",
       "toLogin": "Back to sign-in"
     },
     "reset": {
       "title": "New password",
-      "description": "Choose a new password. After saving, every device is signed out.",
+      "description": "Choose a new password. After saving, sign in again on all your devices.",
       "submit": "Save password",
       "done": "Password changed, sign in with the new one",
-      "noToken": "The link is incomplete: open it from the email in full or request a new one.",
+      "noToken": "The link did not open in full. Copy the whole link from the email or request a new one.",
       "requestAgain": "Request a new link"
     }
   },
   "widgets": {
     "title": "Widgets",
-    "empty": "No widgets yet. Create your first one and get a link for OBS.",
+    "empty": "Nothing here yet. Create your first widget and add it to OBS.",
     "create": "New widget",
-    "limit": "{{used}} of {{limit}} widgets created on the free plan.",
-    "limitAction": "Lift the limit",
+    "limit": "{{used}} of {{limit}} widgets on the free plan.",
+    "limitAction": "Remove the limit",
     "namePlaceholder": "Widget name",
     "enabled": "On",
     "disabled": "Off",
     "edit": "Set up",
     "testAlert": "Test alert",
     "testSent": "Test alert sent",
-    "deleteConfirm": "Delete the widget? All its links will stop working.",
+    "deleteConfirm": "Delete this widget? It will disappear from OBS and its links will stop working.",
     "editorTitle": "Widget settings",
     "preview": "Preview",
     "section": {
@@ -102,7 +102,7 @@
       "chat": "Chat",
       "guests": "Guests",
       "media": "Image and sound",
-      "layout": "The window size is not set: the frame is 16:9 and coordinates are percentages. Set the window on the right so the layout matches the OBS browser source. Drag an element and the others are pinned where they are; with the keyboard use Tab and arrows, and Shift to follow the grid.",
+      "layout": "Layout in frame",
       "background": "Background",
       "barImages": "Bar images",
       "allScenarios": "For all scenarios",
@@ -121,12 +121,12 @@
       "strokeWidth": "Outline width",
       "animationIn": "Entrance animation",
       "animationOut": "Exit animation",
-      "imageUrl": "Image (https)",
+      "imageUrl": "Image link",
       "soundEnabled": "Play a sound",
-      "soundUrl": "Sound link (https)",
+      "soundUrl": "Sound link",
       "volume": "Volume",
       "type": "Widget type",
-      "countTypes": "What counts toward it",
+      "countTypes": "What counts",
       "showAmounts": "Show amounts",
       "goalTitle": "Goal title",
       "targetMinor": "Goal",
@@ -195,16 +195,16 @@
       "rouletteMode": "Roulette style",
       "youtubeEvents": "YouTube events: members and paid support"
     },
-    "templateHint": "Available variables: {{vars}}",
+    "templateHint": "You can insert: {{vars}}",
     "tokens": {
-      "title": "Browser source links",
-      "empty": "No links yet",
+      "title": "OBS links",
+      "empty": "No links yet. Create one and add it to OBS as a Browser source.",
       "create": "Create link",
       "revoke": "Revoke",
-      "revokeConfirm": "Revoke the link? The source open in OBS will stop working immediately.",
-      "oneTimeWarning": "The link is shown only once — save it now. It cannot be recovered later; you can only issue a new one.",
-      "lastSeen": "Last activity",
-      "never": "never connected",
+      "revokeConfirm": "Revoke this link? The widget will disappear from OBS right away.",
+      "oneTimeWarning": "Copy the link now, we won’t show it again. If you lose it, just create a new one.",
+      "lastSeen": "Last connected",
+      "never": "not connected yet",
       "urlLabel": "New link for OBS",
       "revokeNamed": "Revoke link {{name}}"
     },
@@ -225,35 +225,35 @@
       "all": "All time"
     },
     "hint": {
-      "secondsPerUnit": "How many seconds one {{currency}} of a donation adds. Zero — donations do not add time.",
-      "offsetMinor": "Added to the raised amount. Use it when part of the sum was raised before you set up the widget.",
-      "countTypes": "You can pick several. Only events with an amount count — a subscription without an amount adds nothing.",
-      "minAmount": "Each currency has its own threshold: a donation is compared with it as received, without currency conversion. Empty or 0 — all donations in that currency are shown.",
-      "messageLifetime": "0 means messages stay on screen until newer ones push them out.",
-      "hiddenUsers": "Comma-separated: a Twitch login or a YouTube name. Common bots are hidden by default.",
-      "showWithoutVideo": "Otherwise a guest with the camera off disappears from the frame while still talking.",
-      "room": "This widget's OBS link opens the video and audio of the room's guests. Keep it as safe as a password.",
+      "secondsPerUnit": "How many seconds each {{currency}} of a donation adds. 0 means donations don’t extend the timer.",
+      "offsetMinor": "Use this if part of the amount was raised before this widget.",
+      "countTypes": "Only events with an amount count.",
+      "minAmount": "Donations below the threshold are not shown. Set it per currency. 0 shows all.",
+      "messageLifetime": "0 keeps a message until newer ones push it out.",
+      "hiddenUsers": "Comma-separated. Popular bots are already hidden.",
+      "showWithoutVideo": "Otherwise a guest without a camera disappears from the frame, even while talking.",
+      "room": "This widget’s link shows your room guests, so keep it private.",
       "noRooms": "Create a room in the Rooms section first.",
-      "roomMissing": "No room selected — this widget will show nothing in OBS. Pick a room and save.",
-      "roomDeleted": "This widget's room was deleted — it will show nothing in OBS. Pick another room and save.",
-      "gapMs": "One queue for all scenarios: alerts follow each other with this pause.",
+      "roomMissing": "Choose a room and save, otherwise OBS will show nothing.",
+      "roomDeleted": "This room was deleted. Choose another one and save, otherwise OBS will show nothing.",
+      "gapMs": "Alerts play one after another with this pause.",
       "minCount": "0 — show all.",
-      "imageUrl": "An https link to an image, GIF or WebM video. Empty means no image.",
-      "layout": "The window size is not set: the frame is 16:9 and coordinates are percentages. Set the window on the right so the layout matches the OBS browser source. Drag an element and the others are pinned where they are; with the keyboard use Tab and arrows.",
-      "barImage": "The image is cropped to the progress, not stretched.",
-      "currencyFromDonations": "Currency: {{currency}} — most of your donations arrive in it. There is nothing to pick, and donations in other currencies are not counted here.",
+      "imageUrl": "An image, GIF or WebM video via an https link.",
+      "layout": "Drag elements where you want them, or select one with Tab and move it with the arrow keys. Set the window size on the right so the layout matches OBS.",
+      "barImage": "The image isn’t stretched: the bar reveals it as the goal fills.",
+      "currencyFromDonations": "Counted in {{currency}}, the currency you receive most donations in. Donations in other currencies are not included.",
       "backgroundOpacity": "0% — the background is invisible, 100% — solid.",
       "neverFades": "never fades",
-      "soundFromVideo": "The sound comes from the alert’s video.",
-      "layoutCanvas": "The frame is the widget window, {{width}} × {{height}} px, like the browser source in OBS. Drag an element and the others are pinned where they are. Shift snaps to the grid, while dragging and with arrows. With the keyboard: Tab selects, arrows move. Dashed lines are safe areas, cells are the grid.",
-      "emptyText": "Leave empty to keep the widget invisible until the first event.",
-      "latestTest": "Test events never land here: a “Test viewer” would stay on screen until a real donation.",
-      "spinPrice": "A donation of at least this amount is one spin, however much it exceeds the price. A currency without a price does not spin the wheel: we do not convert currencies.",
-      "manualOnly": "The wheel spins only from the button in the “Controls” block — for giveaways without donations.",
-      "voice": "A voice donation is a recording the donor made in DonationAlerts. The alert stays on screen while it plays, and the scenario sound is skipped: together they turn into noise.",
-      "voiceMaxSeconds": "A longer recording is cut off: its length is set by the donor, not by you.",
-      "rouletteMode": "A wheel stays readable up to a couple dozen sectors; beyond that the labels turn into spokes. The vertical reel keeps labels horizontal and holds up to {{max}} positions; the reel is part of the Pro plan.",
-      "youtubeEvents": "Memberships, member milestones, gifts and Super Chats from a YouTube stream arrive as alerts through the Subscription, Renewal, Gifted subscriptions and Donation scenarios. YouTube has no event subscription: they come as lines of the live chat, so they only arrive while this OBS link is open, and they spend the daily YouTube quota shared by the whole service. Twitch events need no switch — they arrive on their own."
+      "soundFromVideo": "The video’s own soundtrack plays.",
+      "layoutCanvas": "A {{width}} × {{height}} px window, same as the OBS source. Drag an element, or select it with Tab and move it with the arrow keys; hold Shift to snap to the grid. Dashed lines mark safe areas.",
+      "emptyText": "Leave empty to keep the widget hidden until the first event.",
+      "latestTest": "Test events don’t show up here.",
+      "spinPrice": "A donation of this amount or more gives one spin. Currencies without a price don’t spin the wheel.",
+      "manualOnly": "The wheel only spins from the button under Controls, handy for giveaways.",
+      "voice": "A donor’s voice message from DonationAlerts. While it plays, the alert sound stays silent.",
+      "voiceMaxSeconds": "Longer recordings are cut off.",
+      "rouletteMode": "A wheel reads well with about 20 sectors. The strip fits up to {{max}} and is part of the Pro plan.",
+      "youtubeEvents": "YouTube memberships, gifts and Super Chats arrive as subscription, resubscription, gift and donation alerts. Works while the widget is open in OBS. Twitch events arrive without this option."
     },
     "state": {
       "raised": "Raised",
@@ -264,7 +264,7 @@
       "paused": "paused",
       "topEmpty": "No donations in the selected period yet",
       "until": "until",
-      "latestEmpty": "No events of this type yet — the widget is empty or shows the “no events yet” text."
+      "latestEmpty": "No events of this type yet."
     },
     "guestsLayout": {
       "grid": "Grid",
@@ -280,14 +280,14 @@
     },
     "scenario": {
       "title": "Scenarios",
-      "hint": "Each event has its own text, image, sound and style. All scenarios are saved together.",
+      "hint": "Each event has its own look. Save stores all scenarios at once.",
       "off": "off",
       "test": "Test in OBS",
       "testSent": "Test alert sent",
       "copyDesign": "Copy the style to all scenarios",
       "copied": "Style copied — save to apply",
       "listen": "Listen",
-      "soundFailed": "The sound did not play — check the link"
+      "soundFailed": "The sound won’t play, check the link"
     },
     "layout": {
       "center": "Centered",
@@ -296,8 +296,8 @@
       "element": "{{element}}: {{x}} {{unit}} horizontally, {{y}} {{unit}} vertically",
       "resetAll": "Reset layout",
       "elementInFlow": "{{element}}: no position set",
-      "placed": "has its own position",
-      "inFlow": "sits where the style puts it",
+      "placed": "pinned in place",
+      "inFlow": "in its default place",
       "auto": "auto",
       "clear": "Reset",
       "asText": "same as text"
@@ -319,9 +319,9 @@
       "platformTwitch": "Twitch chat: twitch.tv/{{channel}}",
       "platformYoutube": "YouTube chat: {{channel}}",
       "notConnected": "{{platform}} is not connected.",
-      "none": "The widget shows only your own channels' chat. Connect Twitch or YouTube — otherwise OBS stays empty.",
+      "none": "Connect Twitch or YouTube and the widget will show your channels’ chat.",
       "connect": "Connect in your profile",
-      "youtubeHint": "YouTube chat appears within two minutes after your stream starts and uses the daily YouTube quota shared across the service. Untick it if you don't need it on screen."
+      "youtubeHint": "YouTube chat appears within a couple of minutes after the stream starts."
     },
     "backgroundFit": {
       "cover": "Cover",
@@ -377,7 +377,7 @@
     },
     "seats": {
       "title": "Guest spots in the frame",
-      "hint": "The first guest to join takes seat 1, the second takes seat 2. Drag a seat by its middle and resize it by the corner; hold Shift to follow the grid. With the keyboard: arrows move, Alt with arrows resizes. Tiles are always 16:9.",
+      "hint": "The first guest takes seat 1, the second takes seat 2. Drag a seat by its center and resize it by a corner; hold Shift to snap to the grid. Keyboard: arrows move, Alt+arrows resize.",
       "seat": "Spot {{number}}",
       "label": "{{seat}}: center {{x}}% · {{y}}%, width {{width}}%",
       "width": "Width"
@@ -386,11 +386,11 @@
     "soundSource": {
       "file": {
         "title": "Separate file",
-        "hint": "Sound from its own link; the video plays muted."
+        "hint": "Sound from its own link, the video plays muted."
       },
       "video": {
         "title": "Sound from the video",
-        "hint": "The video’s own audio track, in sync with the picture. The video loops until the alert ends and stops with it."
+        "hint": "The video’s own sound, in sync with the picture."
       }
     },
     "canvas": {
@@ -399,8 +399,8 @@
       "height": "Height, px",
       "preset": "Common sizes",
       "custom": "Custom size",
-      "hint": "Give the OBS browser source the same width and height. In a source of another size the widget scales as a whole and elements stay in place.",
-      "unset": "The window size is not set: the widget stretches over the whole browser source, and in a source of another size the elements move.",
+      "hint": "Give the OBS source the same size. If sizes differ, the widget scales as a whole.",
+      "unset": "No size set: the widget stretches to the whole OBS source and the layout may shift.",
       "set": "Set {{width}} × {{height}} px",
       "clear": "Stretch over the whole source"
     },
@@ -415,7 +415,7 @@
       "reward": "Latest reward"
     },
     "triggers": {
-      "intro": "A trigger gives a donation its own alert look by amount. They are checked top to bottom and the first match wins. When none matches, the donation uses the base look, which the other tabs edit while no trigger is selected.",
+      "intro": "Give donations of a certain amount their own alert. The first matching trigger from the top wins; if none matches, the regular look is used.",
       "listLabel": "Triggers by priority",
       "name": "Trigger {{number}} name",
       "up": "Move “{{name}}” up in priority",
@@ -433,7 +433,7 @@
       "amount": "Amount",
       "to": "To",
       "currency": "Currency",
-      "shadowed": "A {{amount}} donation is caught by the trigger above — “{{name}}”. Move this one up or narrow its condition.",
+      "shadowed": "A {{amount}} donation will be caught by “{{name}}” above. Move this trigger up or change its condition.",
       "edit": "Edit look",
       "test": "Test with {{amount}}",
       "testNamed": "Test trigger “{{name}}” in OBS",
@@ -467,7 +467,7 @@
       "add": "Add sector",
       "recolor": "Recolor",
       "count": "{{used}} of {{max}}",
-      "weightHint": "A sector’s chance is its weight divided by the sum of weights. On the wheel it takes the same share of the circle, so viewers see the real odds. Default colors are checked so that neighbouring sectors stay distinct, including for colour-blind viewers.",
+      "weightHint": "The higher the weight, the higher the chance. A sector’s size on the wheel matches its chance.",
       "sample": {
         "1": "Sing a song",
         "2": "Challenge",
@@ -478,14 +478,14 @@
       },
       "trySpin": "Try a spin here",
       "spin": "Spin the wheel on stream",
-      "spinHint": "The spin goes to OBS right away. The server picks the sector — the same as for a donation.",
+      "spinHint": "The wheel spins in OBS right away.",
       "history": "Recent spins",
       "clear": "Clear",
       "clearConfirm": "Erase the spin history? The wheel and its sectors stay.",
       "historyEmpty": "The wheel has not been spun yet.",
       "manual": "by button",
       "csvLoad": "Load from file",
-      "csvHint": "A CSV file with semicolons, one line per sector: “name;weight”. That is how Excel saves a sheet by default. The list from the file replaces the current one entirely.",
+      "csvHint": "A CSV file with one sector per line: “name;weight”, the way Excel saves it. It replaces the current list.",
       "csvLoaded": "Sectors loaded: {{count}}",
       "csvEmpty": "The file has no “name;weight” lines",
       "csvBad": "The file could not be read, the list is unchanged:",
@@ -505,16 +505,16 @@
   },
   "sources": {
     "title": "Donation sources",
-    "lead": "Connect the service your viewers donate through: donations will appear in the event feed and in on-stream alerts.",
+    "lead": "Connect the service you receive donations through, and donations will show up in alerts and the event feed.",
     "state": {
       "on": "Connected",
       "broken": "Not working",
       "off": "Not connected"
     },
-    "notConfigured": "Connecting this service is not available yet.",
+    "notConfigured": "Connecting is not available yet.",
     "donationalerts": {
-      "description": "You will sign in to DonationAlerts and allow StreamKit to receive your donations. We never see your DonationAlerts password and do not store the account email.",
-      "check": "To check, send yourself a test donation on DonationAlerts: it will appear in the event feed within a few seconds."
+      "description": "Sign in to DonationAlerts and allow access. We never see your DonationAlerts password.",
+      "check": "To check, send yourself a test donation on DonationAlerts. It will appear in the event feed."
     },
     "connect": "Connect {{service}}",
     "reconnect": "Reconnect",
@@ -523,7 +523,7 @@
     "disconnectTitle": "Disconnect {{service}}?",
     "disconnectText": "New donations will stop reaching your alerts. Donations already received stay in the event feed.",
     "disconnected": "Service disconnected",
-    "connected": "DonationAlerts is connected. Donations will start arriving within a few seconds.",
+    "connected": "DonationAlerts is connected. New donations will show up in alerts.",
     "connectFailed": "Could not connect the service. Please try again.",
     "lastEvent": "Last donation",
     "lastEventAt": "Last event: {{date}}",
@@ -531,18 +531,18 @@
     "brokenFallback": "The service stopped responding. Reconnect it.",
     "webhookForDevelopers": "for developers",
     "webhookTitle": "For developers: your own webhook",
-    "webhookDescription": "If you have your own bot or service, it can send donations directly. Each request is signed with HMAC-SHA256 using the secret below — this cannot be set up without programming; for regular donations, connect a service above.",
+    "webhookDescription": "For your own bot or service: it can send donations in requests signed with the secret below. For regular donations, connect a service above.",
     "createWebhook": "Create webhook",
     "rotate": "Issue a new secret",
     "rotateWarning": "The old secret will stop working immediately.",
-    "secretShownOnce": "The secret is shown only once — save it in your program.",
+    "secretShownOnce": "Copy the secret now, we won’t show it again.",
     "urlLabel": "Webhook URL",
     "secretLabel": "Webhook secret",
     "twitch": {
       "title": "Twitch events",
       "on": "arriving",
       "off": "not arriving",
-      "lead": "Followers, subscriptions, gifted subs, Bits, raids and Channel Points rewards arrive on their own while Twitch is connected under Profile → Platforms. Style them in the alert widget scenarios.",
+      "lead": "Follows, subscriptions, Bits, raids and Channel Points rewards arrive on their own while Twitch is connected. Style them in your alerts widget scenarios.",
       "connect": "Connect Twitch",
       "fix": "Reconnect Twitch"
     }
@@ -589,7 +589,7 @@
     "consents": "Consents",
     "accepted": "Accepted on {{date}}",
     "notAccepted": "Not accepted",
-    "consentsLead": "You accept the service rules by signing up, and having an account confirms it. We notify you in the dashboard when a document changes: access does not depend on an unmarked version, and if a new version does not suit you, the account can be deleted below.",
+    "consentsLead": "You accepted the terms when you signed up. If the documents change, we will let you know in your dashboard.",
     "needsRenewal": "The document has been updated — please confirm",
     "newEdition": "A new version has been published — please read it",
     "acknowledge": "Got it",
@@ -598,9 +598,9 @@
     "grant": "Give consent",
     "revoke": "Withdraw",
     "export": "Download my data",
-    "exportDescription": "Everything the service stores about you, in a single JSON file.",
+    "exportDescription": "All your data in the service as a single JSON file.",
     "deleteTitle": "Delete account",
-    "deleteDescription": "Your personal data will be anonymized, OBS links revoked and integrations disconnected. This cannot be undone.",
+    "deleteDescription": "We will anonymize your data, delete your widgets and OBS links, and disconnect your platforms and donation services. This can’t be undone.",
     "deleteConfirmLabel": "Type {{word}} to confirm",
     "deletePasswordLabel": "Current password",
     "deleteButton": "Delete account",
@@ -618,7 +618,7 @@
     }
   },
   "cookies": {
-    "message": "We use strictly necessary cookies. Visit statistics — on our own server, without cookies or ad networks — are collected only with your consent.",
+    "message": "We only use essential cookies. We collect visit statistics without cookies or ad networks, and only with your consent.",
     "acceptAll": "Accept all",
     "onlyNecessary": "Necessary only",
     "more": "Learn more",
@@ -627,18 +627,16 @@
   },
   "analytics": {
     "title": "Analytics",
-    "empty": "Donations and streams are counted anyway, but viewers and audience growth appear only after you connect a channel.",
+    "empty": "Connect Twitch or YouTube to see streams, viewers and audience growth. Donations are counted either way.",
     "live": "Live",
-    "viewersNow": "Viewers",
-    "liveHours": "Live",
-    "hoursSuffix": "h",
+    "viewersNow": "Watching now",
     "noValue": "—",
     "reset": {
       "title": "Reset donation history",
-      "text": "Deletes every event: donations, followers, subscriptions, raids. Period totals, the top donors list and goal progress reset with them. Widget settings and goal starting amounts stay.",
+      "text": "Deletes all donations and events. Totals, top donors and goal progress reset to zero. Widget settings stay.",
       "action": "Reset history",
       "confirmTitle": "Reset donation history?",
-      "confirmText": "There is no way to restore it: platforms do not resend past events. The goal and top donors open in OBS reset too.",
+      "confirmText": "This can’t be undone. Goals and top donors in OBS reset too.",
       "done_one": "{{count}} event deleted",
       "done_other": "{{count}} events deleted"
     },
@@ -658,19 +656,18 @@
       "youtube": "YouTube"
     },
     "syncState": {
-      "auth-expired": "Access to the platform has expired. Reconnect it to resume collecting metrics.",
-      "rate-limited": "The platform's daily request limit is used up. Collection will resume automatically.",
-      "error": "The last metrics collection failed. We'll try again in a few minutes."
+      "auth-expired": "Access to the channel has expired. Reconnect the platform to resume updates.",
+      "rate-limited": "The platform has temporarily limited requests. Data will update on its own.",
+      "error": "Couldn’t update the data. We’ll try again in a few minutes."
     },
     "rangeLabel": "Period",
     "chartSummary": "{{title}}: from {{min}} to {{max}}, latest value {{last}}.",
-    "emptyTitle": "No platforms connected",
-    "connectInProfile": "Connect in your profile",
-    "channelNeedsAction": "Metric collection needs attention, see",
-    "channelInactive": "This platform is inactive on your plan, switch it in",
-    "offline": "offline",
+    "emptyTitle": "Connect a platform",
+    "connectInProfile": "Connect a platform",
+    "channelNeedsAction": "Channel data isn’t updating.",
+    "channelInactive": "This platform is off: your plan keeps one active.",
+    "offline": "Offline",
     "peakViewers": "Peak viewers",
-    "youtubeRounding": "YouTube rounds subscriber counts to three significant digits.",
     "deltaForPeriod": "for the period",
     "tabs": {
       "label": "Analytics sections",
@@ -693,7 +690,7 @@
       "liveShare": "Donations during streams",
       "liveShareNote": "share of the period total",
       "audience": "Audience growth",
-      "audienceNote": "Twitch followers and YouTube subscribers"
+      "audienceNote": "new followers and subscribers"
     },
     "duration": {
       "minutes": "{{minutes}} min",
@@ -714,7 +711,7 @@
     },
     "streams": {
       "title": "Streams",
-      "description": "A stream is time live on at least one platform: a multistream counts once. Donations are those received during the stream.",
+      "description": "A multistream across platforms counts as one stream. Donations are those received during the stream.",
       "empty": "No streams in this period.",
       "date": "Start",
       "duration": "Duration",
@@ -727,7 +724,7 @@
     },
     "timeline": {
       "title": "Donations, streams and audience over time",
-      "description": "The charts share one time axis: hover a day and the crosshair lands on it in all three.",
+      "description": "Hover a day to highlight it on every chart.",
       "donations": "Donations",
       "live": "Time live",
       "audience": "Audience growth",
@@ -739,7 +736,7 @@
       "hours": "Stream length, h",
       "tooFew": "At least {{min}} streams in the period are needed to judge a relationship.",
       "constant": "The value did not change from stream to stream, so no relationship shows.",
-      "coefficient": "(Spearman coefficient {{value}}, streams: {{count}})",
+      "coefficient": "(based on {{count}} streams)",
       "strength": {
         "weak": "weak",
         "moderate": "noticeable",
@@ -762,7 +759,7 @@
     },
     "heatmap": {
       "title": "When people donate",
-      "description": "Donation totals by weekday and hour in your time zone.",
+      "description": "Donation totals by weekday and hour, in your time zone.",
       "best": "Most donations: {{day}} from {{from}} to {{to}}, {{amount}}.",
       "empty": "No donations in this period.",
       "less": "less",
@@ -773,20 +770,22 @@
     "events": {
       "title": "Channel events",
       "empty": "No events in this period."
-    }
+    },
+    "liveTime": "Time live",
+    "fixInProfile": "Open Platforms"
   },
   "rooms": {
     "title": "Private rooms",
-    "description": "Bring guests on stream: a guest joins by link without signing up, and the Room guests widget puts their video and audio into OBS.",
+    "description": "Bring guests on stream: they join by link without signing up, and the Room guests widget puts them in OBS.",
     "namePlaceholder": "Room name",
     "create": "New room",
     "empty": "No rooms yet",
     "open": "Open",
-    "deleteConfirm": "Delete the room? Everyone in it now will be disconnected, and invite links will stop working.",
-    "notConfigured": "Private rooms are not configured on this server.",
+    "deleteConfirm": "Delete this room? Everyone in it will be disconnected and invites will stop working.",
+    "notConfigured": "Rooms are temporarily unavailable.",
     "lobby": {
       "title": "You are not in the room",
-      "hint": "Listen to the room with headphones. Sound from speakers gets into your microphone and goes on stream as an echo.",
+      "hint": "Put on headphones, otherwise sound from your speakers gets into the mic and echoes on stream.",
       "join": "Join the room",
       "withCamera": "Turn on camera"
     },
@@ -795,8 +794,8 @@
       "mic": "Microphone",
       "camera": "Camera",
       "mirror": "Mirror",
-      "mirrorHint": "Mirroring applies to your camera only, and everywhere: this is how other participants and viewers on stream see you. Nobody can flip another person’s camera.",
-      "empty": "Nobody here yet. Send a guest an invite link.",
+      "mirrorHint": "Mirrors your camera for everyone: participants and viewers.",
+      "empty": "No one here yet. Send a guest an invite.",
       "you": "you",
       "host": "streamer",
       "mute": "Mute microphone",
@@ -818,7 +817,7 @@
       "labelPlaceholder": "Who the link is for, e.g. “Alex”",
       "create": "Create link",
       "empty": "No invites yet",
-      "oneTimeWarning": "The link is shown only once — send it to your guest now. One link, one guest: that way you can revoke it without affecting the others.",
+      "oneTimeWarning": "Send the link to your guest now, we won’t show it again. Make a separate link for each guest so you can revoke one without affecting the others.",
       "lastUsed": "Last joined",
       "never": "never joined",
       "revoke": "Revoke",
@@ -827,7 +826,7 @@
     },
     "obs": {
       "title": "Guests in OBS",
-      "hint": "The widget puts the video and audio of this room's guests into an OBS browser source. The streamer isn't in it: your camera and microphone are already in OBS.",
+      "hint": "Puts your guests’ video and audio in OBS. You aren’t in it: your camera and mic are already in OBS.",
       "empty": "No widgets for this room yet.",
       "create": "Create a widget for this room",
       "open": "Set up"
@@ -863,11 +862,11 @@
         },
         "highQuality": {
           "label": "High transmission quality",
-          "hint": "96 kbps instead of 48, and silence is sent as is: without it, quiet word beginnings get cut off."
+          "hint": "Cleaner sound, quiet word beginnings aren’t cut off."
         }
       },
-      "custom": "Custom setting: doesn't match any level.",
-      "headphones": "Echo cancellation is off — listen to the room with headphones only. Otherwise sound from the speakers gets into the microphone, and others hear themselves with a delay."
+      "custom": "Custom settings.",
+      "headphones": "Echo cancellation is off. Use headphones, or others will hear an echo."
     }
   },
   "join": {
@@ -882,7 +881,7 @@
     "cameraDenied": "No access to the camera or microphone. Allow access in your browser settings — or join without them.",
     "terms": "I accept the",
     "termsLink": "room participation terms",
-    "termsHint": "The streamer and guests will see and hear your name, image and voice, and the streamer may put them on stream. The platform does not record them.",
+    "termsHint": "The streamer and guests will see and hear you, and the streamer may put you on stream. We don’t record anything.",
     "submit": "Join",
     "invalid": "This link is not valid. The streamer may have revoked it — ask for a new one.",
     "full": "The room is full. Please try later.",
@@ -899,7 +898,7 @@
   "billing": {
     "title": "Plan",
     "description": "Alerts, chat and analytics work on any plan. A paid one lifts the limits on widgets and platforms, and Pro adds private rooms and advanced styling.",
-    "notConfigured": "Payments are not configured on this server — private rooms are available for free.",
+    "notConfigured": "Payments aren’t set up yet, so every feature is free.",
     "choosePeriod": "Billing period",
     "period": {
       "month": "Month",
@@ -947,29 +946,29 @@
     "status": {
       "renews": "Active until {{date}}, then renews automatically.",
       "endsOn": "Active until {{date}}. Auto-renewal is off.",
-      "grace": "The period ended on {{date}}, but the renewal charge failed. Your plan stays active for a few more days while we retry.",
-      "expired": "Your subscription has ended. Subscribe again to get your rooms back."
+      "grace": "We couldn’t charge the renewal. Your plan is still active and we’ll try again over the next few days.",
+      "expired": "Your subscription has ended. Pay again to get your plan’s features back."
     },
     "paymentMethod": "Payment method: {{title}}",
     "nextPeriod": "Next renewal:",
     "disableAutoRenew": "Turn off auto-renewal",
-    "disableAutoRenewHint": "Nothing more will be charged. Rooms stay available until the end of the paid period.",
+    "disableAutoRenewHint": "Nothing more will be charged. Your plan stays active until the end of the paid period.",
     "enableAutoRenew": "Turn on auto-renewal",
     "returned": {
       "succeeded": "Payment complete — the Pro plan is active.",
       "canceled": "The payment did not go through. No money was taken — try again or use another card.",
-      "pending": "The payment is still processing. This usually takes less than a minute; the page will update by itself once YooKassa confirms the payment."
+      "pending": "The payment is processing. This page updates itself once it’s confirmed."
     },
     "paywall": {
       "rooms": {
         "title": "Private rooms are part of the Pro plan",
         "expired": "Your Pro plan subscription has ended",
-        "hint": "Your rooms and invites are saved. You can call guests and put them into OBS after paying."
+        "hint": "Your rooms and invites are saved. Get Pro to bring guests on stream again."
       },
       "advancedStyling": {
         "title": "Advanced styling is part of the Pro plan",
         "expired": "Your Pro plan subscription has ended",
-        "hint": "Your settings are saved. On stream the widget uses the basic styling until the plan is paid."
+        "hint": "Your settings are saved. Get Pro to see them on stream."
       },
       "action": "Choose a plan"
     },
@@ -1014,7 +1013,7 @@
       "pricing": "Plans and pricing",
       "sampleUser": "Viewer",
       "sampleMessage": "Thanks for the stream!",
-      "sampleCaption": "A sample alert. The centre of the card is the same renderer that shows it in OBS."
+      "sampleCaption": "This is how an alert looks in OBS."
     },
     "features": {
       "title": "What it does",
@@ -1132,26 +1131,26 @@
     "statusLabel": "Stream status",
     "refresh": "Refresh",
     "refreshIn": "Refresh ({{seconds}}s)",
-    "refreshHint": "Ask the platforms for viewers and stream state right now. Twitch reports the start of a stream itself, YouTube does not: there this is the only way not to wait for the next poll.",
-    "refreshThrottled": "Just refreshed — platforms are polled at most once every 30 seconds.",
+    "refreshHint": "Update viewers and stream status right now. Useful for YouTube: we learn about Twitch streams starting instantly.",
+    "refreshThrottled": "Data was just updated. You can refresh again in 30 seconds.",
     "updatedAt": "updated at {{time}}",
     "neverUpdated": "metrics have not been collected yet",
     "syncProblem": "metrics are not updating",
     "noPlatforms": "Connect Twitch or YouTube to see stream time and viewers here.",
     "connectPlatform": "Connect a platform",
     "openWindow": "Open in a separate window",
-    "obsDock": "You can add this window to OBS: Docks → Custom Browser Docks, URL {{url}}. Sign in inside the dock itself.",
+    "obsDock": "Add this window to OBS: Docks → Custom Browser Docks, URL {{url}}. Sign in right inside the dock.",
     "chat": {
       "title": "Chat",
       "label": "Chat messages",
-      "none": "No chat: connect Twitch or YouTube to see your channels' chat here.",
-      "waiting": "Messages will appear here within ten seconds of opening the window.",
-      "notStored": "Chat is not stored: you only see messages that arrive while this window is open.",
+      "none": "Connect Twitch or YouTube to see your channels’ chat here.",
+      "waiting": "Messages will appear here in a few seconds.",
+      "notStored": "You see messages from the moment you opened this window.",
       "state": {
         "ok": "reading chat",
         "waiting": "waiting for the stream to start",
-        "quota": "YouTube quota is used up for today — chat returns when Google resets it (midnight Pacific time)",
-        "auth": "access revoked, reconnect the channel under Profile → Platforms"
+        "quota": "YouTube’s daily limit is used up — chat returns at midnight Pacific time",
+        "auth": "reconnect the channel in Platforms"
       },
       "channelTwitch": "twitch.tv/{{channel}}"
     },
@@ -1187,7 +1186,7 @@
     "description": "Password, two-factor sign-in and the devices your account is open on.",
     "password": {
       "title": "Password",
-      "description": "After a password change every other device is signed out; this one stays signed in.",
+      "description": "Changing your password signs you out on your other devices.",
       "current": "Current password",
       "new": "New password",
       "confirm": "Repeat the new password",
@@ -1196,19 +1195,19 @@
     },
     "sessions": {
       "title": "Devices",
-      "description": "Where your account is open now. An unfamiliar device is a reason to sign it out and change your password.",
+      "description": "Don’t recognize a device? Sign it out and change your password.",
       "unknownDevice": "Unknown device",
       "current": "This device",
       "lastUsed": "Last active {{date}}",
       "revoke": "Sign out",
       "revokeNamed": "Sign out on {{name}}",
-      "revoked": "The device will be signed out within a few minutes"
+      "revoked": "The device will be signed out within 15 minutes"
     },
     "totp": {
       "title": "Two-factor sign-in",
       "on": "On",
       "off": "Off",
-      "description": "When you sign in, you will need a code from an authenticator app in addition to your password. Staff cannot sign in to the admin panel without it.",
+      "description": "Besides your password, you’ll need a code from an authenticator app to sign in.",
       "enable": "Turn on",
       "stepApp": "Install an authenticator app: Google Authenticator, Yandex Key or any app that supports TOTP.",
       "stepScan": "Scan the QR code with the app or enter the key manually.",
@@ -1218,33 +1217,33 @@
       "codeHint": "The code changes every 30 seconds.",
       "confirm": "Confirm and turn on",
       "enabled": "Two-factor sign-in is on",
-      "enabledDescription": "A code from the app is requested at every sign-in. Enter your password to turn it off.",
+      "enabledDescription": "We’ll ask for a code from the app every time you sign in. Enter your password to turn it off.",
       "disable": "Turn off two-factor sign-in",
       "disabled": "Two-factor sign-in is off"
     }
   },
   "platforms": {
     "title": "Platforms",
-    "description": "Twitch and YouTube channels connected by signing in to the platform. Chat, Twitch events, the live window and analytics depend on them.",
+    "description": "Connect your channels to get chat, events and stats.",
     "emptyTitle": "No platform connected",
-    "empty": "Connect a channel: metrics start collecting, and chat and events arrive on their own.",
+    "empty": "Connect a channel and chat, events and stats start working on their own.",
     "donationsHint": "Donation services are connected in",
     "connectTitle": "Connect a platform",
     "connect": "Connect {{platform}}",
-    "notConfigured": "The administrator has not set up this platform",
+    "notConfigured": "Connecting is not available yet",
     "connected": "{{platform}} is connected",
     "connectFailed": "Could not connect the platform. Please try again.",
-    "connectPlanLimit": "Your plan includes one platform. Get Multistream or disconnect the connected platform.",
+    "connectPlanLimit": "The free plan includes one platform. Upgrade to Multistream or disconnect the current one.",
     "active": "Active",
     "inactiveShort": "Inactive",
     "lastSynced": "data from {{date}}",
     "activate": "Make active",
     "activateNamed": "Make {{name}} active",
-    "inactive": "This platform is inactive: your plan runs one at a time. Metrics are not collected, chat and events do not arrive. Press “Make active” to switch to it.",
+    "inactive": "This platform is off: your plan keeps one active. Press “Make active” to switch to it.",
     "disconnect": "Disconnect",
     "disconnectNamed": "Disconnect {{name}}",
     "disconnectTitle": "Disconnect {{name}}?",
-    "disconnectText": "Tokens, channel details and all collected metrics are deleted at once and cannot be restored. For Twitch, channel events and chat stop arriving.",
+    "disconnectText": "The channel’s stats will be deleted for good, and its chat and events will stop arriving.",
     "needsReconnect": "Reconnect Twitch: without the new permissions, Bits and Channel Points alerts will not arrive.",
     "reconnect": "Reconnect"
   }

@@ -39,8 +39,8 @@ test('окно эфира показывает чат канала, виджет
   await test.step('без площадок и чата окно объясняет, что подключить', async () => {
     await mainNav(page).getByRole('link', { name: 'Эфир', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Эфир', level: 1 })).toBeVisible();
-    await expect(page.getByText(/Подключите Twitch или YouTube/)).toBeVisible();
-    await expect(page.getByText(/Чата нет/)).toBeVisible();
+    await expect(page.getByText(/здесь появятся время эфира и зрители/)).toBeVisible();
+    await expect(page.getByText(/здесь появится чат ваших каналов/)).toBeVisible();
   });
 
   let channel = '';
