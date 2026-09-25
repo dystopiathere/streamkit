@@ -31,7 +31,7 @@ export function SyncNotice({ channel }: { channel: Channel }): React.JSX.Element
       <p>
         {isAuth || channel.syncState !== 'ok'
           ? t(`analytics.syncState.${channel.syncState}`)
-          : t('platforms.needsReconnect')}
+          : t(`platforms.needsReconnect.${channel.platform}`)}
       </p>
       {needsAction ? (
         <Button

@@ -102,6 +102,11 @@ describe('токены Kick', () => {
     expect(tokens.scopes).toEqual(KICK_SCOPES);
   });
 
+  it('ответ без scope — выданы запрошенные права, а не никаких', () => {
+    const tokens = normalizeKickTokens({ access_token: 'a', refresh_token: 'r', expires_in: 7200 });
+    expect(tokens.scopes).toEqual(KICK_SCOPES);
+  });
+
   it('пустой срок — без срока, а не «истёк в 1970-м»', () => {
     expect(normalizeKickTokens({ access_token: 'a', expires_in: '' }).expiresAt).toBeNull();
   });

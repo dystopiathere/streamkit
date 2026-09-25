@@ -304,6 +304,16 @@ describe('Kick (feature)', () => {
     });
   });
 
+  it('подключённый со всеми правами Kick не просит переподключения', async () => {
+    // Права Kick не попадали в выборку прав, и карточка просила переподключить
+    // площадку сразу после подключения — с текстом про Twitch.
+    await connectKick();
+
+    const channels = await request(server()).get('/api/channels').set(auth()).expect(200);
+    expect(channels.body).toHaveLength(1);
+    expect(channels.body[0]).toMatchObject({ platform: 'kick', needsReconnect: false });
+  });
+
   it('без того же code_verifier код не меняется: подключение не проходит', async () => {
     const authorize = await request(server())
       .post('/api/integrations/kick/authorize')

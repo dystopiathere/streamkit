@@ -465,10 +465,16 @@ export class AnalyticsService {
     return rows[0] ?? { peak_viewers: null, live_seconds: 0 };
   }
 
-  /** Какие права выдала каждая площадка — по учётным данным пользователя. */
+  /**
+   * Какие права выдала каждая площадка — по учётным данным пользователя.
+   *
+   * Список площадок — тот же, что у аналитики: площадка, выпавшая из выборки,
+   * получает пустой список прав и навсегда встаёт с просьбой переподключиться.
+   */
   private async grantedScopes(userId: string): Promise<Map<string, string[]>> {
+    const providers = ANALYTICS_PLATFORMS.map((platform) => platform.toLowerCase());
     const credentials = await this.prisma.integrationCredential.findMany({
-      where: { userId, provider: { in: ['twitch', 'youtube'] } },
+      where: { userId, provider: { in: providers } },
       select: { provider: true, scopes: true },
     });
     return new Map(credentials.map((row) => [row.provider.toUpperCase(), row.scopes]));
