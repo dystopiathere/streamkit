@@ -8,6 +8,10 @@ import { DonationSourcesService } from './donation-sources.service';
 import { DonationAlertsApi } from './donationalerts.api';
 import { DonationAlertsConnector } from './donationalerts.connector';
 import { IntegrationsController } from './integrations.controller';
+import { KickEventsConnector } from './kick-events.connector';
+import { KickProvider } from './kick.provider';
+import { KickWebhookController } from './kick-webhook.controller';
+import { KickWebhookService } from './kick-webhook.service';
 import { OAuthStateService } from './oauth-state.service';
 import { PlatformConnectionService } from './platform-connection.service';
 import { PlatformRegistry } from './platform-registry.service';
@@ -24,11 +28,13 @@ import { YouTubeProvider } from './youtube.provider';
  */
 @Module({
   imports: [EventsModule, BillingModule],
-  controllers: [IntegrationsController, DonationSourcesController],
+  controllers: [IntegrationsController, DonationSourcesController, KickWebhookController],
   providers: [
     HttpClient,
     TwitchProvider,
     YouTubeProvider,
+    KickProvider,
+    KickWebhookService,
     PlatformRegistry,
     PlatformTokenService,
     OAuthStateService,
@@ -42,6 +48,7 @@ import { YouTubeProvider } from './youtube.provider';
     PlatformConnectionService,
     DonationAlertsApi,
     TwitchProvider,
+    KickProvider,
   ],
 })
 export class IntegrationsModule {}
@@ -59,6 +66,7 @@ export class IntegrationsModule {}
   providers: [
     DonationAlertsConnector,
     TwitchEventSubConnector,
+    KickEventsConnector,
     ConnectorManager,
     ConnectorScheduler,
   ],

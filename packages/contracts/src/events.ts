@@ -28,6 +28,7 @@ export const EVENT_PROVIDERS = [
   'donatepay',
   'twitch',
   'youtube',
+  'kick',
   'webhook',
   'manual',
 ] as const;

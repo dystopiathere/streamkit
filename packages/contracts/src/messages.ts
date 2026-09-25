@@ -57,6 +57,7 @@ export const MESSAGES_EN: Readonly<Record<string, string>> = {
     'Twitch channel login: Latin letters, digits and underscores',
   'Идентификатор канала YouTube: UC и 22 символа':
     'YouTube channel ID: UC followed by 22 characters',
+  'Идентификатор пользователя Kick: только цифры': 'Kick user ID: digits only',
   'Ник без пробелов, до 64 символов': 'A name without spaces, up to 64 characters',
   'Верхняя граница должна быть не меньше нижней':
     'The upper bound must not be lower than the lower one',
@@ -70,8 +71,8 @@ export const MESSAGES_EN: Readonly<Record<string, string>> = {
   'Ссылка подключения недействительна, начните заново':
     'The connection link is no longer valid, please start over',
   'DonationAlerts не настроен на этом сервере': 'DonationAlerts is not configured on this server',
-  'Виджет чата показывает чат ваших каналов — сначала подключите Twitch или YouTube в разделе «Аналитика»':
-    'The chat widget shows the chat of your own channels — connect Twitch or YouTube in Analytics first',
+  'Виджет чата показывает чат ваших каналов — сначала подключите Twitch, YouTube или Kick в разделе «Аналитика»':
+    'The chat widget shows the chat of your own channels — connect Twitch, YouTube or Kick in Analytics first',
 
   // Комнаты
   'Приватные комнаты не настроены на этом сервере':

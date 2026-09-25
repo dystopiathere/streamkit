@@ -66,9 +66,13 @@ export interface OverviewResult {
   donationsDuringStreamsMinor: number;
 }
 
-/** Какой счётчик мерит аудиторию у площадки — для запроса по снимкам. */
-export function audienceCounter(platform: Platform): 'followers' | 'subscribers' {
+/**
+ * Какой счётчик мерит аудиторию у площадки — для запроса по снимкам. null —
+ * у площадки его нет (Kick), и в прирост аудитории она не входит.
+ */
+export function audienceCounter(platform: Platform): 'followers' | 'subscribers' | null {
   const counter = PLATFORM_COUNTERS[platform].audience;
+  if (counter === null) return null;
   return counter === 'followers' ? 'followers' : 'subscribers';
 }
 

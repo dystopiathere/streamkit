@@ -318,8 +318,9 @@
     "chat": {
       "platformTwitch": "Twitch chat: twitch.tv/{{channel}}",
       "platformYoutube": "YouTube chat: {{channel}}",
+      "platformKick": "Kick chat: kick.com/{{channel}}",
       "notConnected": "{{platform}} is not connected.",
-      "none": "Connect Twitch or YouTube and the widget will show your channels’ chat.",
+      "none": "Connect Twitch, YouTube or Kick and the widget will show your channels’ chat.",
       "connect": "Connect in your profile",
       "youtubeHint": "YouTube chat appears within a couple of minutes after the stream starts."
     },
@@ -544,7 +545,17 @@
       "off": "not arriving",
       "lead": "Follows, subscriptions, Bits, raids and Channel Points rewards arrive on their own while Twitch is connected. Style them in your alerts widget scenarios.",
       "connect": "Connect Twitch",
-      "fix": "Reconnect Twitch"
+      "fix": "Reconnect Twitch",
+      "enable": "Turn on Twitch in Platforms"
+    },
+    "kick": {
+      "title": "Kick events",
+      "on": "arriving",
+      "off": "not arriving",
+      "lead": "Follows, subscriptions, gifted subscriptions and Channel Points rewards arrive on their own while Kick is connected. Style them in your alerts widget scenarios.",
+      "connect": "Connect Kick",
+      "fix": "Reconnect Kick",
+      "enable": "Turn on Kick in Platforms"
     }
   },
   "events": {
@@ -627,7 +638,7 @@
   },
   "analytics": {
     "title": "Analytics",
-    "empty": "Connect Twitch or YouTube to see streams, viewers and audience growth. Donations are counted either way.",
+    "empty": "Connect Twitch, YouTube or Kick to see streams, viewers and audience growth. Donations are counted either way.",
     "live": "Live",
     "viewersNow": "Watching now",
     "noValue": "—",
@@ -653,7 +664,8 @@
     },
     "platform": {
       "twitch": "Twitch",
-      "youtube": "YouTube"
+      "youtube": "YouTube",
+      "kick": "Kick"
     },
     "syncState": {
       "auth-expired": "Access to the channel has expired. Reconnect the platform to resume updates.",
@@ -1131,19 +1143,19 @@
     "statusLabel": "Stream status",
     "refresh": "Refresh",
     "refreshIn": "Refresh ({{seconds}}s)",
-    "refreshHint": "Update viewers and stream status right now. Useful for YouTube: we learn about Twitch streams starting instantly.",
+    "refreshHint": "Update viewers and stream status right now. Useful for YouTube: we learn about Twitch and Kick streams starting instantly.",
     "refreshThrottled": "Data was just updated. You can refresh again in 30 seconds.",
     "updatedAt": "updated at {{time}}",
     "neverUpdated": "metrics have not been collected yet",
     "syncProblem": "metrics are not updating",
-    "noPlatforms": "Connect Twitch or YouTube to see stream time and viewers here.",
+    "noPlatforms": "Connect Twitch, YouTube or Kick to see stream time and viewers here.",
     "connectPlatform": "Connect a platform",
     "openWindow": "Open in a separate window",
     "obsDock": "Add this window to OBS: Docks → Custom Browser Docks, URL {{url}}. Sign in right inside the dock.",
     "chat": {
       "title": "Chat",
       "label": "Chat messages",
-      "none": "Connect Twitch or YouTube to see your channels’ chat here.",
+      "none": "Connect Twitch, YouTube or Kick to see your channels’ chat here.",
       "waiting": "Messages will appear here in a few seconds.",
       "notStored": "You see messages from the moment you opened this window.",
       "state": {

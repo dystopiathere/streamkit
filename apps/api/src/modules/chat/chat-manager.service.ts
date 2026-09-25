@@ -14,6 +14,7 @@ import { PresenceService } from '../../common/redis/presence.service';
 import { EventsService } from '../events/events.service';
 import { chatChannels } from './chat-channel';
 import type { ChatSource } from './chat-source';
+import { KickChatSource } from './kick-chat.source';
 import { TwitchChatSource } from './twitch-chat.source';
 import { YouTubeChatSource } from './youtube-chat.source';
 
@@ -62,12 +63,13 @@ export class ChatManager implements OnApplicationShutdown {
     private readonly prisma: PrismaService,
     twitch: TwitchChatSource,
     youtube: YouTubeChatSource,
+    kick: KickChatSource,
     private readonly bus: RealtimeBus,
     private readonly lock: RedisLock,
     private readonly presence: PresenceService,
     private readonly events: EventsService,
   ) {
-    this.sources = [twitch, youtube];
+    this.sources = [twitch, youtube, kick];
   }
 
   /** Один такт: подтвердить владение и свести состав каналов. */

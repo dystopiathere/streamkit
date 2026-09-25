@@ -2,7 +2,7 @@ import type { IncomingAlertEvent } from '@streamkit/contracts';
 
 /**
  * Контракт коннектора событий: донат-сервиса или площадки, которая присылает
- * события канала сама (Twitch EventSub).
+ * события канала сама (Twitch EventSub, вебхуки Kick).
  *
  * Ядро (приём, дедупликация, рассылка) не знает ни одного провайдера по имени —
  * иначе добавление DonatePay или Boosty превращалось бы в правки в десяти местах.
@@ -16,7 +16,7 @@ import type { IncomingAlertEvent } from '@streamkit/contracts';
  */
 export interface DonationConnector {
   /** Идентификатор провайдера, совпадает со значением в контрактах. */
-  readonly provider: 'donationalerts' | 'donatepay' | 'twitch';
+  readonly provider: 'donationalerts' | 'donatepay' | 'twitch' | 'kick';
 
   /**
    * Открывает подключение для конкретного пользователя.

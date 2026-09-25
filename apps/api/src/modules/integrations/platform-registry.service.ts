@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { AvailablePlatform, Platform } from '@streamkit/contracts';
 import { AppConfig } from '../../config/app-config.service';
 import type { PlatformProvider } from './platform-provider';
+import { KickProvider } from './kick.provider';
 import { TwitchProvider } from './twitch.provider';
 import { YouTubeProvider } from './youtube.provider';
 
@@ -25,8 +26,9 @@ export class PlatformRegistry {
     private readonly config: AppConfig,
     twitch: TwitchProvider,
     youtube: YouTubeProvider,
+    kick: KickProvider,
   ) {
-    this.all = [twitch, youtube];
+    this.all = [twitch, youtube, kick];
 
     for (const provider of this.all) {
       if (this.config.oauthCredentials(provider.platform)) {

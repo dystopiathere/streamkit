@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Button, cn, Label, selectClasses } from '@streamkit/app-kit';
 import { toast } from 'sonner';
+import { PLATFORM_TITLES } from '@streamkit/ui';
 import { useChannels } from '@/features/analytics/queries';
 import { PlanPaywall, usePlanAccess } from '@/features/billing/PlanPaywall';
 import { useRooms } from '@/features/rooms/queries';
@@ -1268,7 +1269,9 @@ function ChatMain({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.Ele
                   label={
                     platform === 'twitch'
                       ? t('widgets.chat.platformTwitch', { channel: channel.login })
-                      : t('widgets.chat.platformYoutube', { channel: channel.displayName })
+                      : platform === 'kick'
+                        ? t('widgets.chat.platformKick', { channel: channel.login })
+                        : t('widgets.chat.platformYoutube', { channel: channel.displayName })
                   }
                 />
                 {platform === 'youtube' ? (
@@ -1278,7 +1281,7 @@ function ChatMain({ form }: { form: UseFormReturn<FieldValues> }): React.JSX.Ele
             ) : (
               <p key={platform} className="text-sm text-muted">
                 {t('widgets.chat.notConnected', {
-                  platform: platform === 'twitch' ? 'Twitch' : 'YouTube',
+                  platform: PLATFORM_TITLES[platform],
                 })}{' '}
                 <Link to={PLATFORMS_PATH} className="underline hover:text-fg">
                   {t('widgets.chat.connect')}

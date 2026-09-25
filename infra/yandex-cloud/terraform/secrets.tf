@@ -141,7 +141,7 @@ resource "yandex_lockbox_secret_version" "livekit" {
 
 resource "yandex_lockbox_secret" "external" {
   name        = "streamkit-external"
-  description = "Заводится владельцем: YOOKASSA_*, TWITCH_*, YOUTUBE_*, SELLER_*"
+  description = "Заводится владельцем: YOOKASSA_*, TWITCH_*, YOUTUBE_*, KICK_*, SELLER_*"
 }
 
 resource "yandex_lockbox_secret_iam_binding" "app_viewers" {

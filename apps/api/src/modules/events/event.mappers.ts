@@ -39,6 +39,7 @@ const PROVIDER_TO_PRISMA: Record<EventProvider, PrismaProvider> = {
   donatepay: PrismaProvider.DONATEPAY,
   twitch: PrismaProvider.TWITCH,
   youtube: PrismaProvider.YOUTUBE,
+  kick: PrismaProvider.KICK,
   webhook: PrismaProvider.WEBHOOK,
   manual: PrismaProvider.MANUAL,
 };
@@ -48,6 +49,7 @@ const PROVIDER_FROM_PRISMA: Record<PrismaProvider, EventProvider> = {
   DONATEPAY: 'donatepay',
   TWITCH: 'twitch',
   YOUTUBE: 'youtube',
+  KICK: 'kick',
   WEBHOOK: 'webhook',
   MANUAL: 'manual',
 };

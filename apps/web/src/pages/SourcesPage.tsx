@@ -56,7 +56,8 @@ export function SourcesPage(): React.JSX.Element {
         </p>
       ) : null}
 
-      <TwitchEventsCard />
+      <PlatformEventsCard platform="twitch" />
+      <PlatformEventsCard platform="kick" />
 
       {sources.data?.services.map((service) => (
         <ServiceCard key={service.service} service={service} />
@@ -68,32 +69,37 @@ export function SourcesPage(): React.JSX.Element {
 }
 
 /**
- * События Twitch — фолловеры, подписки, биты, рейды, баллы.
+ * События площадки — фолловеры, подписки, награды и то, что ещё она шлёт.
  *
- * Отдельной кнопки подключения у них нет: они идут вместе с Twitch из
- * «Аналитики», тем же входом. Карточка говорит, откуда они берутся, — иначе
+ * Отдельной кнопки подключения у них нет: они идут вместе с площадкой из
+ * профиля, тем же входом. Карточка говорит, откуда они берутся, — иначе
  * стример искал бы их среди донат-сервисов.
  */
-function TwitchEventsCard(): React.JSX.Element {
+function PlatformEventsCard({ platform }: { platform: 'twitch' | 'kick' }): React.JSX.Element {
   const { t } = useTranslation();
   const channels = useChannels();
-  const twitch = channels.data?.find((channel) => channel.platform === 'twitch');
-  const working = twitch && twitch.syncState !== 'auth-expired' && !twitch.needsReconnect;
+  const channel = channels.data?.find((item) => item.platform === platform);
+  const working =
+    channel && channel.isEnabled && channel.syncState !== 'auth-expired' && !channel.needsReconnect;
 
   return (
     <Card className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-medium">{t('sources.twitch.title')}</h2>
+        <h2 className="font-medium">{t(`sources.${platform}.title`)}</h2>
         {channels.data ? (
           <StatusPill tone={working ? 'success' : 'neutral'}>
-            {working ? t('sources.twitch.on') : t('sources.twitch.off')}
+            {working ? t(`sources.${platform}.on`) : t(`sources.${platform}.off`)}
           </StatusPill>
         ) : null}
       </div>
-      <p className="text-sm text-muted">{t('sources.twitch.lead')}</p>
+      <p className="text-sm text-muted">{t(`sources.${platform}.lead`)}</p>
       {channels.data && !working ? (
         <Link to={PLATFORMS_PATH} className="text-sm underline">
-          {twitch ? t('sources.twitch.fix') : t('sources.twitch.connect')}
+          {!channel
+            ? t(`sources.${platform}.connect`)
+            : channel.isEnabled
+              ? t(`sources.${platform}.fix`)
+              : t(`sources.${platform}.enable`)}
         </Link>
       ) : null}
     </Card>

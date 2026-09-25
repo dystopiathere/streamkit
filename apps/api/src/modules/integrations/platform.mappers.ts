@@ -4,6 +4,7 @@ import {
   Platform as PrismaPlatform,
 } from '@prisma/client';
 import type { Channel, ChannelSyncState, Platform } from '@streamkit/contracts';
+import { KICK_SCOPES } from './kick.provider';
 import { TWITCH_SCOPES } from './twitch.provider';
 
 /**
@@ -18,22 +19,24 @@ import { TWITCH_SCOPES } from './twitch.provider';
  * может — фильтр стоит в запросе.
  */
 /**
- * Не хватает ли прав, которые площадка должна была выдать. Считается только у
- * Twitch: у YouTube право одно и с подключения не менялось.
+ * Не хватает ли прав, которые площадка должна была выдать. Считается у Twitch
+ * и Kick: у YouTube право одно и с подключения не менялось.
  */
 function missingScopes(platform: PrismaPlatform, granted: string[]): boolean {
-  if (platform !== 'TWITCH') return false;
-  return TWITCH_SCOPES.some((scope) => !granted.includes(scope));
+  const required = platform === 'TWITCH' ? TWITCH_SCOPES : platform === 'KICK' ? KICK_SCOPES : null;
+  return required !== null && required.some((scope) => !granted.includes(scope));
 }
 
 const PLATFORM_TO_PRISMA: Record<Platform, PrismaPlatform> = {
   twitch: PrismaPlatform.TWITCH,
   youtube: PrismaPlatform.YOUTUBE,
+  kick: PrismaPlatform.KICK,
 };
 
 const PLATFORM_FROM_PRISMA: Partial<Record<PrismaPlatform, Platform>> = {
   TWITCH: 'twitch',
   YOUTUBE: 'youtube',
+  KICK: 'kick',
 };
 
 const SYNC_STATE_FROM_PRISMA: Record<PrismaSyncState, ChannelSyncState> = {

@@ -1,6 +1,29 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { Platform } from '@streamkit/contracts';
 import type { Env } from './env';
+
+/** Префикс переменных приложения площадки: `TWITCH_CLIENT_ID` и т. д. */
+const OAUTH_ENV_PREFIX: Record<Platform, string> = {
+  twitch: 'TWITCH',
+  youtube: 'YOUTUBE',
+  kick: 'KICK',
+};
+
+/**
+ * Ключ, которым Kick подписывает вебхуки, — из документации площадки
+ * (`docs.kick.com/events/webhook-security`). Тот же отдаёт
+ * `GET /public/v1/public-key`.
+ */
+const KICK_WEBHOOK_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq/+l1WnlRrGSolDMA+A8
+6rAhMbQGmQ2SapVcGM3zq8ANXjnhDWocMqfWcTd95btDydITa10kDvHzw9WQOqp2
+MZI7ZyrfzJuz5nhTPCiJwTwnEtWft7nV14BYRDHvlfqPUaZ+1KR4OCaO/wWIk/rQ
+L/TjY0M70gse8rlBkbo2a8rKhu69RQTRsoaf4DVhDPEeSeI5jVrRDGAMGL3cGuyY
+6CLKGdjVEM78g3JfYOvDU/RvfqD7L89TZ3iN94jrmWdGz34JNlEI5hqK8dd7C5EF
+BEbZ5jgB8s8ReQV8H+MkuffjdAj3ajDDX3DOJMIut1lBrUVD1AaSrGCKHooWoL2e
+twIDAQAB
+-----END PUBLIC KEY-----`;
 
 /**
  * Типизированная обёртка над ConfigService.
@@ -157,6 +180,24 @@ export class AppConfig {
   }
 
   /**
+   * Адреса Kick без хвостового слэша и ключ подписи вебхуков. По умолчанию —
+   * боевые; переопределяются только в тестах. Через `get`: переменные
+   * необязательны.
+   */
+  get kickEndpoints(): { auth: string; api: string; webhookPublicKey: string } {
+    const trim = (value: string) => value.replace(/\/+$/, '');
+    return {
+      auth: trim(this.config.get<string>('KICK_AUTH_URL') ?? 'https://id.kick.com'),
+      api: trim(this.config.get<string>('KICK_API_URL') ?? 'https://api.kick.com'),
+      // Переменная окружения несёт PEM одной строкой: переводы строк в ней
+      // записываются как `\n`, и без замены ключ не разбирается.
+      webhookPublicKey:
+        this.config.get<string>('KICK_WEBHOOK_PUBLIC_KEY')?.replace(/\\n/g, '\n') ??
+        KICK_WEBHOOK_PUBLIC_KEY,
+    };
+  }
+
+  /**
    * DonationAlerts: приложение и адреса, либо null — сервис не настроен.
    * Адреса по умолчанию — боевые; переопределяются только в тестах.
    */
@@ -279,10 +320,8 @@ export class AppConfig {
    * Через `config.get`, а не `value`: `value` использует getOrThrow и уронил бы
    * приложение там, где отсутствие ключа — штатная ситуация.
    */
-  oauthCredentials(
-    platform: 'twitch' | 'youtube',
-  ): { clientId: string; clientSecret: string } | null {
-    const prefix = platform === 'twitch' ? 'TWITCH' : 'YOUTUBE';
+  oauthCredentials(platform: Platform): { clientId: string; clientSecret: string } | null {
+    const prefix = OAUTH_ENV_PREFIX[platform];
     const clientId = this.config.get<string>(`${prefix}_CLIENT_ID` as keyof Env);
     const clientSecret = this.config.get<string>(`${prefix}_CLIENT_SECRET` as keyof Env);
     if (!clientId || !clientSecret) return null;

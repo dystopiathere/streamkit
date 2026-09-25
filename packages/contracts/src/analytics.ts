@@ -12,7 +12,7 @@ import { alertEventTypeSchema } from './events.js';
  * Список короче, чем enum `Platform` в схеме БД: там уже заведены VKPLAY и
  * TROVO под будущие коннекторы, но контракт описывает то, что реально работает.
  */
-export const PLATFORMS = ['twitch', 'youtube'] as const;
+export const PLATFORMS = ['twitch', 'youtube', 'kick'] as const;
 export const platformSchema = z.enum(PLATFORMS);
 export type Platform = z.infer<typeof platformSchema>;
 
@@ -33,11 +33,16 @@ export type ChannelCounter = 'followers' | 'subscribers' | 'totalViews';
  * бесплатное «следить за каналом». Платные подписчики Twitch — другое, их
  * немного и не у всех: они есть только у компаньонов и партнёров, поэтому
  * `optional` — без значения карточка их не показывает вовсе.
+ *
+ * У Kick счётчика аудитории нет вовсе: публичный API не отдаёт число
+ * фолловеров, только платных подписчиков своего канала. Подставить их вместо
+ * аудитории значило бы назвать ростом аудитории рост платных подписок —
+ * поэтому `audience: null`, и прирост аудитории считается без Kick.
  */
 export const PLATFORM_COUNTERS: Record<
   Platform,
   {
-    audience: ChannelCounter;
+    audience: ChannelCounter | null;
     counters: readonly ChannelCounter[];
     optional: readonly ChannelCounter[];
   }
@@ -48,6 +53,7 @@ export const PLATFORM_COUNTERS: Record<
     optional: ['subscribers'],
   },
   youtube: { audience: 'subscribers', counters: ['subscribers', 'totalViews'], optional: [] },
+  kick: { audience: null, counters: ['subscribers'], optional: [] },
 };
 
 /**

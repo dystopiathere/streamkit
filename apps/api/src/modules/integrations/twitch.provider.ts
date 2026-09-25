@@ -97,6 +97,7 @@ export class TwitchProvider implements PlatformProvider {
   readonly platform = 'twitch' as const;
   readonly title = 'Twitch';
   /** Квоты по объёму у Twitch нет — только лимит частоты, его держит бэкофф. */
+  readonly usesPkce = false;
   readonly statsQuotaCost = 0;
   private readonly logger = new Logger(TwitchProvider.name);
 

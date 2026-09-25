@@ -338,7 +338,7 @@ export class AnalyticsService {
         FROM "AnalyticsSnapshot" a
         JOIN "Channel" c ON c."id" = a."channelId"
         WHERE c."userId" = ${userId}::uuid AND a."isLive" AND a."capturedAt" >= ${since}
-          AND c."platform" IN ('TWITCH', 'YOUTUBE')
+          AND c."platform" IN ('TWITCH', 'YOUTUBE', 'KICK')
       ), runs AS (
         SELECT *, SUM(
           CASE WHEN prev_at IS NOT NULL
@@ -359,7 +359,7 @@ export class AnalyticsService {
 
     return rows.map((row) => {
       const platform = toPlatform(row.platform);
-      const followers = audienceCounter(platform) === 'followers';
+      const counter = audienceCounter(platform);
       return {
         channelId: row.channel_id,
         platform,
@@ -367,8 +367,8 @@ export class AnalyticsService {
         endedAt: row.ended_at,
         peakViewers: row.peak_viewers,
         avgViewers: row.avg_viewers,
-        audienceFirst: followers ? row.followers_first : row.subscribers_first,
-        audienceLast: followers ? row.followers_last : row.subscribers_last,
+        audienceFirst: pickAudience(counter, row.followers_first, row.subscribers_first),
+        audienceLast: pickAudience(counter, row.followers_last, row.subscribers_last),
       };
     });
   }
@@ -391,18 +391,22 @@ export class AnalyticsService {
       FROM "AnalyticsSnapshot" a
       JOIN "Channel" c ON c."id" = a."channelId"
       WHERE c."userId" = ${userId}::uuid AND a."capturedAt" >= ${since}
-        AND c."platform" IN ('TWITCH', 'YOUTUBE')
+        AND c."platform" IN ('TWITCH', 'YOUTUBE', 'KICK')
       GROUP BY 1, 2, 3
     `;
 
-    return rows.map((row) => {
-      const followers = audienceCounter(toPlatform(row.platform)) === 'followers';
-      return {
-        channelId: row.channel_id,
-        at: row.at,
-        first: followers ? row.followers_first : row.subscribers_first,
-        last: followers ? row.followers_last : row.subscribers_last,
-      };
+    return rows.flatMap((row) => {
+      const counter = audienceCounter(toPlatform(row.platform));
+      // Площадка без счётчика аудитории в прирост не входит вовсе, а не нулём.
+      if (counter === null) return [];
+      return [
+        {
+          channelId: row.channel_id,
+          at: row.at,
+          first: pickAudience(counter, row.followers_first, row.subscribers_first),
+          last: pickAudience(counter, row.followers_last, row.subscribers_last),
+        },
+      ];
     });
   }
 
@@ -512,7 +516,17 @@ function toContractStats(
 }
 
 function toPlatform(value: string): Platform {
-  return value === 'YOUTUBE' ? 'youtube' : 'twitch';
+  return value === 'YOUTUBE' ? 'youtube' : value === 'KICK' ? 'kick' : 'twitch';
+}
+
+/** Значение счётчика аудитории площадки; null — у площадки его нет. */
+function pickAudience(
+  counter: 'followers' | 'subscribers' | null,
+  followers: number | null,
+  subscribers: number | null,
+): number | null {
+  if (counter === null) return null;
+  return counter === 'followers' ? followers : subscribers;
 }
 
 function toPoint(row: SeriesRow): AnalyticsPoint {

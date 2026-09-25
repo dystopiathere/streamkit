@@ -1,6 +1,6 @@
 # StreamKit Terms of Service
 
-Version No. 11 of 24.09.2026
+Version No. 12 of 25.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/terms?lang=ru); if the two
@@ -31,11 +31,11 @@ processing of the user's viewers' and guests' data is described in section 13.
 - a widget builder for streaming software: alerts for donations and channel
   events (follows, subscriptions, memberships, gifts, Bits, raids, Channel Points
   rewards, paid support), donation goal, timer, top donors, latest event,
-  roulette, chat of the connected Twitch and YouTube channels in one feed,
+  roulette, chat of the connected Twitch, YouTube and Kick channels in one feed,
   private room guests;
 - public links for showing widgets in streaming software (for example, OBS);
 - receiving events from external services connected by the user;
-- channel analytics on connected platforms (Twitch, YouTube);
+- channel analytics on connected platforms (Twitch, YouTube, Kick);
 - a stream window: chat, viewer count, recent events and widget status on one
   screen;
 - private rooms for video calls with guests — in the Pro plan.
@@ -226,9 +226,9 @@ effect for as long as the user's account exists.
   YouTube Super Chats and Super Stickers): name or nickname, message text, amount
   and currency or a quantity, date and time, and for a voice donation a link to
   the recording held by the source service;
-- Twitch and YouTube chat viewers on the channels the user has connected to the
-  Service: username or name, for YouTube the author's channel ID, and message
-  text;
+- Twitch, YouTube and Kick chat viewers on the channels the user has connected to
+  the Service: username or name, for YouTube and Kick the author's ID on the
+  platform, and message text;
 - names, nicknames and labels the user types into the Service themselves:
   giveaway participants in roulette sectors, viewers hidden in the chat widget
   settings, the label of a guest invitation;

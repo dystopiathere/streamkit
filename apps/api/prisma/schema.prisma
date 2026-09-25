@@ -363,6 +363,7 @@ enum EventProvider {
   DONATEPAY
   TWITCH
   YOUTUBE
+  KICK
   WEBHOOK
   MANUAL
 }
@@ -449,6 +450,7 @@ enum Platform {
   YOUTUBE
   VKPLAY
   TROVO
+  KICK
 }
 
 /// Состояние сбора метрик. Отдельное поле, а не «последняя ошибка строкой»:

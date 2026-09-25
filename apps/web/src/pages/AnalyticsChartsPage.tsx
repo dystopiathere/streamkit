@@ -73,8 +73,11 @@ function ChannelCharts({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const series = useChannelSeries(channel.id, range);
-  const audience =
-    PLATFORM_COUNTERS[channel.platform].audience === 'followers' ? 'followers' : 'subscribers';
+  // Второй график — аудитория площадки, а где её нет (у Kick нет числа
+  // фолловеров) — платные подписчики: это тоже ряд, который площадка отдаёт.
+  const counters = PLATFORM_COUNTERS[channel.platform];
+  const audience: 'followers' | 'subscribers' =
+    (counters.audience ?? counters.counters[0]) === 'followers' ? 'followers' : 'subscribers';
   const points = series.data?.points ?? [];
   const bucket = rangeBucket(range);
 

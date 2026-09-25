@@ -5,7 +5,9 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import type { AvailablePlatform, Platform } from '@streamkit/contracts';
+import { CryptoService } from '../../common/crypto/crypto.service';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
 import { RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -35,6 +37,7 @@ export class PlatformConnectionService {
     private readonly audit: AuditService,
     private readonly bus: RealtimeBus,
     private readonly billing: BillingService,
+    private readonly crypto: CryptoService,
   ) {}
 
   async listAvailable(userId: string): Promise<AvailablePlatform[]> {
@@ -60,8 +63,16 @@ export class PlatformConnectionService {
     if (!provider) {
       throw new BadRequestException('Эта площадка сейчас недоступна');
     }
-    const state = await this.state.issue(userId, platform);
-    return { url: provider.buildAuthorizeUrl(state), state };
+    if (!provider.usesPkce) {
+      const state = await this.state.issue(userId, platform);
+      return { url: provider.buildAuthorizeUrl(state), state };
+    }
+    // PKCE (RFC 7636, метод S256): verifier — 32 случайных байта в base64url,
+    // это 43 символа из разрешённого алфавита; в ссылку уходит только хэш.
+    const codeVerifier = this.crypto.generateToken(32);
+    const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url');
+    const state = await this.state.issue(userId, platform, codeVerifier);
+    return { url: provider.buildAuthorizeUrl(state, codeChallenge), state };
   }
 
   /**
@@ -99,7 +110,7 @@ export class PlatformConnectionService {
     const limit = await this.requirePlatformSlot(state.userId, platform);
 
     const provider = this.registry.require(platform);
-    const tokens = await provider.exchangeCode(code);
+    const tokens = await provider.exchangeCode(code, state.codeVerifier);
     const identity = await provider.fetchIdentity(tokens.accessToken);
 
     await this.prisma.channel.upsert({

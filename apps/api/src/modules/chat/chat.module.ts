@@ -5,6 +5,7 @@ import { QuotaService } from '../analytics/quota.service';
 import { EventsModule } from '../events/events.module';
 import { IntegrationsModule } from '../integrations/integrations.module';
 import { CHAT_TICK_MS, ChatManager } from './chat-manager.service';
+import { KickChatSource } from './kick-chat.source';
 import { TwitchChatSource } from './twitch-chat.source';
 import { YouTubeChatSource } from './youtube-chat.source';
 
@@ -54,6 +55,7 @@ export class ChatScheduler {
   providers: [
     TwitchChatSource,
     YouTubeChatSource,
+    KickChatSource,
     HttpClient,
     QuotaService,
     ChatManager,

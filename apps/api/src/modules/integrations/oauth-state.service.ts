@@ -16,6 +16,12 @@ export type OAuthTarget = Platform | DonationService;
 export interface OAuthState {
   userId: string;
   platform: OAuthTarget;
+  /**
+   * Пара к `code_challenge` из ссылки входа — у площадок с PKCE (Kick). Живёт
+   * рядом со state и расходуется вместе с ним: verifier, переживший state,
+   * ничего бы не защищал.
+   */
+  codeVerifier?: string;
 }
 
 /**
@@ -39,11 +45,11 @@ export class OAuthStateService {
     private readonly crypto: CryptoService,
   ) {}
 
-  async issue(userId: string, platform: OAuthTarget): Promise<string> {
+  async issue(userId: string, platform: OAuthTarget, codeVerifier?: string): Promise<string> {
     const state = this.crypto.generateToken(32);
     await this.redis.set(
       this.key(state),
-      JSON.stringify({ userId, platform } satisfies OAuthState),
+      JSON.stringify({ userId, platform, codeVerifier } satisfies OAuthState),
       'EX',
       STATE_TTL_SECONDS,
     );

@@ -11,6 +11,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { EventsService } from '../events/events.service';
 import type { DonationConnector } from './donation-provider';
 import { DonationAlertsConnector } from './donationalerts.connector';
+import { KickEventsConnector } from './kick-events.connector';
 import { PlatformTokenService, type CredentialProvider } from './platform-token.service';
 import { TwitchEventSubConnector } from './twitch-eventsub.connector';
 
@@ -66,9 +67,11 @@ export class ConnectorManager implements OnApplicationBootstrap, OnApplicationSh
     private readonly bus: RealtimeBus,
     donationAlerts: DonationAlertsConnector,
     twitch: TwitchEventSubConnector,
+    kick: KickEventsConnector,
   ) {
     this.connectors.set(donationAlerts.provider, donationAlerts);
     this.connectors.set(twitch.provider, twitch);
+    this.connectors.set(kick.provider, kick);
   }
 
   /** Первая сверка — сразу при старте, не дожидаясь такта. Старт процесса она не держит. */
@@ -118,9 +121,9 @@ export class ConnectorManager implements OnApplicationBootstrap, OnApplicationSh
   }
 
   /**
-   * Что должно быть подключено: включённые донат-сервисы и каналы Twitch,
-   * доступ к которым жив. Twitch подключён ради аналитики, и события канала
-   * идут вместе с ним — отдельного включения у них нет.
+   * Что должно быть подключено: включённые донат-сервисы и каналы Twitch и
+   * Kick, доступ к которым жив. Площадка подключена ради аналитики, и события
+   * канала идут вместе с ней — отдельного включения у них нет.
    */
   private async wanted(): Promise<Map<string, WantedConnection>> {
     const [sources, channels] = await Promise.all([
@@ -129,8 +132,12 @@ export class ConnectorManager implements OnApplicationBootstrap, OnApplicationSh
         select: { userId: true, provider: true, externalAccountId: true },
       }),
       this.prisma.channel.findMany({
-        where: { platform: 'TWITCH', isEnabled: true, syncState: { not: 'AUTH_EXPIRED' } },
-        select: { userId: true, externalId: true },
+        where: {
+          platform: { in: ['TWITCH', 'KICK'] },
+          isEnabled: true,
+          syncState: { not: 'AUTH_EXPIRED' },
+        },
+        select: { userId: true, platform: true, externalId: true },
       }),
     ]);
     const all: WantedConnection[] = [
@@ -141,7 +148,7 @@ export class ConnectorManager implements OnApplicationBootstrap, OnApplicationSh
       })),
       ...channels.map((channel) => ({
         userId: channel.userId,
-        provider: 'twitch',
+        provider: channel.platform === 'KICK' ? 'kick' : 'twitch',
         accountId: channel.externalId,
       })),
     ];
@@ -205,12 +212,12 @@ export class ConnectorManager implements OnApplicationBootstrap, OnApplicationSh
     for (const [key, entry] of [...this.active]) {
       if (entry.userId === userId && entry.provider === provider) await this.stopKey(key);
     }
-    // У Twitch источник — канал «Аналитики»: мёртвый доступ там тот же, что
-    // видит опрос метрик, и чинится тем же повторным подключением.
+    // У Twitch и Kick источник — канал «Аналитики»: мёртвый доступ там тот
+    // же, что видит опрос метрик, и чинится тем же повторным подключением.
     const disabled =
-      provider === 'twitch'
+      provider === 'twitch' || provider === 'kick'
         ? this.prisma.channel.updateMany({
-            where: { userId, platform: 'TWITCH' },
+            where: { userId, platform: provider === 'kick' ? 'KICK' : 'TWITCH' },
             data: { syncState: 'AUTH_EXPIRED', syncError: reason },
           })
         : this.prisma.donationSource.updateMany({
