@@ -85,8 +85,8 @@ terraform providers lock -platform=linux_amd64 -platform=windows_amd64 \
   -platform=darwin_amd64 -platform=darwin_arm64
 ```
 
-Классы хостов по умолчанию — `s3-c2-m8` у PostgreSQL (burstable `b3-c1-m4` у
-него нет) и burstable `b3-c1-m4` у Valkey; проверьте
+Классы хостов по умолчанию — burstable: `b2.medium` у PostgreSQL (`b3-c1-m4` у
+него нет) и `b3-c1-m4` у Valkey; проверьте
 доступность в каталоге: `yc managed-postgresql resource-preset list`, `yc
 managed-redis resource-preset list`. Когда и как их поднимать — раздел
 «Стоимость и рост».
@@ -402,7 +402,7 @@ failed». Администратор входит на ВМ как `ops`.
 
 | Ресурс | По умолчанию | Когда поднимать | Куда |
 |---|---|---|---|
-| PostgreSQL | `s3-c2-m8` | CPU кластера стабильно выше 70 %, растёт время запросов | `s3-c4-m16`, затем второй хост (реплика) |
+| PostgreSQL | `b2.medium` | CPU кластера упирается в 50 %, растёт время запросов | `c3-c2-m4`, затем `s3-c2-m8` и второй хост (реплика) |
 | Valkey | `b3-c1-m4` | память выше половины (`used_memory`) | `hm3-c2-m8` |
 | ВМ приложений | 2 vCPU, 50 %, 4 ГБ | CPU ВМ стабильно у доли 50 % | `core_fraction = 100`, затем `cores = 4` |
 | ВМ LiveKit | 2 vCPU, 50 %, 4 ГБ | одновременных комнат больше десятка | `core_fraction = 100`; узкое место — канал |
