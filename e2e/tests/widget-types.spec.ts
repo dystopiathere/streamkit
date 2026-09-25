@@ -74,7 +74,7 @@ test('виджет чата настраивается, а оверлей по �
   await page.getByPlaceholder('Название виджета').fill('Чат в кадре');
   await page.getByLabel('Тип виджета').selectOption('chat');
   await page.getByRole('button', { name: 'Новый виджет' }).click();
-  await expect(page.getByText(/сначала подключите Twitch или YouTube/)).toBeVisible();
+  await expect(page.getByText(/сначала подключите Twitch, YouTube или Kick/)).toBeVisible();
 
   // Хватает одной площадки — здесь только YouTube.
   const youtube = await connectYouTube(page);
