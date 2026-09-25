@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { HttpClient } from '../../common/http/http-client.service';
-import { PlatformAuthError, PlatformError } from '../../common/http/platform-errors';
+import {
+  PlatformAuthError,
+  PlatformError,
+  PlatformRateLimitError,
+} from '../../common/http/platform-errors';
 import { AppConfig } from '../../config/app-config.service';
 
 /**
@@ -11,9 +15,16 @@ import { AppConfig } from '../../config/app-config.service';
  * разбора тела мёртвый ключ выглядел бы как «донатов пока нет».
  */
 const envelopeSchema = z.object({
-  status: z.string(),
+  status: z.union([z.string(), z.number()]),
   message: z.string().nullish(),
 });
+
+/**
+ * Лимит в теле ответа. Документация описывает его как `status: 429` в
+ * конверте, а боевой API отвечает кодом 429 с `retry-after` — ловим оба.
+ */
+const RATE_LIMIT_STATUS = '429';
+const RATE_LIMIT_PAUSE_MS = 20_000;
 
 /** Сообщения DonatePay о ключе, который не подходит (проверено запросами к боевому API). */
 const REJECTED_KEY_MESSAGES = new Set(['Incorrect token', 'Empty token']);
@@ -37,6 +48,8 @@ const timeSchema = z.union([
 
 const transactionSchema = z.object({
   id: z.union([z.number(), z.string()]),
+  /** Имя донатера по документации; `vars.name` — то же имя в клиентах их API. */
+  what: z.string().nullish(),
   type: z.string().nullish(),
   status: z.string().nullish(),
   sum: z.union([z.number(), z.string()]),
@@ -50,25 +63,34 @@ export type DonatePayTransaction = z.infer<typeof transactionSchema>;
 
 const transactionsSchema = z.object({ data: z.array(transactionSchema) });
 
+const socketTokenSchema = z.object({ token: z.string().min(1) });
+
+const subscribeSchema = z.object({
+  channels: z.array(z.object({ channel: z.string(), token: z.string().min(1) })),
+});
+
 export interface DonatePayProfile {
   id: string;
   /** Имя аккаунта для дашборда. Баланс из того же ответа не берём. */
   name: string;
 }
 
-/** Сколько последних донатов спрашиваем за раз — столько же по умолчанию отдаёт DonatePay. */
-export const DONATEPAY_PAGE_SIZE = 25;
+/** Сколько донатов спрашиваем за раз — максимум, который отдаёт DonatePay. */
+export const DONATEPAY_PAGE_SIZE = 100;
+
+/** Путь токенов сокета: и подключения, и подписки на канал — по документации DonatePay. */
+const SOCKET_TOKEN_PATH = '/api/v2/socket/token';
 
 /**
- * HTTP-часть DonatePay: профиль и последние донаты по личному ключу API.
+ * HTTP-часть DonatePay: профиль, донаты и токены сокета по личному ключу API.
  *
  * OAuth для сторонних приложений у DonatePay нет: стример копирует ключ со
  * страницы API своего кабинета. Ключ передаётся параметром `access_token` —
  * так его принимает API; `HttpClient` адрес запроса в журнал не пишет.
  *
- * Лимит — один запрос к методу на ключ примерно в двадцать секунд (заголовки
- * `x-ratelimit-*` и 429 с `retry-after` у боевого API). Поэтому донаты
- * опрашиваются, а не спрашиваются по требованию, см. `DonatePayConnector`.
+ * Лимит методов `v1` — один запрос к методу на ключ примерно в двадцать секунд
+ * (заголовки `x-ratelimit-*` и 429 с `retry-after` у боевого API). У токенов
+ * сокета (`v2`) заголовков лимита нет.
  */
 @Injectable()
 export class DonatePayApi {
@@ -92,20 +114,82 @@ export class DonatePayApi {
   }
 
   /**
-   * Последние донаты аккаунта, от новых к старым, в любом статусе.
+   * Самый новый донат аккаунта — точка отсчёта при первом подключении.
    *
-   * Статус не фильтруется запросом: донат, ожидавший оплаты, становится
-   * успешным позже, и коннектору нужно видеть его в обоих состояниях.
+   * @returns `null`, если донатов ещё не было.
    */
-  async fetchRecentDonations(apiKey: string): Promise<DonatePayTransaction[]> {
+  async fetchLatestDonation(apiKey: string): Promise<DonatePayTransaction | null> {
     const raw = transactionsSchema.parse(
       await this.request('/api/v1/transactions', apiKey, {
         type: 'donation',
         order: 'DESC',
+        limit: '1',
+      }),
+    );
+    return raw.data[0] ?? null;
+  }
+
+  /**
+   * Донаты после `afterId`, от старых к новым, в любом статусе.
+   *
+   * Спрашиваем «после курсора», а не «последние N»: при наплыве донатов между
+   * опросами страница последних обрезала бы середину. Статус запросом не
+   * фильтруется: донат, ожидавший оплаты, становится успешным позже, и
+   * коннектору нужно видеть его в обоих состояниях.
+   */
+  async fetchDonationsAfter(apiKey: string, afterId: number): Promise<DonatePayTransaction[]> {
+    const raw = transactionsSchema.parse(
+      await this.request('/api/v1/transactions', apiKey, {
+        type: 'donation',
+        order: 'ASC',
+        after: String(afterId),
         limit: String(DONATEPAY_PAGE_SIZE),
       }),
     );
     return raw.data;
+  }
+
+  /** Токен подключения к сокету Centrifugo. */
+  async socketToken(apiKey: string): Promise<string> {
+    const raw = socketTokenSchema.parse(
+      await this.parse(
+        await this.http.json<unknown>({
+          platform: 'donatepay',
+          url: `${this.config.donatePay.baseUrl}${SOCKET_TOKEN_PATH}`,
+          method: 'POST',
+          json: { access_token: apiKey },
+        }),
+      ),
+    );
+    return raw.token;
+  }
+
+  /**
+   * Токен подписки на приватный канал под идентификатор клиента сокета.
+   *
+   * Так его запрашивает centrifuge-js 2.x из примера DonatePay: ключ —
+   * параметром адреса (`subscribeParams`), клиент и каналы — телом.
+   */
+  async subscribeToken(apiKey: string, client: string, channel: string): Promise<string> {
+    const url = new URL(`${this.config.donatePay.baseUrl}${SOCKET_TOKEN_PATH}`);
+    url.searchParams.set('access_token', apiKey);
+    const raw = subscribeSchema.parse(
+      await this.parse(
+        await this.http.json<unknown>({
+          platform: 'donatepay',
+          url: url.toString(),
+          method: 'POST',
+          json: { client, channels: [channel] },
+        }),
+      ),
+    );
+    const match = raw.channels.find((entry) => entry.channel === channel);
+    if (!match) throw new Error('DonatePay не выдал токен канала донатов');
+    return match.token;
+  }
+
+  get socketUrl(): string {
+    return this.config.donatePay.socketUrl;
   }
 
   private async request(
@@ -113,14 +197,35 @@ export class DonatePayApi {
     apiKey: string,
     params: Record<string, string>,
   ): Promise<unknown> {
-    const url = new URL(`${this.config.donatePayBaseUrl}${path}`);
+    const url = new URL(`${this.config.donatePay.baseUrl}${path}`);
     url.searchParams.set('access_token', apiKey);
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
 
-    const body = await this.http.json<unknown>({ platform: 'donatepay', url: url.toString() });
+    return this.parse(
+      await this.http.json<unknown>({ platform: 'donatepay', url: url.toString() }),
+    );
+  }
+
+  /**
+   * Разбирает конверт ответа.
+   *
+   * @throws PlatformAuthError — ключ не принят.
+   * @throws PlatformRateLimitError — лимит в теле ответа.
+   * @throws PlatformError — любая другая ошибка в конверте.
+   */
+  private parse(body: unknown): unknown {
     const envelope = envelopeSchema.safeParse(body);
-    if (envelope.success && envelope.data.status !== 'success') {
+    // У токена сокета конверта нет: успешный ответ — просто `{ token }`.
+    if (envelope.success && String(envelope.data.status) !== 'success') {
       const message = envelope.data.message ?? '';
+      if (String(envelope.data.status) === RATE_LIMIT_STATUS) {
+        throw new PlatformRateLimitError(
+          'donatepay',
+          429,
+          'DonatePay просит спрашивать реже',
+          RATE_LIMIT_PAUSE_MS,
+        );
+      }
       if (REJECTED_KEY_MESSAGES.has(message)) {
         throw new PlatformAuthError('donatepay', 401, 'DonatePay не принял ключ API');
       }

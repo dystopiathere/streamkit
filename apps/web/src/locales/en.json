@@ -522,7 +522,7 @@
     "donatepay": {
       "description": "Copy the API key from your DonatePay account and paste it here. Your DonatePay password is not needed.",
       "keyPage": "API page of your DonatePay account",
-      "check": "New donations show up in alerts within 20 seconds: DonatePay does not allow asking more often. Donations made before connecting are not added to the feed."
+      "check": "Donations show up in alerts within seconds, and back-to-back donations up to 20 seconds apart: DonatePay does not allow asking more often. Check the connection with a test donation from your DonatePay dashboard. Donations made before connecting are not added to the feed."
     },
     "apiKey": {
       "label": "{{service}} API key",

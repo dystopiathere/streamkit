@@ -64,6 +64,23 @@ describe('донат DonatePay → событие', () => {
     expect(event.message).toHaveLength(500);
   });
 
+  it('имя донатера берёт из what, а vars.name — запасное', () => {
+    expect(
+      normalizeDonatePayDonation(
+        donation(12, { what: 'Из what', vars: { name: 'Из vars' } }),
+        userId,
+      ).username,
+    ).toBe('Из what');
+    expect(normalizeDonatePayDonation(donation(13, { what: ' ' }), userId).username).toBe(
+      'Зритель',
+    );
+  });
+
+  it('тестовый донат из кабинета (статус user) — тестовое событие', () => {
+    expect(normalizeDonatePayDonation(donation(14, { status: 'user' }), userId).isTest).toBe(true);
+    expect(normalizeDonatePayDonation(donation(15), userId).isTest).toBe(false);
+  });
+
   it('время доната ставит временем события', () => {
     expect(normalizeDonatePayDonation(donation(11, { agoMs: 60_000 }), userId).occurredAt).toBe(
       new Date(now - 60_000).toISOString(),
@@ -153,6 +170,24 @@ describe('опрос DonatePay', () => {
   it('отменённый донат не показывается, но курсор проходит его', () => {
     const plan = planDonatePayPoll([donation(12, { status: 'cancel' })], 11, new Set(), now);
     expect(plan).toEqual({ emit: [], cursor: 12 });
+  });
+
+  it('тестовый донат показывается и курсор проходит его', () => {
+    const plan = planDonatePayPoll([donation(12, { status: 'user' })], 11, new Set(), now);
+    expect(ids(plan)).toEqual([12]);
+    expect(plan.cursor).toBe(12);
+  });
+
+  it('на полной странице ожидающий донат курсор не держит', () => {
+    const plan = planDonatePayPoll(
+      [donation(12, { status: 'wait' }), donation(13)],
+      11,
+      new Set(),
+      now,
+      { holdPending: false },
+    );
+    expect(ids(plan)).toEqual([13]);
+    expect(plan.cursor).toBe(13);
   });
 
   it('после простоя не вываливает в кадр старые донаты, но курсор их проходит', () => {

@@ -181,11 +181,12 @@ export const envSchema = z.object({
   DONATIONALERTS_BASE_URL: optionalValue(),
   DONATIONALERTS_SOCKET_URL: optionalValue(),
   /**
-   * Адрес API DonatePay. Приложения у DonatePay регистрировать не нужно —
-   * стример подключается личным ключом API, — поэтому ключей здесь нет, а
-   * адрес переопределяется только в тестах.
+   * Адреса DonatePay: API и сокет Centrifugo. Приложения у DonatePay
+   * регистрировать не нужно — стример подключается личным ключом API, —
+   * поэтому ключей здесь нет, а адреса переопределяются только в тестах.
    */
   DONATEPAY_BASE_URL: optionalValue(),
+  DONATEPAY_SOCKET_URL: optionalValue(),
 
   /**
    * LiveKit — медиасервер приватных комнат. Все четыре необязательны: без них

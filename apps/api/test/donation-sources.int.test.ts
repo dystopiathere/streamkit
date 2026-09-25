@@ -334,22 +334,35 @@ describe('Донат-сервисы: DonationAlerts (feature)', () => {
 });
 
 /**
- * Поддельный DonatePay по поведению боевого API: ключ — параметром
- * `access_token`, отвергнутый ключ — 200 со `status: "error"`, донаты — от
- * новых к старым, время — `DateTime` PHP в московской зоне.
+ * Поддельный DonatePay по поведению боевого API и их документации: ключ —
+ * параметром `access_token`, отвергнутый ключ — 200 со `status: "error"`,
+ * транзакции с `after` и `order`, время — `DateTime` PHP в московской зоне;
+ * токены сокета и Centrifugo на том же порту, канал `$public:<id>`.
  */
 class FakeDonatePay {
   readonly server: Server;
+  private readonly sockets = new WebSocketServer({ noServer: true });
+  readonly connections: ServerSocket[] = [];
+  readonly subscribedChannels: string[] = [];
   readonly donations: Array<Record<string, unknown>> = [];
   readonly requests: URL[] = [];
+  /** Ключ API каждого запроса — из адреса или тела. */
+  readonly keys: string[] = [];
   validKey = 'dp-key';
 
   constructor() {
-    this.server = createServer((req, res) => this.route(req, res));
+    this.server = createServer((req, res) => void this.route(req, res));
+    this.server.on('upgrade', (req, socket, head) => {
+      this.sockets.handleUpgrade(req, socket, head, (ws) => this.accept(ws));
+    });
   }
 
   get baseUrl(): string {
     return `http://127.0.0.1:${(this.server.address() as AddressInfo).port}`;
+  }
+
+  get socketUrl(): string {
+    return `ws://127.0.0.1:${(this.server.address() as AddressInfo).port}/connection/websocket`;
   }
 
   /** Донат, пришедший `agoMs` назад. */
@@ -357,9 +370,11 @@ class FakeDonatePay {
     const moscow = new Date(Date.now() - agoMs + 3 * 3_600_000).toISOString();
     this.donations.unshift({
       id,
-      what: 'Донат',
+      what: 'Зритель DP',
       sum: '250.50',
-      commission: '0.00',
+      to_cash: '238.00',
+      to_pay: '250.50',
+      commission: '12.50',
       status: 'success',
       type: 'donation',
       vars: { name: 'Зритель DP', comment: 'Привет из DonatePay', user_ip: '203.0.113.7' },
@@ -373,15 +388,56 @@ class FakeDonatePay {
     });
   }
 
-  private route(req: IncomingMessage, res: import('node:http').ServerResponse): void {
+  /** Сообщение в канал — содержимое коннектор не читает, только сигнал. */
+  publish(): void {
+    const frame = JSON.stringify({
+      result: { channel: '$public:4242', data: { data: { notification: { type: 'donation' } } } },
+    });
+    for (const socket of this.connections) socket.send(frame);
+  }
+
+  dropConnections(): void {
+    for (const socket of this.connections.splice(0)) socket.terminate();
+  }
+
+  private accept(socket: ServerSocket): void {
+    this.connections.push(socket);
+    socket.on('close', () => {
+      const index = this.connections.indexOf(socket);
+      if (index >= 0) this.connections.splice(index, 1);
+    });
+    socket.on('message', (data) => {
+      const frame = JSON.parse(String(data)) as {
+        id: number;
+        method?: number;
+        params?: Record<string, string>;
+      };
+      if (frame.id === 1 && frame.params?.token === 'dp-socket-token') {
+        socket.send(JSON.stringify({ id: 1, result: { client: 'dp-client' } }));
+      } else if (frame.method === 1 && frame.params?.token === 'dp-channel-token') {
+        this.subscribedChannels.push(frame.params.channel ?? '');
+        socket.send(JSON.stringify({ id: frame.id, result: {} }));
+      }
+    });
+  }
+
+  private async route(
+    req: IncomingMessage,
+    res: import('node:http').ServerResponse,
+  ): Promise<void> {
     const url = new URL(req.url ?? '/', this.baseUrl);
+    const raw = await readBody(req);
+    const body = (raw ? JSON.parse(raw) : {}) as Record<string, unknown>;
     this.requests.push(url);
     const json = (payload: unknown) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(payload));
     };
-    const key = url.searchParams.get('access_token');
+    const key =
+      url.searchParams.get('access_token') ??
+      (typeof body.access_token === 'string' ? body.access_token : null);
     if (!key) return json({ status: 'error', message: 'Empty token' });
+    this.keys.push(key);
     if (key !== this.validKey) return json({ status: 'error', message: 'Incorrect token' });
 
     if (req.method === 'GET' && url.pathname === '/api/v1/user') {
@@ -391,9 +447,27 @@ class FakeDonatePay {
       });
     }
     if (req.method === 'GET' && url.pathname === '/api/v1/transactions') {
-      const limit = Number(url.searchParams.get('limit') ?? 25);
-      const data = this.donations.slice(0, limit);
+      const limit = Math.min(Number(url.searchParams.get('limit') ?? 25), 100);
+      const after = Number(url.searchParams.get('after') ?? 0);
+      const ascending = url.searchParams.get('order') === 'ASC';
+      const data = this.donations
+        .filter((item) => Number(item.id) > after)
+        .sort((left, right) => (Number(left.id) - Number(right.id)) * (ascending ? 1 : -1))
+        .slice(0, limit);
       return json({ status: 'success', count: data.length, data });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/v2/socket/token') {
+      // Подписка на канал — как её шлёт centrifuge-js: ключ в адресе, клиент и каналы в теле.
+      if (Array.isArray(body.channels)) {
+        if (body.client !== 'dp-client') return json({ status: 'error', message: 'bad client' });
+        return json({
+          channels: (body.channels as string[]).map((channel) => ({
+            channel,
+            token: channel === '$public:4242' ? 'dp-channel-token' : 'foreign',
+          })),
+        });
+      }
+      return json({ token: 'dp-socket-token' });
     }
     res.writeHead(404);
     res.end();
@@ -410,6 +484,7 @@ describe('Донат-сервисы: DonatePay (feature)', () => {
   beforeAll(async () => {
     await new Promise<void>((resolve) => fake.server.listen(0, '127.0.0.1', resolve));
     process.env.DONATEPAY_BASE_URL = fake.baseUrl;
+    process.env.DONATEPAY_SOCKET_URL = fake.socketUrl;
     harness = await createHarness([DonationConnectorsModule]);
     manager = harness.app.get(ConnectorManager);
   });
@@ -419,12 +494,16 @@ describe('Донат-сервисы: DonatePay (feature)', () => {
     await harness.close();
     await new Promise<void>((resolve) => fake.server.close(() => resolve()));
     delete process.env.DONATEPAY_BASE_URL;
+    delete process.env.DONATEPAY_SOCKET_URL;
   });
 
   beforeEach(async () => {
     await manager.onApplicationShutdown();
+    fake.dropConnections();
     fake.donations.length = 0;
     fake.requests.length = 0;
+    fake.keys.length = 0;
+    fake.subscribedChannels.length = 0;
     fake.validKey = 'dp-key';
     await harness.reset();
     const registration = await request(server())
@@ -533,10 +612,46 @@ describe('Донат-сервисы: DonatePay (feature)', () => {
       currency: 'RUB',
     });
     expect(Math.abs(events[0]!.occurredAt.getTime() - (Date.now() - 1_000))).toBeLessThan(10_000);
-    // Ключ уходит DonatePay параметром — и только туда.
-    expect(fake.requests.every((url) => url.searchParams.get('access_token') === 'dp-key')).toBe(
-      true,
-    );
+    // Ключ уходит только DonatePay, и транзакции спрашиваются после курсора.
+    expect(fake.keys.every((key) => key === 'dp-key')).toBe(true);
+    const lastPoll = fake.requests.filter((url) => url.pathname === '/api/v1/transactions').at(-1)!;
+    expect(Object.fromEntries(lastPoll.searchParams)).toMatchObject({
+      after: '101',
+      order: 'ASC',
+      limit: '100',
+    });
+  });
+
+  it('сообщение сокета забирает донат сразу, без ожидания шага опроса', async () => {
+    await connect().expect(204);
+    await pollNow();
+    await until(() => fake.subscribedChannels.includes('$public:4242'));
+
+    fake.add(301);
+    fake.add(302, { status: 'user', what: 'Тест из кабинета' });
+    // Слот опроса свободен, как через двадцать секунд после прошлого опроса.
+    await harness.redis.del(`streamkit:donatepay:poll:${userId}`);
+    fake.publish();
+
+    await until(async () => (await harness.prisma.alertEvent.count({ where: { userId } })) === 2);
+    const events = await harness.prisma.alertEvent.findMany({
+      where: { userId },
+      orderBy: { externalId: 'asc' },
+    });
+    expect(events.map((event) => [event.externalId, event.isTest, event.username])).toEqual([
+      ['301', false, 'Зритель DP'],
+      ['302', true, 'Тест из кабинета'],
+    ]);
+  });
+
+  it('после обрыва сокет подписывается заново', async () => {
+    await connect().expect(204);
+    await manager.reconcile();
+    await until(() => fake.subscribedChannels.length === 1);
+
+    fake.dropConnections();
+    await until(() => fake.subscribedChannels.length === 2);
+    expect(fake.subscribedChannels).toEqual(['$public:4242', '$public:4242']);
   });
 
   it('донат, ждавший оплаты, показывается, когда станет успешным', async () => {
@@ -561,7 +676,8 @@ describe('Донат-сервисы: DonatePay (feature)', () => {
   it('отозванный ключ выключает источник с причиной, новый ключ его чинит', async () => {
     await connect().expect(204);
     fake.validKey = 'rotated-key';
-    await pollNow();
+    // Отказ приходит первым — от опроса или от токена сокета.
+    await manager.reconcile();
 
     await until(async () => {
       const source = await harness.prisma.donationSource.findFirst({ where: { userId } });
