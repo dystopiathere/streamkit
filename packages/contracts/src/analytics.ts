@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { currencySchema, isoDateSchema, uuidSchema } from './common.js';
-import { alertEventTypeSchema } from './events.js';
+import { ALERT_EVENT_TYPES, type AlertEventType, alertEventTypeSchema } from './events.js';
 
 /* ------------------------------------------------------------------ */
 /* Площадки                                                            */
@@ -55,6 +55,43 @@ export const PLATFORM_COUNTERS: Record<
   youtube: { audience: 'subscribers', counters: ['subscribers', 'totalViews'], optional: [] },
   kick: { audience: null, counters: ['subscribers'], optional: [] },
 };
+
+/**
+ * Площадки, от которых приходит событие сценария оповещения; `null` — событие
+ * не привязано к площадке (донат идёт из донат-сервисов и вебхука).
+ *
+ * Сценарий без подключённой площадки редактор не показывает: настроить
+ * «рейд» без Twitch — значит оформить оповещение, которое никогда не
+ * сработает. Общее событие нескольких площадок (подписка есть у всех трёх)
+ * показывается, если подключена хотя бы одна. Настройки скрытого сценария
+ * остаются в конфиге: отключение площадки не должно их стирать.
+ */
+export const ALERT_SCENARIO_PLATFORMS: Record<AlertEventType, readonly Platform[] | null> = {
+  donation: null,
+  follow: ['twitch', 'kick'],
+  subscription: ['twitch', 'youtube', 'kick'],
+  gift: ['twitch', 'youtube', 'kick'],
+  resubscription: ['twitch', 'youtube', 'kick'],
+  cheer: ['twitch'],
+  kicks: ['kick'],
+  raid: ['twitch'],
+  reward: ['twitch', 'kick'],
+};
+
+/**
+ * Сценарии, доступные при этих подключённых площадках, в порядке
+ * `ALERT_EVENT_TYPES`.
+ *
+ * @param connected площадки, подключённые стримером (повторы допустимы)
+ * @returns типы событий, которые хотя бы одна из площадок может прислать
+ */
+export function availableAlertScenarios(connected: readonly Platform[]): AlertEventType[] {
+  const have = new Set(connected);
+  return ALERT_EVENT_TYPES.filter((type) => {
+    const platforms = ALERT_SCENARIO_PLATFORMS[type];
+    return platforms === null || platforms.some((platform) => have.has(platform));
+  });
+}
 
 /**
  * Состояние сбора метрик по каналу.

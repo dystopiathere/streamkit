@@ -222,10 +222,31 @@ describe('события Kick → оповещения', () => {
     ).toBeNull();
   });
 
-  it('эфир, чат и KICKs оповещениями не становятся', () => {
+  it('KICKs — своим типом, сумма в количестве, текст подарка в сообщении', () => {
+    expect(
+      normalize('kicks.gifted', {
+        sender: viewer('gift_sender'),
+        gift: { amount: 500, name: 'Rage Quit', type: 'LEVEL_UP', tier: 'MID', message: 'w' },
+        created_at: '2025-10-20T04:00:08.634Z',
+      }),
+    ).toMatchObject({
+      type: 'kicks',
+      username: 'gift_sender',
+      count: 500,
+      message: 'w',
+      amount: null,
+    });
+  });
+
+  it('KICKs без суммы — без количества, а не ноль', () => {
+    expect(
+      normalize('kicks.gifted', { sender: viewer('a'), gift: { amount: 0 } })?.count,
+    ).toBeNull();
+  });
+
+  it('эфир и чат оповещениями не становятся', () => {
     expect(normalize('livestream.status.updated', { is_live: true })).toBeNull();
     expect(normalize('chat.message.sent', { content: 'привет' })).toBeNull();
-    expect(normalize('kicks.gifted', { gift: { amount: 500 } })).toBeNull();
   });
 });
 

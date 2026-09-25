@@ -160,6 +160,7 @@
       "minGifts": "Минимум подарочных подписок",
       "minMonths": "Минимум месяцев подписки",
       "minBits": "Минимум битов",
+      "minKicks": "Минимум KICKs",
       "minRaiders": "Минимум зрителей рейда",
       "showPlatform": "Значок площадки у ника",
       "fontFamily": "Шрифт",
@@ -412,6 +413,7 @@
       "gift": "Последний подарок",
       "resubscription": "Последнее продление",
       "cheer": "Последние биты",
+      "kicks": "Последние KICKs",
       "raid": "Последний рейд",
       "reward": "Последняя награда"
     },
@@ -568,6 +570,7 @@
       "subscription": "Подписка",
       "resubscription": "Продление подписки",
       "cheer": "Биты",
+      "kicks": "KICKs",
       "raid": "Рейд",
       "reward": "Награда за баллы",
       "gift": "Подарочные подписки"
@@ -583,6 +586,9 @@
       "cheer_one": "{{formatted}} бит",
       "cheer_few": "{{formatted}} бита",
       "cheer_many": "{{formatted}} битов",
+      "kicks_one": "{{formatted}} KICKs",
+      "kicks_few": "{{formatted}} KICKs",
+      "kicks_many": "{{formatted}} KICKs",
       "raid_one": "{{formatted}} зритель",
       "raid_few": "{{formatted}} зрителя",
       "raid_many": "{{formatted}} зрителей"

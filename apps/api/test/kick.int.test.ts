@@ -351,6 +351,23 @@ describe('Kick (feature)', () => {
     ]);
   });
 
+  it('KICKs записываются своим типом с количеством', async () => {
+    await connectKick();
+    await postWebhook(
+      signedWebhook('kicks.gifted', {
+        broadcaster,
+        sender: { user_id: 7, username: 'Щедрый' },
+        gift: { amount: 500, name: 'Rage Quit', type: 'LEVEL_UP', tier: 'MID', message: 'gg' },
+        created_at: '2026-09-25T10:00:00Z',
+      }),
+    ).expect(200);
+
+    const events = await harness.prisma.alertEvent.findMany();
+    expect(events.map((event) => [event.type, event.username, event.count, event.message])).toEqual(
+      [['KICKS', 'Щедрый', 500, 'gg']],
+    );
+  });
+
   it('чужая подпись — 401 и запись в аудит, события нет', async () => {
     await connectKick();
     const forged = generateKeyPairSync('rsa', { modulusLength: 2048 });

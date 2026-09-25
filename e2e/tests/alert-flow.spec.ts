@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { mainNav } from './navigation';
+import { connectTwitch } from './platforms';
 
 /**
  * Сквозной сценарий, ради которого существует продукт:
@@ -136,6 +137,15 @@ test('у каждого события свой сценарий: текст ф�
   await page.getByPlaceholder('Название виджета').fill('Оповещения');
   await page.getByRole('button', { name: 'Новый виджет' }).click();
   await page.getByRole('link', { name: 'Настроить' }).first().click();
+
+  // Без площадок сценарии площадок не показываются: рейд без Twitch не придёт.
+  await expect(page.getByRole('tab', { name: 'Донат' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Рейд' })).toHaveCount(0);
+  await connectTwitch(page);
+  await mainNav(page).getByRole('link', { name: 'Виджеты', exact: true }).click();
+  await page.getByRole('link', { name: 'Настроить' }).first().click();
+  // Twitch открывает свои сценарии, но не чужие: KICKs — только с Kick.
+  await expect(page.getByRole('tab', { name: 'KICKs' })).toHaveCount(0);
 
   // Свой заголовок у фолловера, рейд выключен. Сохраняются все сценарии сразу.
   await page.getByRole('tab', { name: 'Фолловер' }).click();

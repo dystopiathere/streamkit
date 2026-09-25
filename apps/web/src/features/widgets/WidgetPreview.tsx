@@ -779,6 +779,7 @@ function sampleEvents(text: {
     gift: event('gift', { count: 5 }),
     resubscription: event('resubscription', { message: text.message, count: 12 }),
     cheer: event('cheer', { message: text.message, count: 500 }),
+    kicks: event('kicks', { message: text.message, count: 100 }),
     raid: event('raid', { count: 42 }),
     reward: event('reward', { message: text.reward }),
   };

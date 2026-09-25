@@ -29,7 +29,7 @@ processing of the user's viewers' and guests' data is described in section 13.
 2.1. The Service provides tools for streaming:
 
 - a widget builder for streaming software: alerts for donations and channel
-  events (follows, subscriptions, memberships, gifts, Bits, raids, Channel Points
+  events (follows, subscriptions, memberships, gifts, Bits, KICKs, raids, Channel Points
   rewards, paid support), donation goal, timer, top donors, latest event,
   roulette, chat of the connected Twitch, YouTube and Kick channels in one feed,
   private room guests;
@@ -222,7 +222,7 @@ effect for as long as the user's account exists.
 
 - event participants from the services and platforms connected by the user
   (donations, follows, subscriptions, memberships and member milestones, gifted
-  subscriptions and gifted memberships, Bits, raids, Channel Points rewards,
+  subscriptions and gifted memberships, Bits, KICKs, raids, Channel Points rewards,
   YouTube Super Chats and Super Stickers): name or nickname, message text, amount
   and currency or a quantity, date and time, and for a voice donation a link to
   the recording held by the source service;

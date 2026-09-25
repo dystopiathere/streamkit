@@ -30,6 +30,7 @@ import { PlanPaywall, usePlanAccess } from '@/features/billing/PlanPaywall';
 import { useRooms } from '@/features/rooms/queries';
 import { ApiError } from '@/lib/api';
 import { useSendTestAlert } from './queries';
+import { useAlertScenarios } from './useAlertScenarios';
 import { LayoutSection, StyleSection } from './AdvancedStyling';
 import { AlertTriggers, conditionSummary, triggerTitle } from './AlertTriggers';
 import { RouletteSectors } from './RouletteSectors';
@@ -614,6 +615,7 @@ const COUNT_THRESHOLDS: Partial<Record<AlertEventType, string>> = {
   gift: 'widgets.field.minGifts',
   resubscription: 'widgets.field.minMonths',
   cheer: 'widgets.field.minBits',
+  kicks: 'widgets.field.minKicks',
   raid: 'widgets.field.minRaiders',
 };
 
@@ -656,14 +658,17 @@ function ScenarioHeader({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const sendTest = useSendTestAlert();
+  // Сценарии площадок, которых нет, не показываются: оповещение о рейде без
+  // Twitch никогда не сработает. Их настройки остаются в конфиге.
+  const { scenarios: available } = useAlertScenarios();
   const scenarios = (form.watch('scenarios') ?? {}) as Partial<
     Record<AlertEventType, { enabled?: boolean }>
   >;
 
   // Стрелки двигают выбор по кругу — как у любых вкладок (WAI-ARIA Tabs).
   const move = (from: AlertEventType, step: number): void => {
-    const count = ALERT_EVENT_TYPES.length;
-    const next = ALERT_EVENT_TYPES[(ALERT_EVENT_TYPES.indexOf(from) + step + count) % count]!;
+    const count = available.length;
+    const next = available[(available.indexOf(from) + step + count) % count]!;
     onSelect(next);
     document.getElementById(`scenario-tab-${next}`)?.focus();
   };
@@ -704,7 +709,7 @@ function ScenarioHeader({
         aria-label={t('widgets.scenario.title')}
         className="flex flex-wrap gap-1.5"
       >
-        {ALERT_EVENT_TYPES.map((type) => {
+        {available.map((type) => {
           const active = type === selected;
           const enabled = scenarios[type]?.enabled !== false;
           return (

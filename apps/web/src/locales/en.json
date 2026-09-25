@@ -160,6 +160,7 @@
       "minGifts": "Minimum gifted subs",
       "minMonths": "Minimum months subscribed",
       "minBits": "Minimum bits",
+      "minKicks": "Minimum KICKs",
       "minRaiders": "Minimum raid viewers",
       "showPlatform": "Platform icon next to the name",
       "fontFamily": "Font",
@@ -412,6 +413,7 @@
       "gift": "Latest gift",
       "resubscription": "Latest resub",
       "cheer": "Latest bits",
+      "kicks": "Latest KICKs",
       "raid": "Latest raid",
       "reward": "Latest reward"
     },
@@ -568,6 +570,7 @@
       "subscription": "Subscription",
       "resubscription": "Resubscription",
       "cheer": "Bits",
+      "kicks": "KICKs",
       "raid": "Raid",
       "reward": "Channel Points reward",
       "gift": "Gifted subs"
@@ -580,6 +583,8 @@
       "resubscription_other": "{{formatted}} months",
       "cheer_one": "{{formatted}} bit",
       "cheer_other": "{{formatted}} bits",
+      "kicks_one": "{{formatted}} KICKs",
+      "kicks_other": "{{formatted}} KICKs",
       "raid_one": "{{formatted}} viewer",
       "raid_other": "{{formatted}} viewers"
     },

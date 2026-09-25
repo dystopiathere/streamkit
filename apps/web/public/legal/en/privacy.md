@@ -39,8 +39,8 @@ channel ID, handle, name and image, channel metrics (viewers, subscribers, total
 views, whether the channel is live), the title, category and start time of the
 current stream, and for DonationAlerts, the account ID and name. From Twitch and
 Kick the service also receives channel events for alerts — follows, subscriptions,
-gifted subscriptions, Channel Points rewards, and from Twitch also Bits and
-raids — and from Twitch, YouTube and Kick, the channel's chat messages while the user has a chat widget or the
+gifted subscriptions, Channel Points rewards, from Twitch also Bits and
+raids, and from Kick gifts in KICKs — and from Twitch, YouTube and Kick, the channel's chat messages while the user has a chat widget or the
 stream window open; we process the data of their authors on behalf of the user
 (section 4). We do not store or use
 the email address of the platform account. DonationAlerts sends it together with
@@ -102,9 +102,9 @@ Article 6 of Federal Law No. 152-FZ):
 
 - **event participants** from the services and platforms connected by the user
   (donations; follows, subscriptions, gifted subscriptions, Bits, raids and
-  Channel Points rewards on Twitch and Kick; memberships, member milestones, gifted
+  Channel Points rewards on Twitch and Kick, KICKs gifts on Kick; memberships, member milestones, gifted
   memberships, Super Chats and Super Stickers on YouTube): name or nickname, message text, amount and currency or a
-  quantity (Bits, raid viewers, months subscribed, number of gifts), time. For a
+  quantity (Bits, KICKs, raid viewers, months subscribed, number of gifts), time. For a
   voice donation we receive a link to the recording instead of text: the
   recording stays with the service the donation was made through, we neither
   copy nor store it and only play it on the widget page. Stored in the user's event history. The Top donors widget shows names on

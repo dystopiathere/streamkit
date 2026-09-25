@@ -160,6 +160,17 @@ export function normalizeKickEvent(
       });
     }
 
+    // KICKs — сумма подарка в валюте Kick, не деньги: в `count`, как биты, а
+    // не в `amount`. Название подарка («Rage Quit») в кадр не идёт — это
+    // название анимации Kick, а не слова зрителя.
+    case 'kicks.gifted': {
+      const gift = (payload.gift ?? {}) as { amount?: unknown; message?: unknown };
+      return build('kicks', author(payload.sender), {
+        count: count(gift.amount) || null,
+        message: text(gift.message),
+      });
+    }
+
     default:
       return null;
   }

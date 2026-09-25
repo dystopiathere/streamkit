@@ -36,6 +36,7 @@ export const KICK_ALERT_EVENTS = [
   'channel.subscription.renewal',
   'channel.subscription.gifts',
   'channel.reward.redemption.updated',
+  'kicks.gifted',
   'livestream.status.updated',
 ] as const;
 

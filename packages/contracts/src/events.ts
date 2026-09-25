@@ -8,6 +8,9 @@ import { LANGUAGES } from './messages.js';
  * Подарочные подписки — отдельный тип, а не `subscription`: у подписки автор —
  * тот, кто подписался, у подарка — тот, кто подарил, и шаблон «оформил
  * подписку» над дарителем пяти подписок читался бы неправдой.
+ *
+ * KICKs — отдельный тип, а не `cheer`: это другая валюта другой площадки, и
+ * «500 битов» над подарком в KICKs было бы неправдой в кадре.
  */
 export const ALERT_EVENT_TYPES = [
   'donation',
@@ -16,6 +19,7 @@ export const ALERT_EVENT_TYPES = [
   'gift',
   'resubscription',
   'cheer',
+  'kicks',
   'raid',
   'reward',
 ] as const;

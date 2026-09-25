@@ -51,6 +51,8 @@ function testSample(
       return { message: text.message, amount: null, count: 12 };
     case 'cheer':
       return { message: text.message, amount: null, count: 500 };
+    case 'kicks':
+      return { message: text.message, amount: null, count: 100 };
     case 'raid':
       return { message: '', amount: null, count: 42 };
     case 'reward':

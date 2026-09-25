@@ -19,6 +19,7 @@ const EVENT_TYPE_TO_PRISMA: Record<AlertEventType, PrismaEventType> = {
   gift: PrismaEventType.GIFT,
   resubscription: PrismaEventType.RESUBSCRIPTION,
   cheer: PrismaEventType.CHEER,
+  kicks: PrismaEventType.KICKS,
   raid: PrismaEventType.RAID,
   reward: PrismaEventType.REWARD,
 };
@@ -30,6 +31,7 @@ const EVENT_TYPE_FROM_PRISMA: Record<PrismaEventType, AlertEventType> = {
   GIFT: 'gift',
   RESUBSCRIPTION: 'resubscription',
   CHEER: 'cheer',
+  KICKS: 'kicks',
   RAID: 'raid',
   REWARD: 'reward',
 };
