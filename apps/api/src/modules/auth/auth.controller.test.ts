@@ -24,6 +24,7 @@ describe('лимиты AuthController', () => {
       'changePassword',
       'forgotPassword',
       'resetPassword',
+      'verifyEmail',
       'confirmTotp',
       'disableTotp',
     ]) {
@@ -32,7 +33,14 @@ describe('лимиты AuthController', () => {
   });
 
   it('не держит его на обновлении токена и чтении сессии: за общим IP это разлогинивало людей', () => {
-    for (const method of ['refresh', 'logout', 'me', 'sessions', 'revokeSession']) {
+    for (const method of [
+      'refresh',
+      'logout',
+      'me',
+      'sessions',
+      'revokeSession',
+      'resendVerification',
+    ]) {
       expect(skipsAuthLimiter(method), method).toBe(true);
     }
   });

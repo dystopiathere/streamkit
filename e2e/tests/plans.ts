@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test';
+import { confirmEmail } from './email';
 
 const API_URL = process.env.E2E_API_URL ?? 'http://localhost:3000';
 
@@ -22,6 +23,10 @@ export async function buyPlan(
   const subscription = await page.request.get(`${API_URL}/api/billing/subscription`, { headers });
   const view = (await subscription.json()) as { billingConfigured: boolean; plan: string };
   if (!view.billingConfigured || view.plan === plan) return;
+
+  // Оплата открывается только подтверждённой почте.
+  const me = await page.request.get(`${API_URL}/api/auth/me`, { headers });
+  confirmEmail(((await me.json()) as { email: string }).email);
 
   const checkout = await page.request.post(`${API_URL}/api/billing/checkout`, {
     headers,

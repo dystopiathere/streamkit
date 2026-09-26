@@ -45,8 +45,15 @@ async function main(): Promise<void> {
 
   const user = await prisma.user.upsert({
     where: { email: DEMO_EMAIL },
-    create: { email: DEMO_EMAIL, passwordHash, displayName: 'Демо-стример' },
-    update: { passwordHash },
+    // Демо-адрес не настоящий: письмо подтверждения до него не дойдёт, а без
+    // подтверждения не открылась бы оплата тарифа.
+    create: {
+      email: DEMO_EMAIL,
+      passwordHash,
+      displayName: 'Демо-стример',
+      emailVerifiedAt: new Date(),
+    },
+    update: { passwordHash, emailVerifiedAt: new Date() },
   });
 
   await prisma.consent.deleteMany({ where: { userId: user.id } });
@@ -132,6 +139,7 @@ async function seedAdmin(): Promise<{ secret: string; uri: string }> {
     passwordHash,
     role: 'ADMIN' as const,
     status: 'ACTIVE' as const,
+    emailVerifiedAt: new Date(),
     isTotpEnabled: true,
     totpSecretEncrypted: crypto.encrypt(secret),
   };

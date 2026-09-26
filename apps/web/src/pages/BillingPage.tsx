@@ -23,6 +23,7 @@ import {
 import { planFeatureList } from '@/features/billing/plan-features';
 import { trackSiteEvent } from '@/features/public/site-stats';
 import { ApiError } from '@/lib/api';
+import { useCurrentUser } from '@/lib/auth-store';
 import { formatMoney, intlLocale } from '@/lib/locale';
 
 const formatDate = (iso: string): string =>
@@ -264,6 +265,10 @@ function Checkout({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const checkout = useCheckout();
+  const user = useCurrentUser();
+  // Сервер откажет и сам (403), но кнопка «Оплатить», которая ведёт к отказу,
+  // хуже честного «сначала подтвердите почту» на её месте.
+  const emailVerified = user?.emailVerified ?? true;
   const [plan, setPlan] = useState<PaidPlan>(initialPlan);
   const [period, setPeriod] = useState<BillingPeriod>(initialPeriod);
   const [accepted, setAccepted] = useState(false);
@@ -358,7 +363,20 @@ function Checkout({
         amount={PLAN_PRICES[plan][period]}
       />
 
-      <Button onClick={() => void handlePay()} disabled={!accepted} isLoading={checkout.isPending}>
+      {emailVerified ? null : (
+        <p
+          role="status"
+          className="rounded-lg border border-border-strong bg-surface-hover p-3 text-sm"
+        >
+          {t('emailVerification.billing', { email: user?.email })}
+        </p>
+      )}
+
+      <Button
+        onClick={() => void handlePay()}
+        disabled={!accepted || !emailVerified}
+        isLoading={checkout.isPending}
+      >
         {t('billing.pay', { amount: formatMoney(PLAN_PRICES[plan][period]) })}
       </Button>
     </Card>

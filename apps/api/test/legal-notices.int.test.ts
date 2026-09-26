@@ -4,7 +4,13 @@ import { MAILER, type Mailer, type MailMessage } from '../src/common/mail/mailer
 import { LEGAL_DOCUMENTS } from '../src/modules/privacy/legal-documents';
 import { LegalNoticesModule } from '../src/modules/privacy/legal-notices.module';
 import { LegalUpdateNoticesService } from '../src/modules/privacy/legal-update-notices.service';
-import { createHarness, registrationPayload, type TestHarness } from './harness';
+import {
+  createHarness,
+  markEmailVerified,
+  registrationPayload,
+  takeVerificationLetter,
+  type TestHarness,
+} from './harness';
 
 class FakeMailer implements Mailer {
   readonly sent: MailMessage[] = [];
@@ -50,7 +56,10 @@ describe('Письма о новых редакциях документов (fe
       .post('/api/auth/register')
       .send(payload)
       .expect(201);
-    return { email: payload.email, userId: response.body.user.id as string };
+    const userId = response.body.user.id as string;
+    await takeVerificationLetter(mailer.sent, payload.email);
+    await markEmailVerified(harness, userId);
+    return { email: payload.email, userId };
   }
 
   /** Отметка пользователя — как будто он принял прошлую редакцию. */
@@ -127,6 +136,21 @@ describe('Письма о новых редакциях документов (fe
     expect(await harness.prisma.legalUpdateNotice.count()).toBe(0);
 
     mailer.fail = false;
+    expect(await notices.sendPending()).toBe(1);
+  });
+
+  it('неподтверждённой почте не пишет, пока её не подтвердят', async () => {
+    const user = await register();
+    await outdate(user.userId, 'TERMS');
+    await harness.prisma.user.update({
+      where: { id: user.userId },
+      data: { emailVerifiedAt: null },
+    });
+
+    expect(await notices.sendPending()).toBe(0);
+    expect(await harness.prisma.legalUpdateNotice.count()).toBe(0);
+
+    await markEmailVerified(harness, user.userId);
     expect(await notices.sendPending()).toBe(1);
   });
 

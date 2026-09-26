@@ -610,6 +610,42 @@ describe('Админка (feature)', () => {
       }
     });
 
+    it('карточка показывает, подтверждена ли почта, и журнал писем — без адреса и текста', async () => {
+      const admin = await staff();
+      const target = await streamer();
+      await harness.prisma.mailLog.createMany({
+        data: [
+          { userId: target.userId, kind: 'EMAIL_VERIFICATION', status: 'SENT' },
+          { userId: target.userId, kind: 'NEW_DEVICE', status: 'SKIPPED_UNVERIFIED' },
+        ],
+      });
+
+      const before = await request(server())
+        .get(`/api/admin/users/${target.userId}`)
+        .set(auth(admin.adminToken))
+        .expect(200);
+      expect(before.body.user).toMatchObject({ emailVerified: false, emailVerifiedAt: null });
+      expect(
+        before.body.mails.map((mail: { kind: string; status: string }) => [mail.kind, mail.status]),
+      ).toEqual(
+        expect.arrayContaining([
+          ['email_verification', 'sent'],
+          ['new_device', 'skipped_unverified'],
+        ]),
+      );
+
+      await harness.prisma.user.update({
+        where: { id: target.userId },
+        data: { emailVerifiedAt: new Date() },
+      });
+      const list = await request(server())
+        .get('/api/admin/users')
+        .query({ q: target.email })
+        .set(auth(admin.adminToken))
+        .expect(200);
+      expect(list.body.items[0].emailVerified).toBe(true);
+    });
+
     it('просмотр карточки пишется в журнал с автором', async () => {
       const support = await staff('SUPPORT');
       const target = await streamer();

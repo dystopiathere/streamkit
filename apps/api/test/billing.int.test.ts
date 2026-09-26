@@ -34,7 +34,13 @@ import {
 import { ROOM_MEDIA_SERVER, type RoomMediaServer } from '../src/modules/rooms/livekit.service';
 import { TokenService } from '../src/modules/auth/token.service';
 import { WidgetsService } from '../src/modules/widgets/widgets.service';
-import { createHarness, registrationPayload, type TestHarness } from './harness';
+import {
+  createHarness,
+  markEmailVerified,
+  registrationPayload,
+  takeVerificationLetter,
+  type TestHarness,
+} from './harness';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -228,11 +234,10 @@ describe('Подписка на платформу (feature)', () => {
   async function streamer(): Promise<{ token: string; userId: string; email: string }> {
     const payload = registrationPayload();
     const response = await request(server()).post('/api/auth/register').send(payload).expect(201);
-    return {
-      token: response.body.accessToken as string,
-      userId: response.body.user.id as string,
-      email: payload.email,
-    };
+    const userId = response.body.user.id as string;
+    if (mailer.configured) await takeVerificationLetter(mailer.sent, payload.email);
+    await markEmailVerified(harness, userId);
+    return { token: response.body.accessToken as string, userId, email: payload.email };
   }
 
   async function checkout(
@@ -306,6 +311,21 @@ describe('Подписка на платформу (feature)', () => {
       where: { userId: owner.userId, document: 'SUBSCRIPTION_OFFER' },
     });
     expect(consent.revokedAt).toBeNull();
+  });
+
+  it('без подтверждённой почты тариф не оформить', async () => {
+    const payload = registrationPayload();
+    const response = await request(server()).post('/api/auth/register').send(payload).expect(201);
+    await takeVerificationLetter(mailer.sent, payload.email);
+
+    const refused = await request(server())
+      .post('/api/billing/checkout')
+      .set(auth(response.body.accessToken as string))
+      .send({ plan: 'pro', period: 'month', acceptOffer: true })
+      .expect(403);
+    expect(refused.body.message).toBe('Подтвердите почту, чтобы оформить тариф');
+    expect(gateway.created).toHaveLength(0);
+    expect(await harness.prisma.payment.count()).toBe(0);
   });
 
   it('без согласия с офертой оплата не оформляется', async () => {
@@ -1183,8 +1203,8 @@ describe('Подписка на платформу (feature)', () => {
   });
 
   it('без настроенной почты письма не уходят — и продления не списываются', async () => {
-    mailer.configured = false;
     const owner = await streamer();
+    mailer.configured = false;
     await subscribed(owner.token);
     await harness.prisma.subscription.update({
       where: { userId: owner.userId },
@@ -1227,6 +1247,25 @@ describe('Подписка на платформу (feature)', () => {
     await harness.prisma.payment.update({ where: { id: paymentId }, data: { periodEnd: end } });
     return owner;
   }
+
+  it('неподтверждённой почте писем о списании и конце периода нет', async () => {
+    const renewing = await streamer();
+    await subscribed(renewing.token);
+    await harness.prisma.subscription.update({
+      where: { userId: renewing.userId },
+      data: { currentPeriodEnd: new Date(Date.now() + 12 * 60 * 60 * 1000) },
+    });
+    await paidWithoutRenewal(2);
+    await harness.prisma.user.updateMany({ data: { emailVerifiedAt: null } });
+    mailer.sent.length = 0;
+
+    expect(await billing.sendRenewalNotices()).toBe(0);
+    expect(await billing.sendExpiryNotices()).toBe(0);
+    expect(mailer.sent).toHaveLength(0);
+    // Без письма нет и списания.
+    await billing.renewDue(new Date(Date.now() + 3 * DAY_MS));
+    expect(gateway.charged).toHaveLength(0);
+  });
 
   it('без автопродления оплаченный период кончается письмом — одним, на языке аккаунта', async () => {
     const owner = await paidWithoutRenewal(2);

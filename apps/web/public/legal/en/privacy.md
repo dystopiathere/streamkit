@@ -65,9 +65,13 @@ turned off — with the time of the event and the name of the browser and
 system), for emails about an upcoming automatic charge, about a paid period
 ending soon without renewal, about new versions of accepted documents, and for
 the password recovery email, which is sent only on a request from the sign-in
-page. For a recovery link we store only the hash of its token and its expiry
-time; for emails about new versions — which document, which version and when the
-email was sent.
+page, and for the email with the address confirmation link. For recovery and
+confirmation links we store only the hash of the token and its expiry time; for
+emails about new versions — which document, which version and when the email was
+sent. We also store whether and when the address was confirmed, and an email log:
+which email, when, and how sending ended (sent, mail failure, not sent because
+the address is unconfirmed) — without the text of the email. Support staff see
+the log to answer "the email did not arrive".
 
 **The Operator's employees** (admin panel): the same account data — email
 address, display name, password hash and the encrypted secret of the second
@@ -231,6 +235,8 @@ We do not sell personal data. Data is shared only with:
 | Browsers used to sign in (tag hash, User-Agent) | 400 days after the last sign-in from the browser; until the account is deleted |
 | Marks of emails about new versions of documents | 3 years from the email date |
 | Password recovery link (hash) | One hour; deleted within a day after use or expiry |
+| Address confirmation link (hash) | 24 hours; after use, no more than two days |
+| Service email log (email type, time, sending result) | 180 days; until the account is deleted |
 | Platform channel metrics | 90 days |
 | Platform tokens | Until the platform is disconnected or the account is deleted |
 | Saved payment method | Until the account is deleted; earlier if access to it is revoked or the card expires |
@@ -262,7 +268,8 @@ in clause 4.3.
 
 Deletion is confirmed with the password. The email address and display name are
 anonymized, the password and the second factor are deleted, sessions are ended,
-the records of browsers used to sign in are deleted, widget links are revoked, the widgets themselves and the connected donation
+the records of browsers used to sign in, the service email log and the address
+confirmation mark are deleted, widget links are revoked, the widgets themselves and the connected donation
 sources are deleted together with everything typed into them (roulette sectors,
 hidden viewers, spin history), platform connections with their tokens and metrics
 are deleted, rooms and invites are deleted, auto-renewal is turned off, and the

@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Inject,
@@ -25,7 +26,7 @@ import {
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { PlatformError } from '../../common/http/platform-errors';
-import { MAILER, type Mailer } from '../../common/mail/mailer';
+import { AccountMailService } from '../../common/mail/account-mail.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AppConfig } from '../../config/app-config.service';
 import { LEGAL_DOCUMENTS } from '../privacy/legal-documents';
@@ -122,7 +123,7 @@ export class BillingService {
     private readonly audit: AuditService,
     private readonly config: AppConfig,
     @Inject(PAYMENT_GATEWAY) private readonly gateway: PaymentGateway,
-    @Inject(MAILER) private readonly mailer: Mailer,
+    private readonly mail: AccountMailService,
   ) {}
 
   get configured(): boolean {
@@ -238,8 +239,15 @@ export class BillingService {
     const now = new Date();
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
-      select: { email: true },
+      select: { email: true, emailVerifiedAt: true },
     });
+    // Подписка держится на письмах: без письма о списании продление не
+    // списывается (оферта, раздел 5), а чек ЮKassa уходит на этот же адрес.
+    // Оплата с чужого или опечатанного адреса оставила бы человека без того и
+    // другого — поэтому сначала подтверждение.
+    if (!user.emailVerifiedAt) {
+      throw new ForbiddenException('Подтвердите почту, чтобы оформить тариф');
+    }
     const existing = await this.prisma.subscription.findUnique({ where: { userId } });
     // Следующий период поверх действующего приходит продлением, а не отдельной
     // оплатой: так у подписки один источник продлений и один способ оплаты.
@@ -849,7 +857,7 @@ export class BillingService {
    */
   async sendRenewalNotices(now = new Date()): Promise<number> {
     if (!this.configured) return 0;
-    if (!this.mailer.configured) {
+    if (!this.mail.configured) {
       this.logger.warn('Почта не настроена: письма о списании не уходят, продления не списываются');
       return 0;
     }
@@ -865,9 +873,20 @@ export class BillingService {
           gt: new Date(now.getTime() - GRACE_DAYS * DAY_MS),
         },
         OR: [{ renewalNoticeFor: null }, { renewalNoticeFor: { lt: staleBefore } }],
+        // Неподтверждённой почте писем нет, а без письма нет и списания.
+        user: { emailVerifiedAt: { not: null } },
       },
       include: {
-        user: { select: { email: true, displayName: true, status: true, language: true } },
+        user: {
+          select: {
+            id: true,
+            email: true,
+            displayName: true,
+            status: true,
+            language: true,
+            emailVerifiedAt: true,
+          },
+        },
       },
       orderBy: { currentPeriodEnd: 'asc' },
       take: 50,
@@ -891,7 +910,9 @@ export class BillingService {
         Math.max(end.getTime() - RENEW_AHEAD_MS, now.getTime() + NOTICE_LEAD_MS),
       );
       try {
-        await this.mailer.send(
+        await this.mail.send(
+          subscription.user,
+          'RENEWAL_NOTICE',
           renewalNoticeMessage({
             email: subscription.user.email,
             displayName: subscription.user.displayName,
@@ -936,13 +957,15 @@ export class BillingService {
    * @returns сколько писем отправлено.
    */
   async sendExpiryNotices(now = new Date()): Promise<number> {
-    if (!this.configured || !this.mailer.configured) return 0;
+    if (!this.configured || !this.mail.configured) return 0;
 
     // Проверка «период оплачен» — в запросе, а не после него: иначе полсотни
     // подписок с подаренным хвостом занимали бы всю выборку каждый такт.
     const candidates = await this.prisma.$queryRaw<
       Array<{
         id: string;
+        userId: string;
+        emailVerifiedAt: Date | null;
         plan: PrismaPlan;
         currentPeriodEnd: Date;
         expiryNoticeFor: Date | null;
@@ -951,12 +974,13 @@ export class BillingService {
         language: string;
       }>
     >`
-      SELECT s."id", s."plan", s."currentPeriodEnd", s."expiryNoticeFor",
-             u."email", u."displayName", u."language"
+      SELECT s."id", s."userId", s."plan", s."currentPeriodEnd", s."expiryNoticeFor",
+             u."email", u."displayName", u."language", u."emailVerifiedAt"
       FROM "Subscription" s
       JOIN "User" u ON u."id" = s."userId"
       WHERE s."autoRenew" = false
         AND u."status" = 'ACTIVE'
+        AND u."emailVerifiedAt" IS NOT NULL
         AND s."currentPeriodEnd" > ${now}
         AND s."currentPeriodEnd" <= ${new Date(now.getTime() + NOTICE_AHEAD_MS)}
         AND (s."expiryNoticeFor" IS NULL OR s."expiryNoticeFor" <> s."currentPeriodEnd")
@@ -985,7 +1009,9 @@ export class BillingService {
       if (claimed.count === 0) continue;
 
       try {
-        await this.mailer.send(
+        await this.mail.send(
+          { id: subscription.userId, emailVerifiedAt: subscription.emailVerifiedAt },
+          'EXPIRY_NOTICE',
           expiryNoticeMessage({
             email: subscription.email,
             displayName: subscription.displayName,

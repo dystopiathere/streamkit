@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { DisableTotpInput, SessionInfo } from '@streamkit/contracts';
+import type { DisableTotpInput, PublicUser, SessionInfo } from '@streamkit/contracts';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -72,4 +73,38 @@ export function useRevokeSession() {
     mutationFn: (id: string) => api.delete<void>(`/auth/sessions/${id}`),
     onSettled: () => client.invalidateQueries({ queryKey: sessionKeys.all }),
   });
+}
+
+/**
+ * Письмо подтверждения почты ещё раз. Сервер пускает раз в минуту и отвечает
+ * 429 с текстом — его и показываем.
+ */
+export function useResendVerification() {
+  return useMutation({
+    mutationFn: () => api.post<void>('/auth/email/resend'),
+  });
+}
+
+/**
+ * Подтверждение почты, сделанное в другой вкладке или на телефоне.
+ *
+ * Ссылку из письма открывают где угодно, а флаг в этой вкладке живёт в памяти
+ * до следующего входа. Пока почта не подтверждена, профиль перечитывается при
+ * возврате на вкладку — плашка уходит сама, без перезагрузки.
+ */
+export function useEmailVerificationSync(): void {
+  const user = useAuthStore((state) => state.user);
+  const patchUser = useAuthStore((state) => state.patchUser);
+  const pending = user !== null && !user.emailVerified;
+  const me = useQuery({
+    queryKey: ['auth', 'me'],
+    queryFn: () => api.get<PublicUser>('/auth/me'),
+    enabled: pending,
+    refetchOnWindowFocus: 'always',
+    staleTime: 0,
+  });
+  const verified = me.data?.emailVerified === true;
+  useEffect(() => {
+    if (pending && verified) patchUser({ emailVerified: true });
+  }, [pending, verified, patchUser]);
 }

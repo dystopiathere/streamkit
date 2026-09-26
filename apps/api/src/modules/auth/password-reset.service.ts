@@ -10,7 +10,7 @@ import type { Redis } from 'ioredis';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { PasswordService } from '../../common/crypto/password.service';
-import { MAILER, type Mailer } from '../../common/mail/mailer';
+import { AccountMailService } from '../../common/mail/account-mail.service';
 import { mailUrl } from '../../common/mail/mail-text';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
@@ -48,7 +48,7 @@ export class PasswordResetService {
     private readonly tokens: TokenService,
     private readonly audit: AuditService,
     private readonly config: AppConfig,
-    @Inject(MAILER) private readonly mailer: Mailer,
+    private readonly mail: AccountMailService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly securityMail: SecurityMailService,
   ) {}
@@ -60,7 +60,7 @@ export class PasswordResetService {
    * сервере, а не об аккаунте.
    */
   async request(email: string, language: MailLanguage, context: AuditContext = {}): Promise<void> {
-    if (!this.mailer.configured) {
+    if (!this.mail.configured) {
       throw new ServiceUnavailableException('Почта не настроена');
     }
 
@@ -99,7 +99,7 @@ export class PasswordResetService {
     });
     // Без await — см. комментарий к методу. Сбой почты пишется в журнал без
     // адреса и без ссылки: ссылка и есть доступ к аккаунту.
-    void this.mailer.send(message).catch((error: unknown) => {
+    void this.mail.send(user, 'PASSWORD_RESET', message).catch((error: unknown) => {
       this.logger.error(
         { userId: user.id, error: error instanceof Error ? error.message : String(error) },
         'Письмо восстановления пароля не отправлено',
@@ -114,6 +114,9 @@ export class PasswordResetService {
    * одной ссылкой не сменят пароль дважды. Смена гасит все сессии — забытый
    * пароль нередко значит, что им уже пользуется кто-то ещё. Второй фактор
    * остаётся: восстановление пароля не должно обходить код из приложения.
+   *
+   * Заодно подтверждается почта: ссылка пришла в ящик, и открыл её его
+   * владелец — ровно то, что доказывает ссылка подтверждения.
    */
   async reset(rawToken: string, newPassword: string, context: AuditContext = {}): Promise<void> {
     const tokenHash = this.crypto.hashToken(rawToken);
@@ -133,7 +136,10 @@ export class PasswordResetService {
         data: { usedAt: now },
       });
       if (count === 0) return false;
-      await tx.user.update({ where: { id: record.userId }, data: { passwordHash } });
+      await tx.user.update({
+        where: { id: record.userId },
+        data: { passwordHash, emailVerifiedAt: record.user.emailVerifiedAt ?? now },
+      });
       return true;
     });
     if (!consumed) throw new BadRequestException(INVALID_LINK);

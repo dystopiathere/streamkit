@@ -61,6 +61,8 @@ export class MaintenanceScheduler {
       await this.lock.withLock(MAINTENANCE_LOCK_KEY, 60 * 60 * 1000, async () => {
         await this.maintenance.purgeExpiredTokens();
         await this.maintenance.purgeExpiredPasswordResets();
+        await this.maintenance.purgeExpiredEmailVerifications();
+        await this.maintenance.purgeOldMailLogs(AUDIT_RETENTION_DAYS);
         await this.maintenance.purgeStaleDevices(DEVICE_RETENTION_DAYS);
         await this.maintenance.purgeOldLegalNotices(CONSENT_RETENTION_DAYS);
         await this.maintenance.purgeOldAuditLogs(AUDIT_RETENTION_DAYS);

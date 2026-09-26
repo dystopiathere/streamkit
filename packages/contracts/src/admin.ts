@@ -90,6 +90,7 @@ export const adminUserRowSchema = z.object({
   role: userRoleSchema,
   status: userStatusSchema,
   isTotpEnabled: z.boolean(),
+  emailVerified: z.boolean(),
   createdAt: isoDateSchema,
   /** Последнее обновление сессии дашборда. null — не входил с момента очистки сессий. */
   lastSeenAt: isoDateSchema.nullable(),
@@ -184,9 +185,38 @@ export const adminConsentSchema = z.object({
   revokedAt: isoDateSchema.nullable(),
 });
 
+/** Виды служебных писем — те, что попадают в журнал писем. */
+export const MAIL_KINDS = [
+  'email_verification',
+  'password_reset',
+  'password_changed',
+  'new_device',
+  'totp_disabled',
+  'renewal_notice',
+  'expiry_notice',
+  'legal_update',
+] as const;
+export const mailKindSchema = z.enum(MAIL_KINDS);
+export type MailKind = z.infer<typeof mailKindSchema>;
+
+/** `skipped_unverified` — не отправлено, потому что почта не подтверждена. */
+export const MAIL_STATUSES = ['sent', 'failed', 'skipped_unverified'] as const;
+export const mailStatusSchema = z.enum(MAIL_STATUSES);
+export type MailStatus = z.infer<typeof mailStatusSchema>;
+
+/** Строка журнала писем: вид и исход, без адреса и текста. */
+export const adminMailLogSchema = z.object({
+  id: uuidSchema,
+  kind: mailKindSchema,
+  status: mailStatusSchema,
+  createdAt: isoDateSchema,
+});
+export type AdminMailLog = z.infer<typeof adminMailLogSchema>;
+
 export const adminUserDetailSchema = z.object({
   user: adminUserRowSchema.omit({ subscriptionStatus: true, widgetCount: true }).extend({
     anonymizedAt: isoDateSchema.nullable(),
+    emailVerifiedAt: isoDateSchema.nullable(),
   }),
   sessions: z.array(adminSessionSchema),
   consents: z.array(adminConsentSchema),
@@ -200,6 +230,8 @@ export const adminUserDetailSchema = z.object({
   rooms: z.array(adminRoomSchema.omit({ userId: true, ownerEmail: true })),
   channels: z.array(adminChannelSchema.omit({ userId: true, ownerEmail: true })),
   donationSources: z.array(adminDonationSourceSchema),
+  /** Последние письма пользователю, новые сверху. */
+  mails: z.array(adminMailLogSchema),
   /** Сколько событий пришло за всё время — число, без самих событий. */
   eventCount: z.number().int().min(0),
 });

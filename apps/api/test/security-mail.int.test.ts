@@ -4,7 +4,14 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { MAILER, type Mailer, type MailMessage } from '../src/common/mail/mailer';
 import { DEVICE_COOKIE_NAME } from '../src/modules/auth/device-cookie';
 import { REFRESH_COOKIE_NAME } from '../src/modules/auth/refresh-cookie';
-import { createHarness, extractCookie, registrationPayload, type TestHarness } from './harness';
+import {
+  createHarness,
+  extractCookie,
+  markEmailVerified,
+  registrationPayload,
+  takeVerificationLetter,
+  type TestHarness,
+} from './harness';
 
 class FakeMailer implements Mailer {
   readonly sent: MailMessage[] = [];
@@ -65,6 +72,8 @@ describe('Письма о безопасности (feature)', () => {
       .send(payload)
       .expect(201);
     const cookies = response.headers['set-cookie'] as unknown as string[];
+    if (mailer.configured) await takeVerificationLetter(mailer.sent, payload.email);
+    await markEmailVerified(harness, response.body.user.id as string);
     return {
       payload,
       accessToken: response.body.accessToken as string,
@@ -233,6 +242,36 @@ describe('Письма о безопасности (feature)', () => {
 
     const [letter] = await lettersWith(mailer, 'двухфакторный вход выключен');
     expect(letter!.text).toContain('теперь для входа достаточно пароля');
+  });
+
+  it('неподтверждённой почте не пишет, а в журнал писем ложится причина', async () => {
+    const user = await register();
+    await harness.prisma.user.updateMany({ data: { emailVerifiedAt: null } });
+
+    await request(server())
+      .post('/api/auth/login')
+      .send({ email: user.payload.email, password: user.payload.password })
+      .expect(200);
+
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      if ((await harness.prisma.mailLog.count({ where: { kind: 'NEW_DEVICE' } })) > 0) break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(mailer.sent).toHaveLength(0);
+    const logs = await harness.prisma.mailLog.findMany({ where: { kind: 'NEW_DEVICE' } });
+    expect(logs.map((log) => log.status)).toEqual(['SKIPPED_UNVERIFIED']);
+  });
+
+  it('отправленное письмо попадает в журнал писем', async () => {
+    const user = await register();
+    await request(server())
+      .post('/api/auth/login')
+      .send({ email: user.payload.email, password: user.payload.password })
+      .expect(200);
+    await lettersWith(mailer, 'вход с нового устройства');
+
+    const logs = await harness.prisma.mailLog.findMany({ where: { kind: 'NEW_DEVICE' } });
+    expect(logs.map((log) => log.status)).toEqual(['SENT']);
   });
 
   it('без настроенной почты действия работают, писем нет', async () => {

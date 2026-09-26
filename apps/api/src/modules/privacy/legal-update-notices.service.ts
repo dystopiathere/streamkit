@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { mailLanguageSchema } from '@streamkit/contracts';
-import { MAILER, type Mailer } from '../../common/mail/mailer';
+import { AccountMailService } from '../../common/mail/account-mail.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AppConfig } from '../../config/app-config.service';
 import { type LegalDocument, publishedDocuments } from './legal-documents';
@@ -29,18 +29,21 @@ export class LegalUpdateNoticesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: AppConfig,
-    @Inject(MAILER) private readonly mailer: Mailer,
+    private readonly mail: AccountMailService,
   ) {}
 
   /** @returns сколько писем отправлено. */
   async sendPending(): Promise<number> {
-    if (!this.mailer.configured) return 0;
+    if (!this.mail.configured) return 0;
 
     const pending = new Map<string, LegalDocument[]>();
     for (const document of publishedDocuments()) {
       const users = await this.prisma.user.findMany({
         where: {
           status: 'ACTIVE',
+          // Неподтверждённой почте не пишем. Подтвердивший позже получит письмо
+          // следующим тактом, если к тому времени не отметил редакцию сам.
+          emailVerifiedAt: { not: null },
           AND: [
             {
               consents: {
@@ -82,7 +85,7 @@ export class LegalUpdateNoticesService {
   private async notify(userId: string, documents: LegalDocument[]): Promise<boolean> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { email: true, displayName: true, language: true },
+      select: { id: true, email: true, displayName: true, language: true, emailVerifiedAt: true },
     });
     if (!user) return false;
 
@@ -94,7 +97,9 @@ export class LegalUpdateNoticesService {
     await this.prisma.legalUpdateNotice.createMany({ data: marks, skipDuplicates: true });
 
     try {
-      await this.mailer.send(
+      await this.mail.send(
+        user,
+        'LEGAL_UPDATE',
         legalUpdateMessage({
           email: user.email,
           displayName: user.displayName,

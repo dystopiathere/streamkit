@@ -67,6 +67,11 @@ export const publicUserSchema = z.object({
   email: z.string().email(),
   displayName: z.string(),
   isTotpEnabled: z.boolean(),
+  /**
+   * Подтверждена ли почта. Без подтверждения сервис не пишет ничего, кроме
+   * письма подтверждения и восстановления пароля, и не принимает оплату тарифа.
+   */
+  emailVerified: z.boolean(),
   createdAt: isoDateSchema,
 });
 export type PublicUser = z.infer<typeof publicUserSchema>;
@@ -147,6 +152,20 @@ export const resetPasswordSchema = z.object({
   newPassword: passwordSchema,
 });
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
+/**
+ * Сколько живёт ссылка подтверждения почты.
+ *
+ * Сутки, а не час, как у восстановления пароля: подтверждение ничего не
+ * открывает постороннему, а письмо после регистрации нередко открывают вечером.
+ */
+export const EMAIL_VERIFICATION_TTL_HOURS = 24;
+
+/** Подтверждение почты по ссылке: токен того же формата, что у восстановления пароля. */
+export const verifyEmailSchema = z.object({
+  token: z.string().regex(/^[A-Za-z0-9_-]{43}$/, 'Ссылка недействительна или устарела'),
+});
+export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
 
 const PASSWORDS_DIFFER = 'Пароли не совпадают';
 

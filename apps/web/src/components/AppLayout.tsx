@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { Link, NavLink, Outlet } from 'react-router-dom';
+import { EmailVerificationNotice } from '@/components/EmailVerificationNotice';
 import { LegalUpdateNotice } from '@/components/LegalUpdateNotice';
 import { PublicFooter } from '@/features/public/PublicFooter';
 import {
@@ -84,6 +85,7 @@ export function AppLayout(): React.JSX.Element {
         {/* Уведомление о новой редакции документов — над содержимым любой
             страницы дашборда: раньше узнать об изменении можно было только
             зайдя в «Приватность». Ничего не блокирует. */}
+        <EmailVerificationNotice />
         <LegalUpdateNotice />
         <Outlet />
       </MainContent>

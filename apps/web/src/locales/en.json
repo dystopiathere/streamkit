@@ -1083,6 +1083,7 @@
     "delivery": {
       "title": "How you get the service",
       "digital": "The service is digital and is provided online through your account on this website. There is no physical delivery — nothing needs to be sent or received.",
+      "account": "You can pay for a plan after signing up and confirming your email with the link we send: receipts and payment reminders go to that address.",
       "instant": "Access to the paid plan opens automatically right after the payment is confirmed, usually within a minute. No email or call is needed.",
       "term": "The service is provided for the whole paid period: a calendar month or year from the date of payment.",
       "requirements": "You need a browser and streaming software with a browser source, such as OBS Studio. Nothing from us needs to be installed."
@@ -1278,5 +1279,20 @@
       "kick": "Reconnect Kick: without the new permissions, channel alerts and chat will not arrive."
     },
     "reconnect": "Reconnect"
+  },
+  "emailVerification": {
+    "notice": "Confirm {{email}}: the link is in your inbox. Until you do, we send no security or payment emails, and paid plans are closed.",
+    "resend": "Send the email again",
+    "resent": "Email sent to {{email}}. If you do not see it, check Spam.",
+    "billing": "Payment opens once you confirm {{email}}: receipts and payment reminders go there.",
+    "page": {
+      "title": "Email confirmation",
+      "checking": "Checking the link…",
+      "done": "Email confirmed. Security and payment emails will now come here, and paid plans are open.",
+      "failed": "This link is invalid or has expired. Sign in to the dashboard and send the email again.",
+      "noToken": "The link did not open in full. Copy the whole link from the email.",
+      "toDashboard": "Go to the dashboard",
+      "toLogin": "Sign in"
+    }
   }
 }

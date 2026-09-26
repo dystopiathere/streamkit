@@ -32,6 +32,8 @@ import {
   type ResetPasswordInput,
   resetPasswordSchema,
   type SessionInfo,
+  type VerifyEmailInput,
+  verifyEmailSchema,
 } from '@streamkit/contracts';
 import type { Request, Response } from 'express';
 import { AuditService } from '../../common/audit/audit.service';
@@ -40,6 +42,7 @@ import { zodBody } from '../../common/pipes/zod-validation.pipe';
 import { AppConfig } from '../../config/app-config.service';
 import { AuthService } from './auth.service';
 import { readDeviceCookie, setDeviceCookie } from './device-cookie';
+import { EmailVerificationService } from './email-verification.service';
 import { KnownDeviceService } from './known-device.service';
 import { PasswordResetService } from './password-reset.service';
 import { clearRefreshCookie, readRefreshCookie, setRefreshCookie } from './refresh-cookie';
@@ -66,6 +69,7 @@ export class AuthController {
     private readonly audit: AuditService,
     private readonly config: AppConfig,
     private readonly devices: KnownDeviceService,
+    private readonly emailVerification: EmailVerificationService,
   ) {}
 
   @Public()
@@ -242,6 +246,28 @@ export class AuthController {
       body.newPassword,
       this.audit.contextFromRequest(request),
     );
+  }
+
+  /**
+   * Подтверждение почты по ссылке из письма. Без сессии: письмо открывают и
+   * там, где в дашборд не входили. Лимитер `auth` — токен можно перебирать.
+   */
+  @Public()
+  @SkipThrottle({ auth: false })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Post('email/verify')
+  async verifyEmail(
+    @Body(zodBody(verifyEmailSchema)) body: VerifyEmailInput,
+    @Req() request: Request,
+  ): Promise<void> {
+    await this.emailVerification.verify(body.token, this.audit.contextFromRequest(request));
+  }
+
+  /** Новое письмо подтверждения: не чаще раза в минуту, см. `EmailVerificationService`. */
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Post('email/resend')
+  async resendVerification(@CurrentUser() user: AuthenticatedUser): Promise<void> {
+    await this.emailVerification.resend(user.id);
   }
 
   @Post('totp/setup')

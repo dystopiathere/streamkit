@@ -75,6 +75,13 @@ their password safe. Actions performed with the account are deemed to have been
 performed by the user. Two-factor authentication can be enabled to protect the
 account.
 
+3.2.1. The address is confirmed with the link in the email the Service sends
+after sign-up; a new email can be requested in the account. The address is also
+considered confirmed once the user has set a new password with the link from a
+password recovery email. Until the address is confirmed, the Service sends it no
+emails other than the confirmation email and the password recovery email, and a
+paid plan cannot be purchased.
+
 3.3. If the account is suspected to be compromised, the user changes the
 password and notifies the Operator at {{SELLER_EMAIL}}. The password is changed
 in the dashboard (Profile, Security section); a password change ends the
@@ -159,9 +166,10 @@ never used with the account before, about two-factor sign-in being turned off,
 about an upcoming automatic charge, about a paid period ending soon without
 renewal, about changes in price and terms and about new versions of documents,
 as well as an email with a password recovery link, sent only on a request made
-on the sign-in page. Security emails cannot be turned off: without them the user
-would not learn about someone else signing in to the account. The Service does
-not send marketing emails.
+on the sign-in page. Emails are sent only to a confirmed address (clause 3.2.1).
+Security emails cannot be turned off: without them the user would not learn about
+someone else signing in to the account. The Service does not send marketing
+emails.
 
 ## 10. Liability
 

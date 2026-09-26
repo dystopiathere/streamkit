@@ -26,12 +26,17 @@ import {
   escapeLike,
   iso,
   pageArgs,
+  toContractMailKind,
+  toContractMailStatus,
   toContractRole,
   toContractStatus,
   toPage,
   toPrismaRole,
   toPrismaStatus,
 } from './admin.mappers';
+
+/** Писем в карточке: поддержке нужны последние, а журнал живёт полгода. */
+const MAIL_LOG_LIMIT = 50;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -76,6 +81,7 @@ export class AdminUsersService {
         role: toContractRole(row.role),
         status: toContractStatus(row.status),
         isTotpEnabled: row.isTotpEnabled,
+        emailVerified: row.emailVerifiedAt !== null,
         createdAt: row.createdAt.toISOString(),
         lastSeenAt: iso(row.refreshTokens[0]?.lastUsedAt),
         subscriptionStatus: subscriptionStatus(row.subscription, now),
@@ -105,6 +111,7 @@ export class AdminUsersService {
         },
         donationSources: { orderBy: { createdAt: 'asc' } },
         payments: { orderBy: { createdAt: 'desc' }, take: 50 },
+        mailLogs: { orderBy: { createdAt: 'desc' }, take: MAIL_LOG_LIMIT },
         _count: { select: { alertEvents: true } },
       },
     });
@@ -125,6 +132,8 @@ export class AdminUsersService {
         role: toContractRole(user.role),
         status: toContractStatus(user.status),
         isTotpEnabled: user.isTotpEnabled,
+        emailVerified: user.emailVerifiedAt !== null,
+        emailVerifiedAt: iso(user.emailVerifiedAt),
         createdAt: user.createdAt.toISOString(),
         lastSeenAt:
           sessions
@@ -185,6 +194,12 @@ export class AdminUsersService {
         isEnabled: source.isEnabled,
         disabledReason: source.disabledReason,
         lastEventAt: iso(source.lastEventAt),
+      })),
+      mails: user.mailLogs.map((mail) => ({
+        id: mail.id,
+        kind: toContractMailKind(mail.kind),
+        status: toContractMailStatus(mail.status),
+        createdAt: mail.createdAt.toISOString(),
       })),
       eventCount: user._count.alertEvents,
     };

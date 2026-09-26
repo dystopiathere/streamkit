@@ -10,6 +10,7 @@ function user(id: string): PublicUser {
     email: `${id.slice(-1)}@example.com`,
     displayName: 'Стример',
     isTotpEnabled: false,
+    emailVerified: true,
     createdAt: new Date().toISOString(),
   };
 }

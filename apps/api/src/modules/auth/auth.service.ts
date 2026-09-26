@@ -11,6 +11,7 @@ import { CryptoService } from '../../common/crypto/crypto.service';
 import { PasswordService } from '../../common/crypto/password.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { LEGAL_DOCUMENTS, REQUIRED_ON_REGISTER } from '../privacy/legal-documents';
+import { EmailVerificationService } from './email-verification.service';
 import { KnownDeviceService } from './known-device.service';
 import { SecurityMailService } from './security-mail.service';
 import { TokenService } from './token.service';
@@ -32,6 +33,7 @@ export class AuthService {
     private readonly audit: AuditService,
     private readonly devices: KnownDeviceService,
     private readonly securityMail: SecurityMailService,
+    private readonly emailVerification: EmailVerificationService,
   ) {}
 
   /**
@@ -78,6 +80,7 @@ export class AuthService {
     });
 
     await this.audit.record('auth.register', user.id, context);
+    this.emailVerification.sendAfterRegistration(user.id);
     if (deviceId) await this.devices.remember(user.id, deviceId, context.userAgent);
 
     const issued = await this.tokens.startSession(user, context);
@@ -319,6 +322,7 @@ export function toPublicUser(user: User): PublicUser {
     email: user.email,
     displayName: user.displayName,
     isTotpEnabled: user.isTotpEnabled,
+    emailVerified: user.emailVerifiedAt !== null,
     createdAt: user.createdAt.toISOString(),
   };
 }
