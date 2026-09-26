@@ -613,7 +613,11 @@
       "page": "Page {{page}}",
       "range": "{{from}}–{{to}} of {{total}}"
     },
-    "voice": "voice"
+    "voice": "voice",
+    "origin": "{{type}} · {{source}}",
+    "source": {
+      "webhook": "webhook"
+    }
   },
   "privacy": {
     "title": "Privacy and data",

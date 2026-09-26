@@ -619,7 +619,11 @@
       "page": "Страница {{page}}",
       "range": "{{from}}–{{to}} из {{total}}"
     },
-    "voice": "голос"
+    "voice": "голос",
+    "origin": "{{type}} · {{source}}",
+    "source": {
+      "webhook": "вебхук"
+    }
   },
   "privacy": {
     "title": "Приватность и данные",
