@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 860" width="1440" height="860" font-family="Arial, Helvetica, sans-serif">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3c4043"/></marker></defs>
+<rect width="1440" height="860" fill="#ffffff"/>
+<text x="40" y="52" font-size="28" font-weight="700" fill="#202124">StreamKit: user flow with YouTube</text>
+<text x="40" y="82" font-size="16" fill="#5f6368">What a streamer does, and which YouTube API calls each step causes. All calls use the streamer's own token for their own channel.</text>
+<text x="40" y="126" font-size="18" font-weight="700" fill="#202124">Setup (once)</text>
+<text x="40" y="466" font-size="18" font-weight="700" fill="#202124">During a live stream</text>
+<rect x="40" y="150" width="305" height="250" rx="12" fill="#f8f9fa" stroke="#5f6368"/>
+<circle cx="70" cy="182" r="16" fill="#202124"/><text x="70" y="188" font-size="16" font-weight="700" fill="#fff" text-anchor="middle">1</text>
+<text x="96" y="188" font-size="17" font-weight="700" fill="#202124">Sign in to StreamKit</text>
+<text x="60" y="222" font-size="13" fill="#5f6368">Dashboard, stream-kit.ru</text>
+<text x="60" y="252" font-size="14" fill="#3c4043">The streamer signs in to their</text>
+<text x="60" y="272" font-size="14" fill="#3c4043">own StreamKit account.</text>
+<line x1="60" y1="322" x2="325" y2="322" stroke="#dadce0"/>
+<text x="60" y="344" font-size="12" font-weight="700" fill="#1a5fb4">API</text>
+<text x="60" y="364" font-size="13" fill="#1a5fb4">No YouTube API calls</text>
+<line x1="349" y1="275.0" x2="379" y2="275.0" stroke="#3c4043" stroke-width="2" marker-end="url(#a)"/>
+<rect x="385" y="150" width="305" height="250" rx="12" fill="#f8f9fa" stroke="#5f6368"/>
+<circle cx="415" cy="182" r="16" fill="#202124"/><text x="415" y="188" font-size="16" font-weight="700" fill="#fff" text-anchor="middle">2</text>
+<text x="441" y="188" font-size="17" font-weight="700" fill="#202124">Connect YouTube</text>
+<text x="405" y="222" font-size="13" fill="#5f6368">Profile › Platforms</text>
+<text x="405" y="252" font-size="14" fill="#3c4043">Clicks “Connect YouTube” and is</text>
+<text x="405" y="272" font-size="14" fill="#3c4043">redirected to Google to choose</text>
+<text x="405" y="292" font-size="14" fill="#3c4043">a channel and confirm access.</text>
+<line x1="405" y1="322" x2="670" y2="322" stroke="#dadce0"/>
+<text x="405" y="344" font-size="12" font-weight="700" fill="#1a5fb4">API</text>
+<text x="405" y="364" font-size="13" fill="#1a5fb4">No YouTube API calls</text>
+<line x1="694" y1="275.0" x2="724" y2="275.0" stroke="#3c4043" stroke-width="2" marker-end="url(#a)"/>
+<rect x="730" y="150" width="305" height="250" rx="12" fill="#e8f0fe" stroke="#1a5fb4"/>
+<circle cx="760" cy="182" r="16" fill="#202124"/><text x="760" y="188" font-size="16" font-weight="700" fill="#fff" text-anchor="middle">3</text>
+<text x="786" y="188" font-size="17" font-weight="700" fill="#202124">Google consent screen</text>
+<text x="750" y="222" font-size="13" fill="#5f6368">accounts.google.com</text>
+<text x="750" y="252" font-size="14" fill="#3c4043">Chooses their own channel and</text>
+<text x="750" y="272" font-size="14" fill="#3c4043">grants youtube.readonly.</text>
+<text x="750" y="292" font-size="14" fill="#3c4043">Can cancel: nothing is stored.</text>
+<line x1="750" y1="322" x2="1015" y2="322" stroke="#dadce0"/>
+<text x="750" y="344" font-size="12" font-weight="700" fill="#1a5fb4">API</text>
+<text x="750" y="364" font-size="13" fill="#1a5fb4">OAuth token exchange</text>
+<line x1="1039" y1="275.0" x2="1069" y2="275.0" stroke="#3c4043" stroke-width="2" marker-end="url(#a)"/>
+<rect x="1075" y="150" width="305" height="250" rx="12" fill="#f8f9fa" stroke="#5f6368"/>
+<circle cx="1105" cy="182" r="16" fill="#202124"/><text x="1105" y="188" font-size="16" font-weight="700" fill="#fff" text-anchor="middle">4</text>
+<text x="1131" y="188" font-size="17" font-weight="700" fill="#202124">Own channel analytics</text>
+<text x="1095" y="222" font-size="13" fill="#5f6368">Analytics</text>
+<text x="1095" y="252" font-size="14" fill="#3c4043">Subscribers, views, concurrent</text>
+<text x="1095" y="272" font-size="14" fill="#3c4043">viewers and stream history of</text>
+<text x="1095" y="292" font-size="14" fill="#3c4043">their own channel only.</text>
+<line x1="1095" y1="322" x2="1360" y2="322" stroke="#dadce0"/>
+<text x="1095" y="344" font-size="12" font-weight="700" fill="#1a5fb4">API</text>
+<text x="1095" y="364" font-size="13" fill="#1a5fb4">channels.list + liveBroadcasts.list:</text>
+<text x="1095" y="382" font-size="13" fill="#1a5fb4">2–3 units every 15 min (1 min live)</text>
+<rect x="40" y="490" width="305" height="250" rx="12" fill="#f8f9fa" stroke="#5f6368"/>
+<circle cx="70" cy="522" r="16" fill="#202124"/><text x="70" y="528" font-size="16" font-weight="700" fill="#fff" text-anchor="middle">5</text>
+<text x="96" y="528" font-size="17" font-weight="700" fill="#202124">Go live on YouTube</text>
+<text x="60" y="562" font-size="13" fill="#5f6368">YouTube Studio / OBS</text>
+<text x="60" y="592" font-size="14" fill="#3c4043">The streamer starts a broadcast</text>
+<text x="60" y="612" font-size="14" fill="#3c4043">on their own channel as usual.</text>
+<line x1="60" y1="662" x2="325" y2="662" stroke="#dadce0"/>
+<text x="60" y="684" font-size="12" font-weight="700" fill="#1a5fb4">API</text>
+<text x="60" y="704" font-size="13" fill="#1a5fb4">liveBroadcasts.list: 1 unit / 2 min,</text>
+<text x="60" y="722" font-size="13" fill="#1a5fb4">only while chat is open, until found</text>
+<line x1="349" y1="615.0" x2="379" y2="615.0" stroke="#3c4043" stroke-width="2" marker-end="url(#a)"/>
+<rect x="385" y="490" width="305" height="250" rx="12" fill="#f8f9fa" stroke="#5f6368"/>
+<circle cx="415" cy="522" r="16" fill="#202124"/><text x="415" y="528" font-size="16" font-weight="700" fill="#fff" text-anchor="middle">6</text>
+<text x="441" y="528" font-size="17" font-weight="700" fill="#202124">Open chat in StreamKit</text>
+<text x="405" y="562" font-size="13" fill="#5f6368">Stream window or OBS overlay</text>
+<text x="405" y="592" font-size="14" fill="#3c4043">Opens the stream window or</text>
+<text x="405" y="612" font-size="14" fill="#3c4043">adds the chat overlay (browser</text>
+<text x="405" y="632" font-size="14" fill="#3c4043">source) to their own OBS scene.</text>
+<line x1="405" y1="662" x2="670" y2="662" stroke="#dadce0"/>
+<text x="405" y="684" font-size="12" font-weight="700" fill="#1a5fb4">API</text>
+<text x="405" y="704" font-size="13" fill="#1a5fb4">liveChatMessages.streamList:</text>
+<text x="405" y="722" font-size="13" fill="#1a5fb4">one stream per live broadcast</text>
+<line x1="694" y1="615.0" x2="724" y2="615.0" stroke="#3c4043" stroke-width="2" marker-end="url(#a)"/>
+<rect x="730" y="490" width="305" height="250" rx="12" fill="#f8f9fa" stroke="#5f6368"/>
+<circle cx="760" cy="522" r="16" fill="#202124"/><text x="760" y="528" font-size="16" font-weight="700" fill="#fff" text-anchor="middle">7</text>
+<text x="786" y="528" font-size="17" font-weight="700" fill="#202124">Chat and alerts live</text>
+<text x="750" y="562" font-size="13" fill="#5f6368">Dashboard + OBS overlay</text>
+<text x="750" y="592" font-size="14" fill="#3c4043">Messages appear in real time and</text>
+<text x="750" y="612" font-size="14" fill="#3c4043">are not stored. Memberships and</text>
+<text x="750" y="632" font-size="14" fill="#3c4043">Super Chats can show as alerts.</text>
+<line x1="750" y1="662" x2="1015" y2="662" stroke="#dadce0"/>
+<text x="750" y="684" font-size="12" font-weight="700" fill="#1a5fb4">API</text>
+<text x="750" y="704" font-size="13" fill="#1a5fb4">Stream closes when the window</text>
+<text x="750" y="722" font-size="13" fill="#1a5fb4">and overlays close or stream ends</text>
+<line x1="1039" y1="615.0" x2="1069" y2="615.0" stroke="#3c4043" stroke-width="2" marker-end="url(#a)"/>
+<rect x="1075" y="490" width="305" height="250" rx="12" fill="#f8f9fa" stroke="#5f6368"/>
+<circle cx="1105" cy="522" r="16" fill="#202124"/><text x="1105" y="528" font-size="16" font-weight="700" fill="#fff" text-anchor="middle">8</text>
+<text x="1131" y="528" font-size="17" font-weight="700" fill="#202124">Disconnect any time</text>
+<text x="1095" y="562" font-size="13" fill="#5f6368">Profile › Platforms</text>
+<text x="1095" y="592" font-size="14" fill="#3c4043">“Disconnect” revokes the token</text>
+<text x="1095" y="612" font-size="14" fill="#3c4043">at Google and deletes tokens,</text>
+<text x="1095" y="632" font-size="14" fill="#3c4043">channel data and all metrics.</text>
+<line x1="1095" y1="662" x2="1360" y2="662" stroke="#dadce0"/>
+<text x="1095" y="684" font-size="12" font-weight="700" fill="#1a5fb4">API</text>
+<text x="1095" y="704" font-size="13" fill="#1a5fb4">Token revoked via Google OAuth;</text>
+<text x="1095" y="722" font-size="13" fill="#1a5fb4">or myaccount.google.com/permissions</text>
+<path d="M1227.5,400 L1227.5,422 L192.5,422 L192.5,440" fill="none" stroke="#3c4043" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#a)"/>
+<text x="40" y="784" font-size="14" fill="#3c4043">Step 8 is available at any moment, also outside a stream. Without an open window or overlay, no chat is read and no live-chat quota is used; analytics polling continues every 15 minutes.</text>
+<text x="40" y="808" font-size="14" fill="#3c4043">Quota is counted per Google Cloud project; StreamKit reserves units before each call and stops calling when its own daily budget is spent.</text>
+</svg>

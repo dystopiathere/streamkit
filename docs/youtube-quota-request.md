@@ -14,6 +14,8 @@ Extension Form»). Заполняется по-английски; ниже — 
       `youtube.readonly` упоминает чат эфира, а не только аналитику.
 - [ ] Цена `streamList` измерена на живом эфире, `YOUTUBE_CHAT_STREAM_COST`
       выставлен по факту, расчёт ниже пересчитан.
+- [ ] Диаграммы приложены к форме: `docs/youtube-quota/architecture.png` и
+      `docs/youtube-quota/user-flow.png` (исходники — SVG рядом).
 - [ ] Скринкаст (2–3 минуты): подключение YouTube → аналитика → окно эфира с
       чатом → виджет чата в OBS → отключение канала (удаляет данные).
 
@@ -38,7 +40,8 @@ Extension Form»). Заполняется по-английски; ниже — 
 
 > - `channels.list` (mine=true): on connect and every 15 minutes (every minute
 >   while live) for analytics.
-> - `liveBroadcasts.list` (mine=true, broadcastStatus=active): same cadence for
+> - `liveBroadcasts.list` (broadcastStatus=active, which already limits results
+>   to the authorized channel): same cadence for
 >   analytics; additionally every 2 minutes only while the streamer has the chat
 >   overlay or the stream window open and no broadcast is live yet.
 > - `videos.list` (liveStreamingDetails): only while a broadcast is live.
@@ -80,3 +83,8 @@ Extension Form»). Заполняется по-английски; ниже — 
 - Terms of Service: https://stream-kit.ru/legal/terms (EN: `?lang=en`)
 - Privacy Policy: https://stream-kit.ru/legal/privacy (EN: `?lang=en`)
 - Устройство и расчёт квоты — `docs/adr/0007`, `docs/adr/0014`.
+- Диаграммы для формы (по-английски): `docs/youtube-quota/architecture.png` —
+  где живут данные и какие вызовы API откуда идут; `docs/youtube-quota/user-flow.png` —
+  шаги стримера и вызовы, которые вызывает каждый шаг. PNG перерисовываются из
+  SVG: цифры в них (каденции, цена вызова) обязаны совпадать с кодом и с
+  расчётом выше.
