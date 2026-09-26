@@ -104,6 +104,11 @@ NestJS 11 (Express), Prisma 7 + PostgreSQL, ioredis, Socket.IO + redis-adapter,
   (стример подключал Twitch до новых scope), тип пропускается, а карточка
   канала просит переподключения (`Channel.needsReconnect` из scope учётки).
   Ключ дедупликации — `message_id`: Twitch повторяет доставку.
+- **Лимитер Nest не видит сокетов.** Рукопожатие Engine.IO идёт мимо
+  контроллеров, поэтому допуск подключений — свой (`SocketAdmission` в
+  `RedisIoAdapter`): новые в минуту на IP — в Valkey, открытые на IP — в
+  процессе. Адрес — последний в `X-Forwarded-For`: `trust proxy` Express до
+  Engine.IO не доходит.
 - **Kick шлёт события и чат только вебхуком** (`docs/adr/0015`). Подписки
   создаёт воркер токеном стримера (`KickEventsConnector` — события, раз в час
   сверка; `KickChatSource` — чат, пока канал читается), а принимает API
