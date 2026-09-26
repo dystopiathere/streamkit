@@ -11,6 +11,7 @@ import {
   StatusPill,
 } from '@streamkit/app-kit';
 import {
+  type AdminReferrals,
   type AdminSession,
   type AdminUserDetail,
   formatMoney,
@@ -510,6 +511,8 @@ function UserCard({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
         />
       </Section>
 
+      <ReferralsSection referrals={detail.referrals} />
+
       {/* «Письмо не пришло» — частое обращение: здесь видно, ушло ли оно, и
           если нет — почему. Адреса и текста нет: в письмах ссылки-доступы. */}
       <Section title={t('user.mails')}>
@@ -671,6 +674,119 @@ function UserCard({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
         {t('user.roleText')}
       </Confirm>
     </div>
+  );
+}
+
+/**
+ * Приглашения и бесплатный «Про»: промокод, кто пригласил, кого пригласил сам,
+ * начисления за оплаты приглашённых, включения накопленных дней и пробный
+ * период. Этого хватает, чтобы ответить на «дни за друга не пришли» без
+ * запросов к базе.
+ */
+function ReferralsSection({ referrals }: { referrals: AdminReferrals }): React.JSX.Element {
+  const { t } = useTranslation();
+  const peer = (value: { id: string; email: string }): ReactNode => (
+    <Link to={`/users/${value.id}`} className="underline-offset-4 hover:underline">
+      {value.email}
+    </Link>
+  );
+  const trial = referrals.trialStartedAt
+    ? t('user.refTrialUsed', {
+        start: formatDate(referrals.trialStartedAt),
+        end: referrals.trialEndsAt ? formatDate(referrals.trialEndsAt) : '—',
+      })
+    : t('user.refTrialNotUsed');
+
+  return (
+    <Section title={t('user.referrals')}>
+      <DetailList
+        items={[
+          {
+            label: t('user.refCode'),
+            value: referrals.code ? <code>{referrals.code}</code> : t('user.refNoCode'),
+          },
+          {
+            label: t('user.refReferredBy'),
+            value: referrals.referredBy ? peer(referrals.referredBy) : '—',
+          },
+          { label: t('user.refInvited'), value: formatNumber(referrals.invitedCount) },
+          { label: t('user.refBalance'), value: formatNumber(referrals.balanceDays) },
+          {
+            label: t('user.refBonusUntil'),
+            value: referrals.bonusProUntil ? formatDateTime(referrals.bonusProUntil) : '—',
+          },
+          { label: t('user.refTrial'), value: trial },
+        ]}
+      />
+
+      <div className="mt-4 space-y-4">
+        <DataTable
+          caption={t('user.refInvitedCaption')}
+          rows={referrals.invited}
+          rowKey={(row) => row.id}
+          empty={<p className="text-sm text-muted">{t('user.refNoInvited')}</p>}
+          columns={[
+            { key: 'email', header: t('user.refUser'), cell: (row) => peer(row) },
+            {
+              key: 'at',
+              header: t('user.registered'),
+              cell: (row) => formatDateTime(row.createdAt),
+              className: 'whitespace-nowrap',
+            },
+            {
+              key: 'rewarded',
+              header: t('user.refRewarded'),
+              cell: (row) => (row.rewarded ? t('common.yes') : t('common.no')),
+            },
+          ]}
+        />
+
+        <DataTable
+          caption={t('user.refRewardsCaption')}
+          rows={referrals.rewards}
+          rowKey={(row) => row.id}
+          empty={<p className="text-sm text-muted">{t('user.refNoRewards')}</p>}
+          columns={[
+            { key: 'referred', header: t('user.refFor'), cell: (row) => peer(row.referred) },
+            { key: 'plan', header: t('user.subPlan'), cell: (row) => t(`plan.${row.plan}`) },
+            { key: 'days', header: t('user.refDays'), cell: (row) => formatNumber(row.days) },
+            {
+              key: 'at',
+              header: t('user.refCredited'),
+              cell: (row) => formatDateTime(row.createdAt),
+              className: 'whitespace-nowrap',
+            },
+            {
+              key: 'revoked',
+              header: t('user.refRevoked'),
+              cell: (row) => (row.revokedAt ? formatDateTime(row.revokedAt) : '—'),
+            },
+          ]}
+        />
+
+        <DataTable
+          caption={t('user.refActivationsCaption')}
+          rows={referrals.activations}
+          rowKey={(row) => row.id}
+          empty={<p className="text-sm text-muted">{t('user.refNoActivations')}</p>}
+          columns={[
+            { key: 'days', header: t('user.refDays'), cell: (row) => formatNumber(row.days) },
+            {
+              key: 'starts',
+              header: t('user.refStarts'),
+              cell: (row) => formatDateTime(row.startsAt),
+              className: 'whitespace-nowrap',
+            },
+            {
+              key: 'ends',
+              header: t('user.refEnds'),
+              cell: (row) => formatDateTime(row.endsAt),
+              className: 'whitespace-nowrap',
+            },
+          ]}
+        />
+      </div>
+    </Section>
   );
 }
 

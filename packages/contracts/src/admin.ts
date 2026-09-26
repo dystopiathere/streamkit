@@ -214,6 +214,60 @@ export const adminMailLogSchema = z.object({
 });
 export type AdminMailLog = z.infer<typeof adminMailLogSchema>;
 
+/** Другой стример в сведениях о приглашениях: ссылка на его карточку. */
+export const adminReferralPeerSchema = z.object({
+  id: uuidSchema,
+  email: z.string(),
+});
+
+/**
+ * Приглашения в карточке стримера.
+ *
+ * Отвечает на обращения «дни за друга не пришли» и «где мой пробный период»:
+ * кто пригласил, кого пригласил он сам, за чьи оплаты начислены дни, сколько
+ * их накоплено и когда включены.
+ */
+export const adminReferralsSchema = z.object({
+  /** null — раздел «Приглашения» ещё не открывали, промокод не выдан. */
+  code: z.string().nullable(),
+  referredBy: adminReferralPeerSchema.nullable(),
+  /** Все зарегистрировавшиеся по промокоду. */
+  invitedCount: z.number().int().min(0),
+  /** Последние приглашённые, новые сверху. */
+  invited: z.array(
+    adminReferralPeerSchema.extend({
+      createdAt: isoDateSchema,
+      /** Оплатил и принёс дни (без отозванных возвратом). */
+      rewarded: z.boolean(),
+    }),
+  ),
+  balanceDays: z.number().int().min(0),
+  rewards: z.array(
+    z.object({
+      id: uuidSchema,
+      referred: adminReferralPeerSchema,
+      plan: paidPlanSchema,
+      days: z.number().int().positive(),
+      createdAt: isoDateSchema,
+      revokedAt: isoDateSchema.nullable(),
+    }),
+  ),
+  activations: z.array(
+    z.object({
+      id: uuidSchema,
+      days: z.number().int().positive(),
+      startsAt: isoDateSchema,
+      endsAt: isoDateSchema,
+    }),
+  ),
+  /** Пробный период: когда включён и до какого момента. */
+  trialStartedAt: isoDateSchema.nullable(),
+  trialEndsAt: isoDateSchema.nullable(),
+  /** Конец всей цепочки бесплатного «Про»: пробный период и включённые дни. */
+  bonusProUntil: isoDateSchema.nullable(),
+});
+export type AdminReferrals = z.infer<typeof adminReferralsSchema>;
+
 export const adminUserDetailSchema = z.object({
   user: adminUserRowSchema.omit({ subscriptionStatus: true, widgetCount: true }).extend({
     anonymizedAt: isoDateSchema.nullable(),
@@ -235,6 +289,7 @@ export const adminUserDetailSchema = z.object({
   mails: z.array(adminMailLogSchema),
   /** Сколько событий пришло за всё время — число, без самих событий. */
   eventCount: z.number().int().min(0),
+  referrals: adminReferralsSchema,
 });
 export type AdminUserDetail = z.infer<typeof adminUserDetailSchema>;
 
