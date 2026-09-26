@@ -215,8 +215,8 @@ export class OverlayGateway
           break;
 
         case 'plan-changed': {
-          // Пересчёт — только если у этой реплики есть открытые сцены
-          // владельца: иначе каждая реплика ходила бы в БД впустую.
+          // Смена тарифа редкая, поэтому конфиги считает каждая реплика, а
+          // отправляет только в комнаты, где у неё есть открытые сцены.
           const configs = await this.widgets.overlayConfigs(message.userId);
           for (const config of configs) {
             const room = widgetRoom(config.widgetId);
