@@ -67,6 +67,7 @@ export default defineConfig({
         // страницу входа посреди теста, то есть как ошибка сессии, а не лимита.
         THROTTLE_LIMIT: '100000',
         THROTTLE_AUTH_LIMIT: '100000',
+        SOCKET_HANDSHAKE_LIMIT: '100000',
         // LiveKit в сквозном прогоне НАСТОЯЩИЙ — в режиме --dev с его встроенными
         // ключами: локально из compose.dev.yml, в CI отдельным контейнером.
         LIVEKIT_URL: process.env.LIVEKIT_URL ?? 'http://127.0.0.1:7880',

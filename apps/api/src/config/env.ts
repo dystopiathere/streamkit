@@ -276,6 +276,13 @@ export const envSchema = z.object({
   THROTTLE_LIMIT: z.coerce.number().int().min(1).default(120),
   /** Лимит попыток логина в минуту на IP. Жёстче общего. */
   THROTTLE_AUTH_LIMIT: z.coerce.number().int().min(1).default(10),
+  /**
+   * Новых подключений к сокетам в минуту с одного IP. OBS со всеми
+   * браузер-сорсами после обрыва сети переподключается разом — запас на это.
+   */
+  SOCKET_HANDSHAKE_LIMIT: z.coerce.number().int().min(1).default(60),
+  /** Открытых сокетов с одного IP на реплику API: сцены OBS плюс окна дашборда. */
+  SOCKET_CONNECTIONS_PER_IP: z.coerce.number().int().min(1).default(100),
 });
 
 export type Env = z.infer<typeof envSchema>;

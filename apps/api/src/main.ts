@@ -45,7 +45,7 @@ async function bootstrap(): Promise<void> {
   });
 
   const ioAdapter = new RedisIoAdapter(app);
-  await ioAdapter.connectToRedis(config.redisUrl);
+  await ioAdapter.connectToRedis(config.redisUrl, config.socketAdmission);
   app.useWebSocketAdapter(ioAdapter);
 
   // Корректное завершение: Nest дождётся onApplicationShutdown, закроются пулы

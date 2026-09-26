@@ -348,4 +348,11 @@ export class AppConfig {
   get throttleAuthLimit(): number {
     return this.value('THROTTLE_AUTH_LIMIT');
   }
+
+  get socketAdmission(): { handshakesPerMinute: number; connectionsPerIp: number } {
+    return {
+      handshakesPerMinute: this.value('SOCKET_HANDSHAKE_LIMIT'),
+      connectionsPerIp: this.value('SOCKET_CONNECTIONS_PER_IP'),
+    };
+  }
 }
