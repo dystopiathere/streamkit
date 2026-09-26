@@ -30,7 +30,7 @@ import { YooKassaGateway } from './yookassa.gateway';
     HttpClient,
     { provide: PAYMENT_GATEWAY, useClass: YooKassaGateway },
   ],
-  exports: [BillingService],
+  exports: [BillingService, ReferralsService],
 })
 export class BillingModule {}
 
@@ -63,6 +63,7 @@ export class BillingScheduler {
         // списывается, и порядок экономит лишний такт.
         await this.billing.sendRenewalNotices();
         await this.billing.sendExpiryNotices();
+        await this.billing.sendBonusEndNotices();
         await this.billing.renewDue();
       });
     } catch (error) {

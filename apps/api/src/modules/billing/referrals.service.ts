@@ -7,8 +7,10 @@ import {
   type ReferralOverview,
 } from '@streamkit/contracts';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
+import { RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { DAY_MS, toContractPlan } from './billing-periods';
+import { toContractPlan } from './billing-periods';
+import { extendBonusPro, lockBonusPro } from './bonus-pro';
 
 /** Сколько раз пробуем выдать промокод, если сгенерированный уже занят. */
 const CODE_ATTEMPTS = 5;
@@ -24,6 +26,7 @@ export class ReferralsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly bus: RealtimeBus,
   ) {}
 
   async overview(userId: string, now = new Date()): Promise<ReferralOverview> {
@@ -31,7 +34,7 @@ export class ReferralsService {
     const [user, invited, rewards, activations] = await Promise.all([
       this.prisma.user.findUniqueOrThrow({
         where: { id: userId },
-        select: { referralDaysBalance: true, referralProUntil: true },
+        select: { referralDaysBalance: true, bonusProUntil: true },
       }),
       this.prisma.user.count({ where: { referredById: userId } }),
       this.prisma.referralReward.findMany({
@@ -52,9 +55,7 @@ export class ReferralsService {
       paid: rewards.filter((reward) => !reward.revokedAt).length,
       balanceDays: user.referralDaysBalance,
       proUntil:
-        user.referralProUntil && user.referralProUntil > now
-          ? user.referralProUntil.toISOString()
-          : null,
+        user.bonusProUntil && user.bonusProUntil > now ? user.bonusProUntil.toISOString() : null,
       rewards: rewards.map((reward) => ({
         id: reward.id,
         plan: toContractPlan(reward.plan),
@@ -72,17 +73,8 @@ export class ReferralsService {
   }
 
   /**
-   * Включить накопленные дни «Про».
-   *
-   * Дни идут подряд после уже включённых. Оплаченный период на это время
-   * встаёт на паузу: его конец и конец оплатившего его платежа сдвигаются на
-   * те же дни. Иначе стример, оплативший «Мультистрим», тратил бы оплаченные
-   * дни впустую, пока действует «Про», — а «Про» у стримера с оплаченным
-   * «Про» просто сгорал бы.
-   *
-   * Строка пользователя блокируется первой, строка подписки — второй. Порядок
-   * важен: оплата (`markSucceeded`) берёт только строку подписки, и обратного
-   * порядка ни у кого нет, поэтому взаимной блокировки не будет.
+   * Включить накопленные дни «Про». Идут подряд после уже идущего бесплатного
+   * «Про», оплаченный период на это время стоит (`extendBonusPro`).
    */
   async activate(
     userId: string,
@@ -91,66 +83,33 @@ export class ReferralsService {
     now = new Date(),
   ): Promise<ReferralOverview> {
     const result = await this.prisma.$transaction(async (tx) => {
-      const [user] = await tx.$queryRaw<
-        Array<{ referralDaysBalance: number; referralProUntil: Date | null }>
-      >`
-        SELECT "referralDaysBalance", "referralProUntil" FROM "User"
-        WHERE "id" = ${userId}::uuid FOR UPDATE`;
+      const user = await lockBonusPro(tx, userId);
       if (!user) throw new NotFoundException('Пользователь не найден');
       if (user.referralDaysBalance < days) {
         throw new ConflictException('Столько дней ещё не накоплено');
       }
-
-      const startsAt =
-        user.referralProUntil && user.referralProUntil > now ? user.referralProUntil : now;
-      const endsAt = new Date(startsAt.getTime() + days * DAY_MS);
-
-      const [subscription] = await tx.$queryRaw<
-        Array<{ id: string; currentPeriodEnd: Date | null }>
-      >`
-        SELECT "id", "currentPeriodEnd" FROM "Subscription"
-        WHERE "userId" = ${userId}::uuid FOR UPDATE`;
-      if (subscription?.currentPeriodEnd && subscription.currentPeriodEnd > now) {
-        const shift = Prisma.sql`make_interval(days => ${days})`;
-        await tx.$executeRaw`
-          UPDATE "Subscription"
-          SET "currentPeriodEnd" = "currentPeriodEnd" + ${shift},
-              "renewalNoticeFor" = NULL,
-              "renewalNoticeSentAt" = NULL,
-              "updatedAt" = ${now}
-          WHERE "id" = ${subscription.id}::uuid`;
-        // Письмо о конце оплаченного периода ищет платёж, который кончается
-        // вместе с подпиской, а возврат — платёж текущего периода. Оба смотрят
-        // на `periodEnd`, и он обязан сдвинуться вместе с подпиской.
-        await tx.$executeRaw`
-          UPDATE "Payment"
-          SET "periodEnd" = "periodEnd" + ${shift},
-              "periodStart" = CASE WHEN "periodStart" > ${now}
-                                   THEN "periodStart" + ${shift}
-                                   ELSE "periodStart" END
-          WHERE "subscriptionId" = ${subscription.id}::uuid
-            AND "status" = 'SUCCEEDED'
-            AND "periodEnd" > ${now}`;
-      }
-
+      const extended = await extendBonusPro(tx, userId, user, days, now);
       await tx.user.update({
         where: { id: userId },
-        data: {
-          referralDaysBalance: { decrement: days },
-          referralProUntil: endsAt,
-        },
+        data: { referralDaysBalance: { decrement: days } },
       });
-      await tx.referralActivation.create({ data: { userId, days, startsAt, endsAt } });
-      return {
-        endsAt,
-        paused: Boolean(subscription?.currentPeriodEnd && subscription.currentPeriodEnd > now),
-      };
+      await tx.referralActivation.create({
+        data: { userId, days, startsAt: extended.startsAt, endsAt: extended.endsAt },
+      });
+      return extended;
     });
 
     await this.audit.record('billing.referral.activated', userId, {
       ...context,
-      metadata: { days, endsAt: result.endsAt.toISOString(), pausedSubscription: result.paused },
+      metadata: {
+        days,
+        endsAt: result.endsAt.toISOString(),
+        pausedSubscription: result.pausedSubscription,
+      },
     });
+    // Открытые сцены снимают подпись бесплатного тарифа сразу, а не при
+    // следующем подключении.
+    await this.bus.publish({ kind: 'plan-changed', userId }).catch(() => undefined);
     return this.overview(userId, now);
   }
 
@@ -161,7 +120,7 @@ export class ReferralsService {
    * два кода, а занятый код — редкость при 31⁸ вариантах — просто
    * генерируется заново.
    */
-  private async ensureCode(userId: string): Promise<string> {
+  async ensureCode(userId: string): Promise<string> {
     for (let attempt = 0; attempt < CODE_ATTEMPTS; attempt += 1) {
       const current = await this.prisma.user.findUniqueOrThrow({
         where: { id: userId },

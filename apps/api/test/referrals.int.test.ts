@@ -227,7 +227,7 @@ describe('Приглашения (feature)', () => {
       roomsAccess: true,
       features: { rooms: true, advancedStyling: true },
     });
-    expect(subscription.body.referralProUntil).toBe(response.body.proUntil);
+    expect(subscription.body.bonusProUntil).toBe(response.body.proUntil);
 
     // Следующие дни — подряд после уже включённых.
     const more = await request(server())

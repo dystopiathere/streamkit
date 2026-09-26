@@ -82,6 +82,16 @@ export class BillingController {
     return this.billing.removePaymentMethod(user.id, this.audit.contextFromRequest(request));
   }
 
+  /** Пробный период «Про»: один раз на аккаунт, без карты. */
+  @Post('trial')
+  @HttpCode(HttpStatus.OK)
+  async startTrial(
+    @CurrentUser() user: AuthenticatedUser,
+    @Req() request: Request,
+  ): Promise<SubscriptionView> {
+    return this.billing.startTrial(user.id, this.audit.contextFromRequest(request));
+  }
+
   @Post('checkout')
   async checkout(
     @CurrentUser() user: AuthenticatedUser,

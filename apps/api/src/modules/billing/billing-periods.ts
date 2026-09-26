@@ -69,7 +69,7 @@ export function paidPlan(
 
 /**
  * Тариф, по которому открыт доступ: оплаченный, а поверх него — «Про» из дней
- * за приглашения (`User.referralProUntil`).
+ * за приглашения (`User.bonusProUntil`).
  *
  * Срок приглашений — обязательный аргумент, а не необязательный: гейт, который
  * забыл его передать, молча закрывал бы «Про», за который стример отдал
@@ -79,9 +79,9 @@ export function paidPlan(
 export function effectivePlan(
   subscription: { plan: PrismaPlan; currentPeriodEnd: Date | null; autoRenew: boolean } | null,
   now: Date,
-  referralProUntil: Date | null,
+  bonusProUntil: Date | null,
 ): Plan {
-  if (referralProUntil && referralProUntil > now) return 'pro';
+  if (bonusProUntil && bonusProUntil > now) return 'pro';
   return paidPlan(subscription, now);
 }
 

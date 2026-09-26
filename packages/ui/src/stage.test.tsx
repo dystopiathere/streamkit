@@ -67,3 +67,33 @@ describe('ширина картинки оповещения', () => {
     expect(container.querySelector('img')!.style.maxWidth).toBe('320px');
   });
 });
+
+describe('подпись бесплатного тарифа', () => {
+  it('стоит в окне виджета, когда её просит тариф, и только тогда', () => {
+    const { rerender } = render(
+      <WidgetStage canvas={{ width: 800, height: 600 }} branding>
+        <span>виджет</span>
+      </WidgetStage>,
+    );
+    const badge = screen.getByTestId('widget-branding');
+    expect(badge.textContent).toBe('stream-kit.ru');
+    // Внутри окна, а не поверх всего места: масштабируется вместе с виджетом.
+    expect(screen.getByTestId('widget-canvas').contains(badge)).toBe(true);
+
+    rerender(
+      <WidgetStage canvas={{ width: 800, height: 600 }}>
+        <span>виджет</span>
+      </WidgetStage>,
+    );
+    expect(screen.queryByTestId('widget-branding')).toBeNull();
+  });
+
+  it('есть и у виджета без окна', () => {
+    render(
+      <WidgetStage canvas={null} branding>
+        <span>виджет</span>
+      </WidgetStage>,
+    );
+    expect(screen.getByTestId('widget-branding')).toBeTruthy();
+  });
+});

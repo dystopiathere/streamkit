@@ -101,6 +101,11 @@ export const MESSAGES_EN: Readonly<Record<string, string>> = {
   'Подтвердите почту, чтобы оформить тариф': 'Confirm your email to choose a paid plan',
   'Оплата не настроена на этом сервере': 'Payments are not configured on this server',
   'Подписка уже действует': 'Your subscription is already active',
+  // Пробный период
+  'Подтвердите почту, чтобы включить пробный период': 'Confirm your email to start the trial',
+  'Пробный период уже был': 'You have already used the trial',
+  'Пробный период — для тех, кто ещё не оплачивал тариф':
+    'The trial is for accounts that have not paid for a plan yet',
   // Приглашения
   'Промокод не найден': 'Promo code not found',
   'Столько дней ещё не накоплено': "You haven't earned that many days yet",

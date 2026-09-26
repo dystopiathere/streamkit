@@ -195,6 +195,7 @@ export const MAIL_KINDS = [
   'renewal_notice',
   'expiry_notice',
   'legal_update',
+  'free_pro_ending',
 ] as const;
 export const mailKindSchema = z.enum(MAIL_KINDS);
 export type MailKind = z.infer<typeof mailKindSchema>;

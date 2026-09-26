@@ -212,6 +212,7 @@ export function WidgetEditorPage(): React.JSX.Element {
               alertTrigger={alertTrigger}
               rouletteSpin={previewSpin}
               onRouletteFinished={() => setPreviewSpin(null)}
+              branding={planFeatures?.branding ?? false}
             />
             <div className="mt-4 space-y-2 border-t border-border pt-4">
               <h3 className="text-sm font-medium">{t('widgets.canvas.title')}</h3>

@@ -211,7 +211,7 @@ export class PrivacyService {
           createdAt: true,
           referralCode: true,
           referralDaysBalance: true,
-          referralProUntil: true,
+          bonusProUntil: true,
         },
       }),
       this.prisma.consent.findMany({ where: { userId } }),
@@ -397,7 +397,7 @@ export class PrivacyService {
           // принадлежали аккаунту, которым никто не воспользуется.
           referralCode: null,
           referralDaysBalance: 0,
-          referralProUntil: null,
+          bonusProUntil: null,
         },
       });
 

@@ -75,9 +75,18 @@ model User {
   referredById        String?    @db.Uuid
   /// Накопленные дни «Про» за приглашения, ещё не активированные.
   referralDaysBalance Int        @default(0)
-  /// До какого момента действует «Про» из активированных дней. Отдельно от
-  /// подписки: оплаченный период на это время встаёт на паузу, а не сгорает.
-  referralProUntil    DateTime?
+  /// До какого момента действует бесплатный «Про» поверх подписки: пробный
+  /// период и включённые дни за приглашения — одна цепочка, новые дни встают
+  /// после уже идущих. Отдельно от подписки: оплаченный период на это время
+  /// встаёт на паузу, а не сгорает.
+  bonusProUntil       DateTime?
+  /// Когда включён пробный период. Он бывает один раз на аккаунт.
+  trialStartedAt      DateTime?
+  /// Конец пробного отрезка цепочки — для надписи «пробный период до …».
+  trialEndsAt         DateTime?
+  /// Письмо «бесплатный «Про» заканчивается»: за какой конец `bonusProUntil`
+  /// ушло. Одно письмо на конец срока.
+  bonusEndNoticeFor   DateTime?
 
   referredBy          User?                    @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
   referrals           User[]                   @relation("Referrals")
@@ -158,6 +167,7 @@ enum MailKind {
   RENEWAL_NOTICE
   EXPIRY_NOTICE
   LEGAL_UPDATE
+  FREE_PRO_ENDING
 }
 
 enum MailStatus {

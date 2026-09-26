@@ -37,6 +37,7 @@ secret, if it is enabled.
   or registered from;
 - the consent log: which document, which version, and when it was accepted or
   withdrawn;
+- the trial: when it was started and when it ends;
 - the referral programme: your promo code, whose promo code was entered at
   sign-up, the Pro days credited — for which plan's payment and when, and whether
   a refund cancelled them — and when and for how many days they were turned on.
@@ -68,7 +69,7 @@ passed to us.
 emails (a password change, a sign-in from a new browser, two-factor sign-in
 turned off — with the time of the event and the name of the browser and
 system), for emails about an upcoming automatic charge, about a paid period
-ending soon without renewal, about new versions of accepted documents, and for
+ending soon without renewal, about the trial and free Pro days ending soon, about new versions of accepted documents, and for
 the password recovery email, which is sent only on a request from the sign-in
 page, and for the email with the address confirmation link. For recovery and
 confirmation links we store only the hash of the token and its expiry time; for

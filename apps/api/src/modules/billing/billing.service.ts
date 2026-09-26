@@ -22,8 +22,11 @@ import {
   type PlanFeatures,
   PLAN_PRICES,
   type SubscriptionView,
+  TRIAL_DAYS,
+  BONUS_END_NOTICE_DAYS,
 } from '@streamkit/contracts';
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
+import { RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { PlatformError } from '../../common/http/platform-errors';
 import { AccountMailService } from '../../common/mail/account-mail.service';
@@ -47,7 +50,8 @@ import {
   creditReferralReward,
   revokeReferralReward,
 } from './referral-rewards';
-import { expiryNoticeMessage, renewalNoticeMessage } from './renewal-notice';
+import { extendBonusPro, lockBonusPro } from './bonus-pro';
+import { bonusEndNoticeMessage, expiryNoticeMessage, renewalNoticeMessage } from './renewal-notice';
 
 /** За сколько до конца периода начинаем списывать продление. */
 const RENEW_AHEAD_MS = DAY_MS;
@@ -130,20 +134,44 @@ export class BillingService {
     private readonly config: AppConfig,
     @Inject(PAYMENT_GATEWAY) private readonly gateway: PaymentGateway,
     private readonly mail: AccountMailService,
+    private readonly bus: RealtimeBus,
   ) {}
+
+  /**
+   * Тариф владельца сменился — открытые сцены должны узнать об этом сразу:
+   * подпись «stream-kit.ru» и продвинутое оформление идут по тарифу, а сцена в
+   * OBS живёт весь эфир. Сбой шины не отменяет оплату: сцена получит своё при
+   * следующем подключении.
+   */
+  private async announcePlanChange(userId: string): Promise<void> {
+    await this.bus
+      .publish({ kind: 'plan-changed', userId })
+      .catch((error: unknown) =>
+        this.logger.warn({ err: error, userId }, 'Смена тарифа не разослана'),
+      );
+  }
 
   get configured(): boolean {
     return this.config.billing !== null;
   }
 
   async subscription(userId: string, now = new Date()): Promise<SubscriptionView> {
-    const [row, owner] = await Promise.all([
+    const [row, owner, paidBefore] = await Promise.all([
       this.prisma.subscription.findUnique({ where: { userId } }),
-      this.prisma.user.findUnique({ where: { id: userId }, select: { referralProUntil: true } }),
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          bonusProUntil: true,
+          trialStartedAt: true,
+          trialEndsAt: true,
+          emailVerifiedAt: true,
+        },
+      }),
+      this.prisma.payment.count({ where: { userId, status: 'SUCCEEDED' } }),
     ]);
     const status = subscriptionStatus(row, now);
     const features = await this.planFeatures(userId, now);
-    const referralProUntil = owner?.referralProUntil ?? null;
+    const bonusProUntil = owner?.bonusProUntil ?? null;
     return {
       status,
       // Оплаченный тариф: «Про» за приглашения виден в `features` и отдельным
@@ -162,8 +190,14 @@ export class BillingService {
         : null,
       paymentMethodTitle: row?.paymentMethodTitle ?? null,
       giftedDays: row?.giftedDays ?? 0,
-      referralProUntil:
-        referralProUntil && referralProUntil > now ? referralProUntil.toISOString() : null,
+      bonusProUntil: bonusProUntil && bonusProUntil > now ? bonusProUntil.toISOString() : null,
+      trialEndsAt:
+        owner?.trialEndsAt && owner.trialEndsAt > now ? owner.trialEndsAt.toISOString() : null,
+      trialAvailable:
+        this.configured &&
+        Boolean(owner?.emailVerifiedAt) &&
+        !owner?.trialStartedAt &&
+        paidBefore === 0,
       roomsAccess: features.rooms,
       billingConfigured: this.configured,
     };
@@ -186,7 +220,7 @@ export class BillingService {
       where: { id: userId },
       select: {
         status: true,
-        referralProUntil: true,
+        bonusProUntil: true,
         subscription: { select: { plan: true, currentPeriodEnd: true, autoRenew: true } },
       },
     });
@@ -195,7 +229,7 @@ export class BillingService {
       return { ...PLAN_FEATURES.pro, rooms: user.status === 'ACTIVE' };
     }
 
-    const features = PLAN_FEATURES[effectivePlan(user.subscription, now, user.referralProUntil)];
+    const features = PLAN_FEATURES[effectivePlan(user.subscription, now, user.bonusProUntil)];
     return user.status === 'ACTIVE' ? features : { ...features, rooms: false };
   }
 
@@ -525,6 +559,7 @@ export class BillingService {
         metadata: { paymentId: row.id, days: revokedReward.days },
       });
     }
+    await this.announcePlanChange(row.userId);
     return 'processed';
   }
 
@@ -563,6 +598,7 @@ export class BillingService {
         await this.audit.record('billing.payment.succeeded', row.userId, {
           metadata: { paymentId: row.id, kind: row.kind },
         });
+        await this.announcePlanChange(row.userId);
       }
       if (applied?.reward) {
         await this.audit.record('billing.referral.credited', applied.reward.referrerId, {
@@ -726,6 +762,51 @@ export class BillingService {
   }
 
   /**
+   * Пробный период: `TRIAL_DAYS` дней «Про», один раз на аккаунт, без карты
+   * (оферта, раздел 10).
+   *
+   * Только тем, кто не платил: пробный период нужен, чтобы решить, платить
+   * ли, а заплатившему решать уже нечего. Идёт той же цепочкой, что дни за
+   * приглашения, — после уже включённых, а оплата в это время начнёт
+   * оплаченный период после него. Почта обязательна: иначе один человек
+   * получал бы пробный период на каждый выдуманный адрес.
+   */
+  async startTrial(
+    userId: string,
+    context: AuditContext = {},
+    now = new Date(),
+  ): Promise<SubscriptionView> {
+    if (!this.configured) throw new ServiceUnavailableException('Оплата не настроена');
+
+    const trial = await this.prisma.$transaction(async (tx) => {
+      const user = await lockBonusPro(tx, userId);
+      if (!user) throw new NotFoundException('Пользователь не найден');
+      if (!user.emailVerifiedAt) {
+        throw new ForbiddenException('Подтвердите почту, чтобы включить пробный период');
+      }
+      if (user.trialStartedAt) throw new ConflictException('Пробный период уже был');
+      const paid = await tx.payment.count({ where: { userId, status: 'SUCCEEDED' } });
+      if (paid > 0) {
+        throw new ConflictException('Пробный период — для тех, кто ещё не оплачивал тариф');
+      }
+
+      const extended = await extendBonusPro(tx, userId, user, TRIAL_DAYS, now);
+      await tx.user.update({
+        where: { id: userId },
+        data: { trialStartedAt: now, trialEndsAt: extended.endsAt },
+      });
+      return extended;
+    });
+
+    await this.audit.record('billing.trial.started', userId, {
+      ...context,
+      metadata: { days: TRIAL_DAYS, endsAt: trial.endsAt.toISOString() },
+    });
+    await this.announcePlanChange(userId);
+    return this.subscription(userId, now);
+  }
+
+  /**
    * Бесплатные дни от платформы — например, в компенсацию сбоя.
    *
    * Платежа не создаётся: денег не было. Отметка письма о списании
@@ -762,13 +843,13 @@ export class BillingService {
 
       const owner = await tx.user.findUniqueOrThrow({
         where: { id: userId },
-        select: { referralProUntil: true },
+        select: { bonusProUntil: true },
       });
       // Как и оплата, подарок не идёт одновременно с днями за приглашения:
       // иначе они сгорали бы вместе.
       const from = latest(
         locked?.currentPeriodEnd && locked.currentPeriodEnd > now ? locked.currentPeriodEnd : now,
-        owner.referralProUntil,
+        owner.bonusProUntil,
       );
       const end = new Date(from.getTime() + days * DAY_MS);
 
@@ -818,6 +899,7 @@ export class BillingService {
       ...context,
       metadata: { ...context.metadata, days, plan },
     });
+    await this.announcePlanChange(userId);
     return this.subscription(userId, now);
   }
 
@@ -1075,6 +1157,87 @@ export class BillingService {
         await this.prisma.subscription.updateMany({
           where: { id: subscription.id, expiryNoticeFor: end },
           data: { expiryNoticeFor: subscription.expiryNoticeFor },
+        });
+      }
+    }
+    return sent;
+  }
+
+  /**
+   * Письмо «бесплатный «Про» заканчивается» — за `BONUS_END_NOTICE_DAYS` дня
+   * до конца пробного периода или дней за приглашения (оферта, раздел 10).
+   *
+   * Только если за бесплатными днями не идёт оплаченный период: у кого
+   * подписка на паузе, тот продолжит на ней, и писать ему не о чем. Одно
+   * письмо на конец срока (`bonusEndNoticeFor`); отметка ставится до отправки
+   * условным обновлением и снимается при сбое — как у письма о списании.
+   *
+   * @returns сколько писем отправлено.
+   */
+  async sendBonusEndNotices(now = new Date()): Promise<number> {
+    if (!this.configured || !this.mail.configured) return 0;
+
+    const candidates = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        email: string;
+        displayName: string;
+        language: string;
+        emailVerifiedAt: Date | null;
+        bonusProUntil: Date;
+        bonusEndNoticeFor: Date | null;
+        trialStartedAt: Date | null;
+      }>
+    >`
+      SELECT u."id", u."email", u."displayName", u."language", u."emailVerifiedAt",
+             u."bonusProUntil", u."bonusEndNoticeFor", u."trialStartedAt"
+      FROM "User" u
+      WHERE u."status" = 'ACTIVE'
+        AND u."emailVerifiedAt" IS NOT NULL
+        AND u."bonusProUntil" > ${now}
+        AND u."bonusProUntil" <= ${new Date(now.getTime() + BONUS_END_NOTICE_DAYS * DAY_MS)}
+        AND (u."bonusEndNoticeFor" IS NULL OR u."bonusEndNoticeFor" <> u."bonusProUntil")
+        AND NOT EXISTS (
+          SELECT 1 FROM "Subscription" s
+          WHERE s."userId" = u."id" AND s."currentPeriodEnd" > u."bonusProUntil"
+        )
+      ORDER BY u."bonusProUntil" ASC
+      LIMIT 50`;
+
+    let sent = 0;
+    for (const user of candidates) {
+      const claimed = await this.prisma.user.updateMany({
+        where: {
+          id: user.id,
+          bonusProUntil: user.bonusProUntil,
+          bonusEndNoticeFor: user.bonusEndNoticeFor,
+        },
+        data: { bonusEndNoticeFor: user.bonusProUntil },
+      });
+      if (claimed.count === 0) continue;
+
+      try {
+        await this.mail.send(
+          { id: user.id, emailVerifiedAt: user.emailVerifiedAt },
+          'FREE_PRO_ENDING',
+          bonusEndNoticeMessage({
+            email: user.email,
+            displayName: user.displayName,
+            language: mailLanguageSchema.catch('ru').parse(user.language),
+            endsAt: user.bonusProUntil,
+            trial: user.trialStartedAt !== null,
+            webBaseUrl: this.config.webBaseUrl,
+          }),
+        );
+        sent += 1;
+      } catch (error) {
+        this.logger.error(
+          { err: error, userId: user.id },
+          'Письмо о конце бесплатного «Про» не ушло',
+        );
+        await this.prisma.user.updateMany({
+          where: { id: user.id, bonusEndNoticeFor: user.bonusProUntil },
+          data: { bonusEndNoticeFor: user.bonusEndNoticeFor },
         });
       }
     }
@@ -1354,13 +1517,10 @@ export class BillingService {
       // шёл бы одновременно с бесплатным «Про» и сгорал бы.
       const owner = await tx.user.findUniqueOrThrow({
         where: { id: row.userId },
-        select: { referralProUntil: true },
+        select: { bonusProUntil: true },
       });
       const currentEnd = subscription.currentPeriodEnd;
-      const start = latest(
-        currentEnd && currentEnd > now ? currentEnd : now,
-        owner.referralProUntil,
-      );
+      const start = latest(currentEnd && currentEnd > now ? currentEnd : now, owner.bonusProUntil);
       const end = addBillingPeriod(start, toContractPeriod(row.period));
 
       await tx.payment.update({

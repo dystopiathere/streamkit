@@ -110,6 +110,12 @@ export const guestJoinResultSchema = roomAccessSchema.extend({
    * объяснения.
    */
   microphoneAllowed: z.boolean(),
+  /**
+   * Промокод стримера, пригласившего гостя: ссылка «создайте свою комнату»
+   * на странице гостя ведёт на регистрацию с ним. Не секрет — стример раздаёт
+   * его сам.
+   */
+  hostReferralCode: z.string().nullable(),
 });
 export type GuestJoinResult = z.infer<typeof guestJoinResultSchema>;
 

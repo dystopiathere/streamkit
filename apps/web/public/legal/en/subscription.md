@@ -19,7 +19,9 @@ customer is a user of the StreamKit service who has paid for the plan.
 plan, including the free one. A plan lifts the limits and adds features.
 
 1.2. **Free plan:** up to four widgets at a time and one connected platform of
-the customer's choice. No time limit, no payment required.
+the customer's choice. No time limit, no payment required. A “stream-kit.ru”
+label is shown in the bottom right corner of every widget on the stream; there
+is no label on paid plans, during the trial or while referral days are running.
 
 1.3. **Multistream:** several connected platforms at once (multistreaming with a
 single chat feed and analytics for each platform) and an unlimited number of
@@ -184,7 +186,8 @@ inviting user turns them on themselves, whenever and in whatever amount they
 choose, up to the days earned and no more than 365 days at a time. Days that are
 turned on run consecutively: starting now or after days already turned on.
 
-9.4. While days that are turned on are running, the paid period is paused: its
+9.4. Days that are turned on also run consecutively with the trial (section 10):
+after it, if it is still running. While days that are turned on are running, the paid period is paused: its
 end and the date of the next automatic charge move forward by the number of days
 turned on, and the charge notice (clause 5.2) is sent for the new date. A payment
 made during this time starts its period after those days end.
@@ -203,3 +206,26 @@ information about the invited users.
 
 9.8. When an account is deleted, its promo code stops working and any earned or
 running days are cancelled.
+
+## 10. Trial
+
+10.1. A user who has never paid for a paid plan may turn on a 14-day trial of the
+Pro plan once, in the Plan section of their account. The trial is free, requires
+no payment method and involves no automatic charges. It can be turned on after
+the account email address is confirmed.
+
+10.2. During the trial, everything included in the Pro plan (clause 1.4) is
+available.
+
+10.3. The customer may pay for any paid plan before the trial ends. The paid
+period starts after the trial ends, and the remaining trial days are not lost.
+
+10.4. No later than two days before the trial ends (or, if referral days that
+are turned on follow it, before those days end), the Operator sends an email to
+the account email address, unless a paid period starts after that date.
+
+10.5. When the trial ends without payment, the account moves to the free plan
+under section 7: nothing is deleted.
+
+10.6. The trial is not a payment: it does not count for the referral programme
+(section 9) and is not refundable.

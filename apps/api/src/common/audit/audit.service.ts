@@ -46,6 +46,8 @@ export type AuditAction =
   | 'billing.referral.revoked'
   /** Владелец включил накопленные дни «Про». */
   | 'billing.referral.activated'
+  /** Включён пробный период «Про». */
+  | 'billing.trial.started'
   | 'webhook.signature.invalid'
   | 'webhook.replay_rejected'
   | 'privacy.data.exported'

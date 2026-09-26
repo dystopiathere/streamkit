@@ -1,18 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  applyPlanToConfig,
-  configSchemaFor,
-  GRACE_DAYS,
-  PLAN_FEATURES,
-} from '@streamkit/contracts';
+import { GRACE_DAYS, PLAN_FEATURES } from '@streamkit/contracts';
 import { Client } from 'pg';
 import { AuditService } from '../../common/audit/audit.service';
-import { type BusMessage, RealtimeBus } from '../../common/bus/realtime-bus.service';
+import { RealtimeBus } from '../../common/bus/realtime-bus.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AppConfig } from '../../config/app-config.service';
 import { TokenService } from '../auth/token.service';
 import { DAY_MS, effectivePlan } from '../billing/billing-periods';
-import { toContractWidgetType } from '../widgets/widget.mappers';
 
 /** Таблицы событий Umami 3 с колонкой created_at. Сессии — отдельно, см. ниже. */
 const SITE_STATS_EVENT_TABLES = [
@@ -314,7 +308,7 @@ export class MaintenanceService {
       select: {
         id: true,
         status: true,
-        referralProUntil: true,
+        bonusProUntil: true,
         subscription: { select: { plan: true, currentPeriodEnd: true, autoRenew: true } },
         channels: {
           where: { isEnabled: true },
@@ -329,7 +323,7 @@ export class MaintenanceService {
       // Без настроенной оплаты лимитов нет вовсе: так в разработке и в
       // самостоятельной установке, где продавать некому.
       const limit = this.config.billing
-        ? PLAN_FEATURES[effectivePlan(user.subscription, now, user.referralProUntil)].platforms
+        ? PLAN_FEATURES[effectivePlan(user.subscription, now, user.bonusProUntil)].platforms
         : null;
       if (limit === null || user.channels.length <= limit) continue;
 
@@ -367,7 +361,7 @@ export class MaintenanceService {
    * рассылку каждую ночь — и перерисовку оверлея посреди эфира вместе с ней.
    * Запас в неделю поверх льготных дней переживает несколько пропущенных ночей.
    *
-   * @returns сколько виджетов переопубликовано.
+   * @returns скольким владельцам разослан новый тариф.
    */
   async refreshStyling(now = new Date()): Promise<number> {
     if (!this.config.billing) return 0;
@@ -380,43 +374,27 @@ export class MaintenanceService {
       where: {
         // «Про» кончается и вместе с днями за приглашения — у того, кто платит
         // за «Мультистрим», подписка при этом продолжается.
-        OR: [{ subscription: { currentPeriodEnd: recently } }, { referralProUntil: recently }],
+        OR: [{ subscription: { currentPeriodEnd: recently } }, { bonusProUntil: recently }],
         widgets: { some: {} },
       },
       select: {
         id: true,
-        referralProUntil: true,
+        bonusProUntil: true,
         subscription: { select: { plan: true, currentPeriodEnd: true, autoRenew: true } },
-        widgets: { select: { id: true, type: true, isEnabled: true, config: true } },
       },
     });
 
     let republished = 0;
     for (const user of users) {
-      const features = PLAN_FEATURES[effectivePlan(user.subscription, now, user.referralProUntil)];
+      const features = PLAN_FEATURES[effectivePlan(user.subscription, now, user.bonusProUntil)];
       if (features.advancedStyling) continue;
 
-      for (const widget of user.widgets) {
-        const type = toContractWidgetType(widget.type);
-        const stored = configSchemaFor(type).safeParse(widget.config);
-        if (!stored.success) continue;
-        const basic = applyPlanToConfig(stored.data, features);
-        // Ничего продвинутого в конфиге нет — и сообщение шины не нужно: оверлей
-        // на него перерисовывается, а перерисовка в эфире не бесплатна.
-        if (JSON.stringify(basic) === JSON.stringify(stored.data)) continue;
-
-        // Приведение as: конфиг в сообщении шины типизирован объединением по
-        // типу виджета, а урезание работает по полям и типа не знает.
-        await this.bus.publish({
-          kind: 'widget-config',
-          userId: user.id,
-          widgetId: widget.id,
-          isEnabled: widget.isEnabled,
-          type,
-          config: basic,
-        } as BusMessage);
-        republished += 1;
-      }
+      // Конфиги пересчитывают реплики API, держащие сцены владельца
+      // (`plan-changed`): тем же кодом, что при подключении оверлея, — с
+      // базовым оформлением и с подписью бесплатного тарифа, если она теперь
+      // положена. Своей копии урезания здесь нет.
+      await this.bus.publish({ kind: 'plan-changed', userId: user.id });
+      republished += 1;
     }
 
     if (republished > 0) {

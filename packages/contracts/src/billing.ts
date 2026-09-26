@@ -77,13 +77,26 @@ export const planFeaturesSchema = z.object({
   rooms: z.boolean(),
   /** Позиции элементов, фоны, шрифты, расширенные анимации. */
   advancedStyling: z.boolean(),
+  /**
+   * Подпись «stream-kit.ru» в правом нижнем углу каждого виджета в кадре.
+   * Её видят зрители, и это петля роста бесплатного тарифа: стример с
+   * бесплатным тарифом показывает сервис своим зрителям, а среди них есть
+   * стримеры. Отключить подпись можно только тарифом, а не настройкой.
+   */
+  branding: z.boolean(),
 });
 export type PlanFeatures = z.infer<typeof planFeaturesSchema>;
 
 export const PLAN_FEATURES: Record<Plan, PlanFeatures> = {
-  free: { widgets: 4, platforms: 1, rooms: false, advancedStyling: false },
-  multistream: { widgets: null, platforms: null, rooms: false, advancedStyling: false },
-  pro: { widgets: null, platforms: null, rooms: true, advancedStyling: true },
+  free: { widgets: 4, platforms: 1, rooms: false, advancedStyling: false, branding: true },
+  multistream: {
+    widgets: null,
+    platforms: null,
+    rooms: false,
+    advancedStyling: false,
+    branding: false,
+  },
+  pro: { widgets: null, platforms: null, rooms: true, advancedStyling: true, branding: false },
 };
 
 /**
@@ -95,6 +108,18 @@ export const PLAN_FEATURES: Record<Plan, PlanFeatures> = {
  * назначен на завтра.
  */
 export const GRACE_DAYS = 3;
+
+/**
+ * Пробный период: столько дней «Про» один раз на аккаунт, без карты.
+ *
+ * Идёт той же цепочкой, что и дни за приглашения (`bonusProUntil`): оплата,
+ * пришедшая в пробный период, начинает оплаченный период после его конца, и
+ * пробные дни не сгорают.
+ */
+export const TRIAL_DAYS = 14;
+
+/** Письмо о конце бесплатного «Про» — за столько дней до конца. */
+export const BONUS_END_NOTICE_DAYS = 2;
 
 /** Сколько раз пытаемся списать продление, прежде чем выключить его. */
 export const MAX_RENEWAL_ATTEMPTS = 3;
@@ -144,12 +169,19 @@ export const subscriptionViewSchema = z.object({
    */
   giftedDays: z.number().int().min(0),
   /**
-   * До какого момента действует «Про» из дней за приглашения. Поверх подписки:
-   * `plan` остаётся оплаченным тарифом, а `features` уже учитывают эти дни.
-   * Оплаченный период на это время сдвинут вперёд — `currentPeriodEnd` уже
-   * с этим сдвигом.
+   * До какого момента действует бесплатный «Про» — пробный период и дни за
+   * приглашения. Поверх подписки: `plan` остаётся оплаченным тарифом, а
+   * `features` уже учитывают эти дни. Оплаченный период на это время сдвинут
+   * вперёд — `currentPeriodEnd` уже с этим сдвигом.
    */
-  referralProUntil: isoDateSchema.nullable(),
+  bonusProUntil: isoDateSchema.nullable(),
+  /** Конец пробного периода, пока он идёт. */
+  trialEndsAt: isoDateSchema.nullable(),
+  /**
+   * Можно ли включить пробный период: не включали, не платили, почта
+   * подтверждена и оплата настроена.
+   */
+  trialAvailable: z.boolean(),
   /** Открыты ли приватные комнаты — то, что покупается. */
   roomsAccess: z.boolean(),
   /** Настроен ли приём оплаты на этом сервере. Без него комнаты бесплатны. */

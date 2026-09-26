@@ -56,6 +56,8 @@ describe('тариф', () => {
       expect(upper.platforms === null || upper.platforms >= (lower.platforms ?? 0)).toBe(true);
       expect(!lower.rooms || upper.rooms).toBe(true);
       expect(!lower.advancedStyling || upper.advancedStyling).toBe(true);
+      // Подпись в кадре — ограничение, а не функция: у старшего её не больше.
+      expect(!upper.branding || lower.branding).toBe(true);
     }
   });
 

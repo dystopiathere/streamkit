@@ -26,6 +26,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { AppConfig } from '../../config/app-config.service';
 import { ROOM_GUEST_TERMS } from '../privacy/legal-documents';
 import { BillingService, SubscriptionRequiredException } from '../billing/billing.service';
+import { ReferralsService } from '../billing/referrals.service';
 import { WidgetsService } from '../widgets/widgets.service';
 import {
   LiveKitTokens,
@@ -52,6 +53,7 @@ export class RoomsService {
     private readonly tokens: LiveKitTokens,
     private readonly widgets: WidgetsService,
     private readonly billing: BillingService,
+    private readonly referrals: ReferralsService,
     @Inject(ROOM_MEDIA_SERVER) private readonly media: RoomMediaServer,
   ) {}
 
@@ -251,6 +253,10 @@ export class RoomsService {
       ...access,
       roomName: invite.room.name,
       microphoneAllowed: invite.micBlockedAt === null,
+      // Ссылка «создайте свою комнату» у гостя ведёт на регистрацию с
+      // промокодом стримера. Не вышло выдать код — гость увидит ссылку без
+      // него, а вход в комнату от этого не зависит.
+      hostReferralCode: await this.referrals.ensureCode(invite.room.userId).catch(() => null),
     };
   }
 

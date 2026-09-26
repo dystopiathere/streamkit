@@ -925,7 +925,9 @@
     "rejoin": "Join again",
     "inRoom": "You are in the room “{{room}}”",
     "ownerUnavailable": "The streamer's room is unavailable right now. Contact the streamer.",
-    "preview": "Your camera image"
+    "preview": "Your camera image",
+    "promo": "This room runs on StreamKit.",
+    "promoLink": "Create your own for free"
   },
   "billing": {
     "title": "Plan",
@@ -959,7 +961,9 @@
       "platforms_other": "{{count}} platforms",
       "platformsUnlimited": "All platforms at once: multistream",
       "rooms": "Private rooms with guests",
-      "styling": "Advanced widget styling"
+      "styling": "Advanced widget styling",
+      "branding": "A stream-kit.ru label in the widget corner",
+      "noBranding": "Widgets without the StreamKit label"
     },
     "choosePlan": "Choose a plan",
     "freeIncludes": "Alerts, chat, analytics and widgets work without paying — a plan lifts the limits.",
@@ -1029,9 +1033,15 @@
       "title": "Pay with another card",
       "hint": "Pay for the next period with another card — it replaces the saved one, and renewals will use it. The new period starts when you pay."
     },
-    "referralPro": "While Pro from referrals is active (until {{date}}), your paid plan is paused and will be extended by the same number of days.",
+    "referralPro": "While free Pro is active (until {{date}}), your paid plan is paused and will be extended by the same number of days.",
     "referralProLink": "Referrals",
-    "referralProFree": "Pro from referrals is active until {{date}}. If you pay for a plan now, the paid period starts after that date."
+    "referralProFree": "Free Pro is active until {{date}}. If you pay for a plan now, the paid period starts after that date.",
+    "trial": {
+      "title": "Try Pro free for {{days}} days",
+      "text": "Rooms with guests, advanced styling and all platforms at once. No card and no charges. If you pay for a plan during the trial, the paid period starts after the trial ends.",
+      "start": "Start the {{days}}-day trial",
+      "active": "Your Pro trial is running."
+    }
   },
   "public": {
     "nav": {

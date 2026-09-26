@@ -28,7 +28,7 @@ export { RouletteDisplay } from './RouletteDisplay';
 export { RouletteReel, type RouletteReelProps, reelGeometry, reelTravel } from './RouletteReel';
 export { RouletteWheel, type RouletteWheelProps } from './RouletteWheel';
 export { isPositioned, slotCss, WidgetBackgroundLayer, WidgetFrame } from './slots';
-export { canvasScale, WidgetStage } from './stage';
+export { BrandingBadge, canvasScale, WidgetStage } from './stage';
 export { textStyleToCss } from './text-style';
 export { TimerDisplay, type TimerDisplayProps } from './TimerDisplay';
 export { TopDonorsList, type TopDonorsListProps } from './TopDonorsList';
