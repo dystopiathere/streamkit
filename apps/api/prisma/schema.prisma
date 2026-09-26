@@ -67,29 +67,46 @@ model User {
   /// задал пароль по ссылке восстановления. NULL — не подтверждена: писем,
   /// кроме подтверждения и восстановления пароля, нет, тариф не оформить.
   emailVerifiedAt     DateTime?
+  /// Промокод, который владелец раздаёт приглашённым. Выдаётся при первом
+  /// открытии раздела «Приглашения», а не при регистрации: у аккаунтов,
+  /// созданных до программы, его иначе не было бы вовсе.
+  referralCode        String?    @unique @db.VarChar(16)
+  /// Кто пригласил: промокод, введённый при регистрации. Задаётся один раз.
+  referredById        String?    @db.Uuid
+  /// Накопленные дни «Про» за приглашения, ещё не активированные.
+  referralDaysBalance Int        @default(0)
+  /// До какого момента действует «Про» из активированных дней. Отдельно от
+  /// подписки: оплаченный период на это время встаёт на паузу, а не сгорает.
+  referralProUntil    DateTime?
 
-  refreshTokens      RefreshToken[]
-  knownDevices       KnownDevice[]
-  legalNotices       LegalUpdateNotice[]
-  passwordResets     PasswordResetToken[]
-  emailVerifications EmailVerificationToken[]
-  mailLogs           MailLog[]
-  consents           Consent[]
-  widgets            Widget[]
-  alertEvents        AlertEvent[]
-  donationSources    DonationSource[]
-  credentials        IntegrationCredential[]
-  channels           Channel[]
-  rooms              Room[]
-  subscription       Subscription?
-  payments           Payment[]
-  auditLogs          AuditLog[]
+  referredBy          User?                    @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals           User[]                   @relation("Referrals")
+  referralRewards     ReferralReward[]         @relation("ReferralRewardReferrer")
+  referralReward      ReferralReward?          @relation("ReferralRewardReferred")
+  referralActivations ReferralActivation[]
+  refreshTokens       RefreshToken[]
+  knownDevices        KnownDevice[]
+  legalNotices        LegalUpdateNotice[]
+  passwordResets      PasswordResetToken[]
+  emailVerifications  EmailVerificationToken[]
+  mailLogs            MailLog[]
+  consents            Consent[]
+  widgets             Widget[]
+  alertEvents         AlertEvent[]
+  donationSources     DonationSource[]
+  credentials         IntegrationCredential[]
+  channels            Channel[]
+  rooms               Room[]
+  subscription        Subscription?
+  payments            Payment[]
+  auditLogs           AuditLog[]
   /// Действия сотрудника над чужими аккаунтами.
-  actedAuditLogs     AuditLog[]               @relation("AuditActor")
+  actedAuditLogs      AuditLog[]               @relation("AuditActor")
 
   @@index([status])
   @@index([role])
   @@index([createdAt])
+  @@index([referredById])
 }
 
 /// Ссылка восстановления пароля из письма.
@@ -780,10 +797,49 @@ model Payment {
   createdAt           DateTime      @default(now())
   paidAt              DateTime?
 
-  user         User          @relation(fields: [userId], references: [id], onDelete: Restrict)
-  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  user           User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  subscription   Subscription?   @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  referralReward ReferralReward?
 
   @@unique([subscriptionId, renewalFor, attempt])
   @@index([userId, createdAt])
   @@index([status, createdAt])
+}
+
+/// Дни «Про», начисленные пригласившему за первую оплату приглашённого.
+///
+/// Одна строка на приглашённого (`referredId` уникален): начисление бывает
+/// только за первую оплату, и повтор уведомления ЮKassa второй строки не
+/// создаст. Возврат этого платежа начисление отзывает (`revokedAt`).
+model ReferralReward {
+  id         String    @id @default(uuid()) @db.Uuid
+  referrerId String    @db.Uuid
+  referredId String    @unique @db.Uuid
+  paymentId  String    @unique @db.Uuid
+  /// Тариф оплаты, за которую начислено: от него зависит число дней.
+  plan       Plan
+  days       Int
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
+
+  referrer User    @relation("ReferralRewardReferrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referred User    @relation("ReferralRewardReferred", fields: [referredId], references: [id], onDelete: Cascade)
+  payment  Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([referrerId, createdAt])
+}
+
+/// Активация накопленных дней: когда и на сколько. История для раздела
+/// «Приглашения»; сам срок — `User.referralProUntil`.
+model ReferralActivation {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  days      Int
+  startsAt  DateTime
+  endsAt    DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }

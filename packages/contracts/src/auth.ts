@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isoDateSchema, uuidSchema } from './common.js';
+import { referralCodeSchema } from './referrals.js';
 
 /**
  * Требования к паролю. Длина важнее символьного зоопарка, поэтому минимум 12
@@ -47,6 +48,11 @@ export const registerSchema = z.object({
   acceptDocuments: z.literal(true),
   /** Язык страницы регистрации — язык будущих писем. */
   language: mailLanguageSchema.optional(),
+  /**
+   * Промокод пригласившего. Пустая строка — поле формы не заполнено: так
+   * необязательное поле приходит из формы, и отвергать его нельзя.
+   */
+  referralCode: z.union([z.literal(''), referralCodeSchema]).optional(),
 });
 export type RegisterInput = z.infer<typeof registerSchema>;
 

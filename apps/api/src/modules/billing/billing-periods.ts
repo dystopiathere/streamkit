@@ -51,20 +51,38 @@ export function subscriptionStatus(
 }
 
 /**
- * Действующий тариф.
+ * Оплаченный тариф, который действует сейчас.
  *
  * Считается из той же пары, что и статус: тариф записан в подписке, но даёт он
  * что-то только пока период не кончился. Истёкшая подписка — это `free`, а не
  * «Про, которым нельзя пользоваться»: иначе каждый гейт пришлось бы сверять с
  * двумя полями сразу и однажды забыть.
  */
-export function effectivePlan(
+export function paidPlan(
   subscription: { plan: PrismaPlan; currentPeriodEnd: Date | null; autoRenew: boolean } | null,
   now: Date,
 ): Plan {
   if (!subscription) return 'free';
   const status = subscriptionStatus(subscription, now);
   return status === 'active' || status === 'grace' ? toContractPlan(subscription.plan) : 'free';
+}
+
+/**
+ * Тариф, по которому открыт доступ: оплаченный, а поверх него — «Про» из дней
+ * за приглашения (`User.referralProUntil`).
+ *
+ * Срок приглашений — обязательный аргумент, а не необязательный: гейт, который
+ * забыл его передать, молча закрывал бы «Про», за который стример отдал
+ * накопленные дни. Где решается вопрос о самой подписке — есть ли что
+ * продлевать, можно ли оформить новую, — нужен `paidPlan`.
+ */
+export function effectivePlan(
+  subscription: { plan: PrismaPlan; currentPeriodEnd: Date | null; autoRenew: boolean } | null,
+  now: Date,
+  referralProUntil: Date | null,
+): Plan {
+  if (referralProUntil && referralProUntil > now) return 'pro';
+  return paidPlan(subscription, now);
 }
 
 export function toContractPlan(plan: PrismaPlan): PaidPlan {

@@ -314,6 +314,7 @@ export class MaintenanceService {
       select: {
         id: true,
         status: true,
+        referralProUntil: true,
         subscription: { select: { plan: true, currentPeriodEnd: true, autoRenew: true } },
         channels: {
           where: { isEnabled: true },
@@ -328,7 +329,7 @@ export class MaintenanceService {
       // Без настроенной оплаты лимитов нет вовсе: так в разработке и в
       // самостоятельной установке, где продавать некому.
       const limit = this.config.billing
-        ? PLAN_FEATURES[effectivePlan(user.subscription, now)].platforms
+        ? PLAN_FEATURES[effectivePlan(user.subscription, now, user.referralProUntil)].platforms
         : null;
       if (limit === null || user.channels.length <= limit) continue;
 
@@ -371,18 +372,20 @@ export class MaintenanceService {
   async refreshStyling(now = new Date()): Promise<number> {
     if (!this.config.billing) return 0;
 
+    const recently = {
+      lt: now,
+      gt: new Date(now.getTime() - (GRACE_DAYS + REFRESH_STYLING_SLACK_DAYS) * DAY_MS),
+    };
     const users = await this.prisma.user.findMany({
       where: {
-        subscription: {
-          currentPeriodEnd: {
-            lt: now,
-            gt: new Date(now.getTime() - (GRACE_DAYS + REFRESH_STYLING_SLACK_DAYS) * DAY_MS),
-          },
-        },
+        // «Про» кончается и вместе с днями за приглашения — у того, кто платит
+        // за «Мультистрим», подписка при этом продолжается.
+        OR: [{ subscription: { currentPeriodEnd: recently } }, { referralProUntil: recently }],
         widgets: { some: {} },
       },
       select: {
         id: true,
+        referralProUntil: true,
         subscription: { select: { plan: true, currentPeriodEnd: true, autoRenew: true } },
         widgets: { select: { id: true, type: true, isEnabled: true, config: true } },
       },
@@ -390,7 +393,7 @@ export class MaintenanceService {
 
     let republished = 0;
     for (const user of users) {
-      const features = PLAN_FEATURES[effectivePlan(user.subscription, now)];
+      const features = PLAN_FEATURES[effectivePlan(user.subscription, now, user.referralProUntil)];
       if (features.advancedStyling) continue;
 
       for (const widget of user.widgets) {

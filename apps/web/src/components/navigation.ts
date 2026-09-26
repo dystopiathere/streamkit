@@ -20,6 +20,7 @@ export const ACCOUNT_SECTIONS = [
   { to: '/account/sources', label: 'nav.sources' },
   { to: '/account/security', label: 'nav.security' },
   { to: '/account/billing', label: 'nav.billing' },
+  { to: '/account/referrals', label: 'nav.referrals' },
   { to: '/account/privacy', label: 'nav.privacy' },
 ] as const;
 

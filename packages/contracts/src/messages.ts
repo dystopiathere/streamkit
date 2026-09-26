@@ -101,6 +101,15 @@ export const MESSAGES_EN: Readonly<Record<string, string>> = {
   'Подтвердите почту, чтобы оформить тариф': 'Confirm your email to choose a paid plan',
   'Оплата не настроена на этом сервере': 'Payments are not configured on this server',
   'Подписка уже действует': 'Your subscription is already active',
+  // Приглашения
+  'Промокод не найден': 'Promo code not found',
+  'Столько дней ещё не накоплено': "You haven't earned that many days yet",
+  'Не удалось выдать промокод — попробуйте ещё раз':
+    "Couldn't issue a promo code. Please try again",
+  'Пользователь не найден': 'User not found',
+  'Целое число дней': 'A whole number of days',
+  'Минимум один день': 'At least one day',
+  'Не больше 365 дней за раз': 'At most 365 days at a time',
   'У пользователя действует другой тариф — бесплатные дни продлевают его':
     'The user already has a different active plan — free days extend that plan',
   'Списание по сохранённой карте ещё обрабатывается — попробуйте через несколько минут':

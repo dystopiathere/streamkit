@@ -69,6 +69,23 @@ export function BillingPage(): React.JSX.Element {
         </p>
       ) : null}
 
+      {subscription.data?.referralProUntil ? (
+        <p
+          data-testid="referral-pro"
+          className="rounded-lg border border-border bg-surface-hover p-3 text-sm"
+        >
+          {t(
+            subscription.data.plan === 'free' ? 'billing.referralProFree' : 'billing.referralPro',
+            {
+              date: formatDate(subscription.data.referralProUntil),
+            },
+          )}{' '}
+          <Link to="/account/referrals" className="underline hover:text-fg">
+            {t('billing.referralProLink')}
+          </Link>
+        </p>
+      ) : null}
+
       {subscription.isLoading ? (
         <p role="status" className="text-muted">
           {t('common.loading')}

@@ -34,6 +34,7 @@ import {
   addBillingPeriod,
   DAY_MS,
   effectivePlan,
+  paidPlan,
   subscriptionStatus,
   toContractPeriod,
   toContractPlan,
@@ -41,6 +42,11 @@ import {
   toPrismaPlan,
 } from './billing-periods';
 import { PAYMENT_GATEWAY, type PaymentGateway, type ProviderPayment } from './payment-gateway';
+import {
+  type CreditedReward,
+  creditReferralReward,
+  revokeReferralReward,
+} from './referral-rewards';
 import { expiryNoticeMessage, renewalNoticeMessage } from './renewal-notice';
 
 /** За сколько до конца периода начинаем списывать продление. */
@@ -131,12 +137,18 @@ export class BillingService {
   }
 
   async subscription(userId: string, now = new Date()): Promise<SubscriptionView> {
-    const row = await this.prisma.subscription.findUnique({ where: { userId } });
+    const [row, owner] = await Promise.all([
+      this.prisma.subscription.findUnique({ where: { userId } }),
+      this.prisma.user.findUnique({ where: { id: userId }, select: { referralProUntil: true } }),
+    ]);
     const status = subscriptionStatus(row, now);
     const features = await this.planFeatures(userId, now);
+    const referralProUntil = owner?.referralProUntil ?? null;
     return {
       status,
-      plan: effectivePlan(row, now),
+      // Оплаченный тариф: «Про» за приглашения виден в `features` и отдельным
+      // сроком, а страница тарифа по-прежнему отвечает, что куплено.
+      plan: paidPlan(row, now),
       // Тариф следующего периода отдаём, только пока есть что продлевать:
       // у истёкшей подписки «продлится Про» — обещание, которого нет. Пустой
       // `nextPlan` значит «сменить не просили», то есть продлится текущий.
@@ -150,6 +162,8 @@ export class BillingService {
         : null,
       paymentMethodTitle: row?.paymentMethodTitle ?? null,
       giftedDays: row?.giftedDays ?? 0,
+      referralProUntil:
+        referralProUntil && referralProUntil > now ? referralProUntil.toISOString() : null,
       roomsAccess: features.rooms,
       billingConfigured: this.configured,
     };
@@ -172,6 +186,7 @@ export class BillingService {
       where: { id: userId },
       select: {
         status: true,
+        referralProUntil: true,
         subscription: { select: { plan: true, currentPeriodEnd: true, autoRenew: true } },
       },
     });
@@ -180,7 +195,7 @@ export class BillingService {
       return { ...PLAN_FEATURES.pro, rooms: user.status === 'ACTIVE' };
     }
 
-    const features = PLAN_FEATURES[effectivePlan(user.subscription, now)];
+    const features = PLAN_FEATURES[effectivePlan(user.subscription, now, user.referralProUntil)];
     return user.status === 'ACTIVE' ? features : { ...features, rooms: false };
   }
 
@@ -259,7 +274,9 @@ export class BillingService {
     // Период к этому моменту уже кончился, поэтому это не доплата поверх
     // оплаченного, а та же оплата следующего периода, что и продление.
     const grace = subscriptionStatus(existing, now) === 'grace';
-    if (effectivePlan(existing, now) !== 'free' && !grace) {
+    // Оплаченный тариф, а не действующий: «Про» за приглашения не мешает
+    // оформить подписку — оплаченный период просто начнётся после него.
+    if (paidPlan(existing, now) !== 'free' && !grace) {
       throw new ConflictException('Подписка уже действует');
     }
 
@@ -453,12 +470,16 @@ export class BillingService {
     }
 
     const now = new Date();
-    await this.prisma.$transaction(async (tx) => {
+    const revokedReward = await this.prisma.$transaction(async (tx) => {
       await tx.payment.update({
         where: { id: row.id },
         data: { refundedAmountMinor: refunded.amountMinor, refundedAt: now },
       });
-      if (!row.subscriptionId || refunded.amountMinor === 0) return;
+      if (refunded.amountMinor === 0) return null;
+      // Любой возврат, и частичный тоже: дни за приглашение начислены за
+      // оплату, которая теперь не состоялась целиком.
+      const reward = await revokeReferralReward(tx, row.id, now);
+      if (!row.subscriptionId) return reward;
 
       await tx.$queryRaw`SELECT id FROM "Subscription" WHERE id = ${row.subscriptionId}::uuid FOR UPDATE`;
       // Текущий — последний оплаченный период, который ещё не кончился. Раньше
@@ -466,7 +487,7 @@ export class BillingService {
       // подписки двигают и подарочные дни: месяц с подарком поверх после
       // возврата оставался открытым целиком. Продление, списанное позже,
       // — уже следующий период: возврат прошлого его не закрывает.
-      if (!row.periodEnd || row.periodEnd <= now) return;
+      if (!row.periodEnd || row.periodEnd <= now) return reward;
       const later = await tx.payment.count({
         where: {
           subscriptionId: row.subscriptionId,
@@ -475,7 +496,7 @@ export class BillingService {
           periodEnd: { gt: row.periodEnd },
         },
       });
-      if (later > 0) return;
+      if (later > 0) return reward;
 
       await tx.subscription.update({
         where: { id: row.subscriptionId },
@@ -493,11 +514,17 @@ export class BillingService {
         where: { userId: row.userId, document: 'SUBSCRIPTION_OFFER', revokedAt: null },
         data: { revokedAt: now },
       });
+      return reward;
     });
 
     await this.audit.record('billing.payment.refunded', row.userId, {
       metadata: { paymentId: row.id, refundedAmountMinor: refunded.amountMinor },
     });
+    if (revokedReward) {
+      await this.audit.record('billing.referral.revoked', revokedReward.referrerId, {
+        metadata: { paymentId: row.id, days: revokedReward.days },
+      });
+    }
     return 'processed';
   }
 
@@ -531,9 +558,19 @@ export class BillingService {
         });
         return;
       }
-      if (await this.markSucceeded(row, provider)) {
+      const applied = await this.markSucceeded(row, provider);
+      if (applied) {
         await this.audit.record('billing.payment.succeeded', row.userId, {
           metadata: { paymentId: row.id, kind: row.kind },
+        });
+      }
+      if (applied?.reward) {
+        await this.audit.record('billing.referral.credited', applied.reward.referrerId, {
+          metadata: {
+            paymentId: row.id,
+            days: applied.reward.days,
+            plan: toContractPlan(applied.reward.plan),
+          },
         });
       }
       return;
@@ -716,15 +753,23 @@ export class BillingService {
       const row = locked
         ? await tx.subscription.findUniqueOrThrow({ where: { id: locked.id } })
         : null;
-      const current = effectivePlan(row, now);
+      const current = paidPlan(row, now);
       if (current !== 'free' && current !== plan) {
         throw new ConflictException(
           'У пользователя действует другой тариф — бесплатные дни продлевают его',
         );
       }
 
-      const from =
-        locked?.currentPeriodEnd && locked.currentPeriodEnd > now ? locked.currentPeriodEnd : now;
+      const owner = await tx.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: { referralProUntil: true },
+      });
+      // Как и оплата, подарок не идёт одновременно с днями за приглашения:
+      // иначе они сгорали бы вместе.
+      const from = latest(
+        locked?.currentPeriodEnd && locked.currentPeriodEnd > now ? locked.currentPeriodEnd : now,
+        owner.referralProUntil,
+      );
       const end = new Date(from.getTime() + days * DAY_MS);
 
       if (row) {
@@ -1275,10 +1320,16 @@ export class BillingService {
    * берётся под `FOR UPDATE`: первый платёж и продление, пришедшие одновременно,
    * иначе оба посчитали бы новый конец от одного и того же старого.
    *
-   * @returns false — платёж уже был применён раньше.
+   * В той же транзакции — начисление пригласившему за первую оплату: дни за
+   * приглашение появляются ровно вместе с деньгами и ровно один раз.
+   *
+   * @returns null — платёж уже был применён раньше.
    */
-  private async markSucceeded(row: Payment, provider: ProviderPayment): Promise<boolean> {
-    if (!row.subscriptionId) return false;
+  private async markSucceeded(
+    row: Payment,
+    provider: ProviderPayment,
+  ): Promise<{ reward: CreditedReward | null } | null> {
+    if (!row.subscriptionId) return null;
     const subscriptionId = row.subscriptionId;
 
     return this.prisma.$transaction(async (tx) => {
@@ -1287,7 +1338,7 @@ export class BillingService {
         where: { id: row.id, status: 'PENDING' },
         data: { status: 'SUCCEEDED', paidAt: now },
       });
-      if (claimed.count === 0) return false;
+      if (claimed.count === 0) return null;
 
       await tx.$queryRaw`SELECT id FROM "Subscription" WHERE id = ${subscriptionId}::uuid FOR UPDATE`;
       const subscription = await tx.subscription.findUniqueOrThrow({
@@ -1297,8 +1348,19 @@ export class BillingService {
       // Продление, списанное за сутки до конца, начинается с конца текущего
       // периода: оплаченные дни не теряются. Оплата после окончания — с сегодня:
       // льготные дни в новый период не засчитываются.
+      //
+      // Пока идут дни «Про» за приглашения, оплаченный период стоит: оплата,
+      // пришедшая в это время, начинается после них. Иначе купленный месяц
+      // шёл бы одновременно с бесплатным «Про» и сгорал бы.
+      const owner = await tx.user.findUniqueOrThrow({
+        where: { id: row.userId },
+        select: { referralProUntil: true },
+      });
       const currentEnd = subscription.currentPeriodEnd;
-      const start = currentEnd && currentEnd > now ? currentEnd : now;
+      const start = latest(
+        currentEnd && currentEnd > now ? currentEnd : now,
+        owner.referralProUntil,
+      );
       const end = addBillingPeriod(start, toContractPeriod(row.period));
 
       await tx.payment.update({
@@ -1346,9 +1408,14 @@ export class BillingService {
           ...(row.kind === 'INITIAL' ? { autoRenew: Boolean(method?.saved) } : {}),
         },
       });
-      return true;
+      return { reward: await creditReferralReward(tx, row) };
     });
   }
+}
+
+/** Более поздний из моментов; срок, который не задан или раньше, не в счёт. */
+function latest(from: Date, other: Date | null): Date {
+  return other && other > from ? other : from;
 }
 
 /** Назначение платежа для ЮKassa: его видит стример в истории банка. */

@@ -195,6 +195,8 @@ export class PrivacyService {
       payments,
       devices,
       mails,
+      referralRewards,
+      referralActivations,
     ] = await Promise.all([
       this.prisma.user.findUniqueOrThrow({
         where: { id: userId },
@@ -207,6 +209,9 @@ export class PrivacyService {
           language: true,
           emailVerifiedAt: true,
           createdAt: true,
+          referralCode: true,
+          referralDaysBalance: true,
+          referralProUntil: true,
         },
       }),
       this.prisma.consent.findMany({ where: { userId } }),
@@ -289,6 +294,18 @@ export class PrivacyService {
         orderBy: { createdAt: 'desc' },
         select: { kind: true, status: true, createdAt: true },
       }),
+      // Начисления за приглашения — без того, кого пригласили: это данные
+      // другого человека.
+      this.prisma.referralReward.findMany({
+        where: { referrerId: userId },
+        orderBy: { createdAt: 'desc' },
+        select: { plan: true, days: true, createdAt: true, revokedAt: true },
+      }),
+      this.prisma.referralActivation.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        select: { days: true, startsAt: true, endsAt: true, createdAt: true },
+      }),
     ]);
 
     await this.audit.record('privacy.data.exported', userId, context);
@@ -308,6 +325,8 @@ export class PrivacyService {
       knownDevices: devices,
       // Журнал писем: вид и исход, без адреса и текста.
       mails,
+      referralRewards,
+      referralActivations,
       // BigInt не сериализуется в JSON — приводим к строке, а не к number:
       // просмотры крупного канала в number ещё влезают, но правило «не терять
       // точность молча» дешевле соблюдать везде, чем помнить, где можно.
@@ -374,6 +393,11 @@ export class PrivacyService {
           // Роль обезличенному не нужна: сотрудник, ушедший так, не должен
           // сохранить вход в админку.
           role: 'USER',
+          // Промокод больше никого не приглашает, а дни за приглашения
+          // принадлежали аккаунту, которым никто не воспользуется.
+          referralCode: null,
+          referralDaysBalance: 0,
+          referralProUntil: null,
         },
       });
 

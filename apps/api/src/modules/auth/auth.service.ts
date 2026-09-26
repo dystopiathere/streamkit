@@ -53,6 +53,11 @@ export class AuthService {
       throw new ConflictException('Пользователь с таким email уже зарегистрирован');
     }
 
+    // Промокод проверяется до хэширования пароля: опечатка в нём — ответ
+    // формы, а не секунда работы argon2 впустую. Код не секрет — его раздают в
+    // эфире, — и «не найден» не раскрывает ничего, кроме этого.
+    const referredById = input.referralCode ? await this.findReferrer(input.referralCode) : null;
+
     const passwordHash = await this.passwords.hash(input.password);
 
     const user = await this.prisma.$transaction(async (tx) => {
@@ -62,6 +67,7 @@ export class AuthService {
           passwordHash,
           displayName: input.displayName,
           language: input.language ?? 'ru',
+          referredById,
         },
       });
 
@@ -90,6 +96,18 @@ export class AuthService {
       refreshToken: issued.refreshToken,
       user: toPublicUser(user),
     };
+  }
+
+  /** Владелец промокода. Заблокированный или обезличенный — как несуществующий. */
+  private async findReferrer(code: string): Promise<string> {
+    const referrer = await this.prisma.user.findUnique({
+      where: { referralCode: code },
+      select: { id: true, status: true, anonymizedAt: true },
+    });
+    if (!referrer || referrer.status !== 'ACTIVE' || referrer.anonymizedAt) {
+      throw new BadRequestException('Промокод не найден');
+    }
+    return referrer.id;
   }
 
   /**

@@ -40,6 +40,12 @@ export type AuditAction =
   | 'billing.payment_method.removed'
   /** Стример выбрал другой тариф или период: применится при продлении. */
   | 'billing.plan.changed'
+  /** Пригласившему начислены дни «Про» за первую оплату приглашённого. */
+  | 'billing.referral.credited'
+  /** Возврат оплаты отозвал начисление за приглашение. */
+  | 'billing.referral.revoked'
+  /** Владелец включил накопленные дни «Про». */
+  | 'billing.referral.activated'
   | 'webhook.signature.invalid'
   | 'webhook.replay_rejected'
   | 'privacy.data.exported'

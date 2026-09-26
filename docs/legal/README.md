@@ -138,6 +138,7 @@
 | Голосовой донат: храним только ссылку на запись у сервиса-источника, сам файл не копируем; ссылка уходит вместе с событием и при обезличивании (политика, 4.1 и 10) | `AlertEvent.audioUrl`, `normalizeDonation` (только https), `EventsService.resetHistory`, `PrivacyService` (обезличивание чистит `audioUrl`) |
 | Стример может обнулить историю донатов сам, вместе с целью и топом донатеров; сотрудник — по его просьбе, с причиной в журнале | `EventsService.resetHistory`, `AdminUsersService.resetDonations`, `events.history.reset` |
 | Сотрудник снимает только подаренные дни и только не истёкшие: оплаченный доступ забрать нельзя | `BillingService.revokeGift`, `Subscription.giftedDays` |
+| Дни «Про» за приглашение — 3 за «Мультистрим», 14 за «Про», один раз за первую оплату приглашённого; копятся и включаются владельцем, оплаченный период на это время приостанавливается; возврат оплаты отменяет начисление в пределах остатка; пригласивший не видит, кто приглашён (оферта, 9; политика, 2) | `REFERRAL_REWARD_DAYS`, `creditReferralReward` в транзакции `markSucceeded`, `revokeReferralReward` в `handleRefundNotification`, `ReferralsService.activate`; `referrals.int.test.ts` |
 | При приостановке доступа: вход закрыт, ссылки и комнаты не открываются, созвоны завершаются, продление не списывается; ссылки и настройки не удаляются | `AccountStatusService.suspend`, `resolveOverlayToken`, `roomsAccess`, `renewDue` |
 
 ## Обязанности оператора вне кода

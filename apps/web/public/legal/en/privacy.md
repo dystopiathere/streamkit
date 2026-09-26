@@ -1,6 +1,6 @@
 # StreamKit Privacy Policy
 
-Version No. 17 of 26.09.2026
+Version No. 18 of 26.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/privacy?lang=ru); if the two
@@ -36,7 +36,12 @@ secret, if it is enabled.
 - the language of service emails — the language of the page you last signed in
   or registered from;
 - the consent log: which document, which version, and when it was accepted or
-  withdrawn.
+  withdrawn;
+- the referral programme: your promo code, whose promo code was entered at
+  sign-up, the Pro days credited — for which plan's payment and when, and whether
+  a refund cancelled them — and when and for how many days they were turned on.
+  The inviting user sees only the number of sign-ups and payments and their own
+  credits, without any information about the invited users.
 
 **Connected platforms** (Twitch, YouTube, Kick, DonationAlerts, DonatePay): access tokens issued
 by these services and the DonatePay API key (stored encrypted and not shown even to the owner), the
@@ -100,6 +105,7 @@ User-Agent. Details are in the Cookie Policy.
 | Providing the service: widgets, events, analytics, rooms | Performance of the contract (Terms of Service) |
 | Sign-up, sign-in, account protection | Performance of the contract |
 | Plan payment, automatic renewal, refunds | Performance of the contract (paid plans offer) |
+| Referral programme: crediting and turning on Pro days | Performance of the contract (paid plans offer, section 9) |
 | Emails about an upcoming charge and the end of a paid period | Performance of the contract |
 | Security emails and emails about new versions of documents | Performance of the contract |
 | Security logs, incident investigation | The Operator's legitimate interest |
@@ -273,7 +279,8 @@ confirmation mark are deleted, widget links are revoked, the widgets themselves 
 sources are deleted together with everything typed into them (roulette sectors,
 hidden viewers, spin history), platform connections with their tokens and metrics
 are deleted, rooms and invites are deleted, auto-renewal is turned off, and the
-saved payment method is erased. Donors' names and messages are anonymized, and links to voice donations are
+saved payment method is erased. The referral promo code stops working, and earned
+and running Pro days are cancelled. Donors' names and messages are anonymized, and links to voice donations are
 deleted.
 Event amounts and dates and the payment history are kept in anonymized form for
 the periods in section 8 — for accounting and dispute resolution.

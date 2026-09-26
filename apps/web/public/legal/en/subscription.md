@@ -1,6 +1,6 @@
 # Paid Plans Offer
 
-Version No. 7 of 26.09.2026
+Version No. 8 of 26.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/subscription?lang=ru); if the
@@ -167,3 +167,39 @@ method.
 Claims about payment and refunds are sent to {{SELLER_EMAIL}} and are reviewed
 within 10 days. Disputes are resolved as set out in section 12 of the Terms of
 Service.
+
+## 9. Referral programme
+
+9.1. Every user gets a personal promo code in the Referrals section of their
+account. A user who enters a promo code when signing up is treated as invited by
+that code's owner. A promo code cannot be added or changed after sign-up.
+
+9.2. When an invited user pays for any paid plan for the first time, the inviting
+user is credited with Pro plan days: 3 days for a Multistream payment and 14 days
+for a Pro payment, regardless of the billing period. Days are credited once per
+invited user, for their first payment only.
+
+9.3. Credited days add up in the Referrals section and do not expire. The
+inviting user turns them on themselves, whenever and in whatever amount they
+choose, up to the days earned and no more than 365 days at a time. Days that are
+turned on run consecutively: starting now or after days already turned on.
+
+9.4. While days that are turned on are running, the paid period is paused: its
+end and the date of the next automatic charge move forward by the number of days
+turned on, and the charge notice (clause 5.2) is sent for the new date. A payment
+made during this time starts its period after those days end.
+
+9.5. Referral days are a free bonus from the Operator. They are not a payment,
+cannot be exchanged for money or transferred to another user, and are not taken
+into account when calculating a refund (section 6).
+
+9.6. If the payment for which days were credited is refunded in full or in part,
+the credit is cancelled and the days are deducted from the remaining balance, up
+to that balance. Days turned on before the refund keep running.
+
+9.7. The inviting user sees the number of sign-ups with their promo code, the
+number of users who paid, and the credits, without names, addresses or any other
+information about the invited users.
+
+9.8. When an account is deleted, its promo code stops working and any earned or
+running days are cancelled.
