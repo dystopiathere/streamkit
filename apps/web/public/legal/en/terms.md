@@ -1,6 +1,6 @@
 # StreamKit Terms of Service
 
-Version No. 12 of 25.09.2026
+Version No. 13 of 26.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/terms?lang=ru); if the two
@@ -74,6 +74,13 @@ the Russian Federation).
 their password safe. Actions performed with the account are deemed to have been
 performed by the user. Two-factor authentication can be enabled to protect the
 account.
+
+3.2.1. The address is confirmed with the link in the email the Service sends
+after sign-up; a new email can be requested in the account. The address is also
+considered confirmed once the user has set a new password with the link from a
+password recovery email. Until the address is confirmed, the Service sends it no
+emails other than the confirmation email and the password recovery email, and a
+paid plan cannot be purchased.
 
 3.3. If the account is suspected to be compromised, the user changes the
 password and notifies the Operator at {{SELLER_EMAIL}}. The password is changed
@@ -154,9 +161,15 @@ out in the paid plans offer. Bank card details are not passed to the Operator.
 ## 9. Service notifications
 
 The Operator sends to the account email address the service emails necessary to
-perform the contract: about an upcoming automatic charge, and about changes in
-price and terms, as well as an email with a password recovery link, sent only on
-a request made on the sign-in page. The Service does not send marketing emails.
+perform the contract: about a password change, about a sign-in from a browser
+never used with the account before, about two-factor sign-in being turned off,
+about an upcoming automatic charge, about a paid period ending soon without
+renewal, about changes in price and terms and about new versions of documents,
+as well as an email with a password recovery link, sent only on a request made
+on the sign-in page. Emails are sent only to a confirmed address (clause 3.2.1).
+Security emails cannot be turned off: without them the user would not learn about
+someone else signing in to the account. The Service does not send marketing
+emails.
 
 ## 10. Liability
 
@@ -178,7 +191,7 @@ Service with its number and date and takes effect when published, unless a later
 date is stated in it.
 
 11.2. The Operator notifies the user of a new version in the dashboard on the
-first sign-in after publication. The list of documents, their current versions
+first sign-in after publication and by email to the account email address. The list of documents, their current versions
 and the marks of acknowledgement are available to the user in the Privacy
 section of the dashboard.
 

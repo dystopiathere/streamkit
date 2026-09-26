@@ -3,6 +3,7 @@ import { AuditService } from './audit/audit.service';
 import { RealtimeBus } from './bus/realtime-bus.service';
 import { CryptoService } from './crypto/crypto.service';
 import { PasswordService } from './crypto/password.service';
+import { AccountMailService } from './mail/account-mail.service';
 import { MAILER, SmtpMailer } from './mail/mailer';
 import { RedisLock } from './redis/lock.service';
 import { PresenceService } from './redis/presence.service';
@@ -21,6 +22,7 @@ import { PresenceService } from './redis/presence.service';
     RedisLock,
     PresenceService,
     { provide: MAILER, useClass: SmtpMailer },
+    AccountMailService,
   ],
   exports: [
     CryptoService,
@@ -30,6 +32,7 @@ import { PresenceService } from './redis/presence.service';
     RedisLock,
     PresenceService,
     MAILER,
+    AccountMailService,
   ],
 })
 export class CommonModule {}

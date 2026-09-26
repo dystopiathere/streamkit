@@ -1,6 +1,6 @@
 # StreamKit Privacy Policy
 
-Version No. 16 of 25.09.2026
+Version No. 17 of 26.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/privacy?lang=ru); if the two
@@ -30,6 +30,11 @@ secret, if it is enabled.
   and the sector drawn. Cleared together with the event history;
 - session details and the security log: IP address hash, User-Agent string,
   time of sign-in and of significant actions;
+- browsers used to sign in to the account: the hash of a random tag from the
+  `sk_device` cookie, the User-Agent string, and the time of the first and last
+  sign-in — to tell you by email about a sign-in from a browser not seen before;
+- the language of service emails — the language of the page you last signed in
+  or registered from;
 - the consent log: which document, which version, and when it was accepted or
   withdrawn.
 
@@ -54,10 +59,19 @@ history, the encrypted identifier of the saved payment method and its label such
 as “Card \*4444”. Card details are entered on the YooKassa page and are not
 passed to us.
 
-**Service emails:** the account email address and display name — for emails
-about an upcoming automatic charge and for the password recovery email, which is
-sent only on a request from the sign-in page. For a recovery link we store only
-the hash of its token and its expiry time.
+**Service emails:** the account email address and display name — for security
+emails (a password change, a sign-in from a new browser, two-factor sign-in
+turned off — with the time of the event and the name of the browser and
+system), for emails about an upcoming automatic charge, about a paid period
+ending soon without renewal, about new versions of accepted documents, and for
+the password recovery email, which is sent only on a request from the sign-in
+page, and for the email with the address confirmation link. For recovery and
+confirmation links we store only the hash of the token and its expiry time; for
+emails about new versions — which document, which version and when the email was
+sent. We also store whether and when the address was confirmed, and an email log:
+which email, when, and how sending ended (sent, mail failure, not sent because
+the address is unconfirmed) — without the text of the email. Support staff see
+the log to answer "the email did not arrive".
 
 **The Operator's employees** (admin panel): the same account data — email
 address, display name, password hash and the encrypted secret of the second
@@ -86,7 +100,8 @@ User-Agent. Details are in the Cookie Policy.
 | Providing the service: widgets, events, analytics, rooms | Performance of the contract (Terms of Service) |
 | Sign-up, sign-in, account protection | Performance of the contract |
 | Plan payment, automatic renewal, refunds | Performance of the contract (paid plans offer) |
-| Emails about an upcoming charge | Performance of the contract |
+| Emails about an upcoming charge and the end of a paid period | Performance of the contract |
+| Security emails and emails about new versions of documents | Performance of the contract |
 | Security logs, incident investigation | The Operator's legitimate interest |
 | Proof of consents given | Requirement of Federal Law No. 152-FZ |
 | Visit statistics for public pages | Consent in the banner; withdrawn via the “Cookie settings” link or in the Privacy section |
@@ -217,7 +232,11 @@ We do not sell personal data. Data is shared only with:
 | Donation events | Until the account is deleted, then anonymized |
 | Security log (audit), including staff actions | 180 days |
 | Sign-in sessions | Until sign-out or expiry, no more than 30 days |
+| Browsers used to sign in (tag hash, User-Agent) | 400 days after the last sign-in from the browser; until the account is deleted |
+| Marks of emails about new versions of documents | 3 years from the email date |
 | Password recovery link (hash) | One hour; deleted within a day after use or expiry |
+| Address confirmation link (hash) | 24 hours; after use, no more than two days |
+| Service email log (email type, time, sending result) | 180 days; until the account is deleted |
 | Platform channel metrics | 90 days |
 | Platform tokens | Until the platform is disconnected or the account is deleted |
 | Saved payment method | Until the account is deleted; earlier if access to it is revoked or the card expires |
@@ -249,7 +268,8 @@ in clause 4.3.
 
 Deletion is confirmed with the password. The email address and display name are
 anonymized, the password and the second factor are deleted, sessions are ended,
-widget links are revoked, the widgets themselves and the connected donation
+the records of browsers used to sign in, the service email log and the address
+confirmation mark are deleted, widget links are revoked, the widgets themselves and the connected donation
 sources are deleted together with everything typed into them (roulette sectors,
 hidden viewers, spin history), platform connections with their tokens and metrics
 are deleted, rooms and invites are deleted, auto-renewal is turned off, and the
@@ -291,7 +311,7 @@ date. This Policy is a document the operator is required to publish (Article
 accepted, and access to the service does not depend on that.
 
 13.2. We notify you of a new version in the dashboard on the first sign-in after
-publication. The list of documents, their current versions and the marks of
+publication and by email to the account email address. The list of documents, their current versions and the marks of
 acknowledgement are in the Privacy section.
 
 13.3. If the changes affect the purposes or scope of processing that requires

@@ -28,6 +28,9 @@ const SITE_STATS_RETENTION_DAYS = 396;
 /** Журнал согласий посетителей: год действия согласия и ещё два года как доказательство. */
 const VISITOR_CONSENT_RETENTION_DAYS = 3 * 365;
 
+/** Браузеры, из которых не входили 400 дней, — столько живёт cookie `sk_device`. */
+const DEVICE_RETENTION_DAYS = 400;
+
 /** Ключ взаимного исключения между репликами воркера. */
 const MAINTENANCE_LOCK_KEY = 'streamkit:lock:maintenance:nightly';
 
@@ -58,6 +61,10 @@ export class MaintenanceScheduler {
       await this.lock.withLock(MAINTENANCE_LOCK_KEY, 60 * 60 * 1000, async () => {
         await this.maintenance.purgeExpiredTokens();
         await this.maintenance.purgeExpiredPasswordResets();
+        await this.maintenance.purgeExpiredEmailVerifications();
+        await this.maintenance.purgeOldMailLogs(AUDIT_RETENTION_DAYS);
+        await this.maintenance.purgeStaleDevices(DEVICE_RETENTION_DAYS);
+        await this.maintenance.purgeOldLegalNotices(CONSENT_RETENTION_DAYS);
         await this.maintenance.purgeOldAuditLogs(AUDIT_RETENTION_DAYS);
         await this.maintenance.purgeOldSnapshots(SNAPSHOT_RETENTION_DAYS);
         await this.maintenance.purgeOldGuestConsents(AUDIT_RETENTION_DAYS);

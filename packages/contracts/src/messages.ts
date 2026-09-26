@@ -35,6 +35,8 @@ export const MESSAGES_EN: Readonly<Record<string, string>> = {
   'Код из 6 цифр': 'A 6-digit code',
   'Ссылка недействительна или устарела': 'This link is invalid or has expired',
   'Пароли не совпадают': 'The passwords do not match',
+  'Письмо уже отправлено. Новое можно запросить через минуту':
+    'The email has already been sent. You can request a new one in a minute',
 
   // Общее
   'Ошибка валидации': 'Some fields are filled in incorrectly',
@@ -96,6 +98,7 @@ export const MESSAGES_EN: Readonly<Record<string, string>> = {
   'Приватные комнаты доступны в тарифе «Про»': 'Private rooms are part of the Pro plan',
   'Платёж не найден': 'Payment not found',
   'Оплата не настроена': 'Payments are not configured',
+  'Подтвердите почту, чтобы оформить тариф': 'Confirm your email to choose a paid plan',
   'Оплата не настроена на этом сервере': 'Payments are not configured on this server',
   'Подписка уже действует': 'Your subscription is already active',
   'У пользователя действует другой тариф — бесплатные дни продлевают его':

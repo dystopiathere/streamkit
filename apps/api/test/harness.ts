@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module';
 import { registerBodyParsers } from '../src/common/http/body-parsers';
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { REDIS_CLIENT } from '../src/common/redis/redis.module';
+import type { MailMessage } from '../src/common/mail/mailer';
 
 export interface TestHarness {
   app: INestApplication;
@@ -87,4 +88,40 @@ export function extractCookie(setCookie: string[] | undefined, name: string): st
   if (!header) return null;
   const value = header.split(';')[0]?.split('=')[1];
   return value ? decodeURIComponent(value) : null;
+}
+
+const VERIFICATION_SUBJECTS = ['StreamKit: подтвердите почту', 'StreamKit: confirm your email'];
+
+/**
+ * Письмо подтверждения, которое регистрация шлёт без ожидания, — дождаться и
+ * забрать из почты теста. Без этого оно приходит посреди теста и путает счёт
+ * писем, которые тест проверяет.
+ */
+export async function takeVerificationLetter(
+  sent: MailMessage[],
+  email: string,
+): Promise<MailMessage> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const index = sent.findIndex(
+      (letter) => letter.to === email && VERIFICATION_SUBJECTS.includes(letter.subject),
+    );
+    if (index >= 0) return sent.splice(index, 1)[0]!;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error('Нет письма подтверждения почты');
+}
+
+/** Почта подтверждена — как будто открыли ссылку из письма. */
+export async function markEmailVerified(harness: TestHarness, userId: string): Promise<void> {
+  await harness.prisma.user.update({
+    where: { id: userId },
+    data: { emailVerifiedAt: new Date() },
+  });
+}
+
+/** Токен из ссылки письма: он во фрагменте адреса. */
+export function linkTokenFrom(letter: MailMessage): string {
+  const match = /#token=([A-Za-z0-9_-]{43})/.exec(letter.text);
+  if (!match) throw new Error('В письме нет ссылки');
+  return match[1]!;
 }

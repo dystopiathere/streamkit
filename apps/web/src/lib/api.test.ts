@@ -31,6 +31,7 @@ const user = {
   email: 'streamer@example.com',
   displayName: 'Стример',
   isTotpEnabled: false,
+  emailVerified: true,
   createdAt: new Date().toISOString(),
 };
 

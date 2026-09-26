@@ -22,6 +22,7 @@ import { trackSiteEvent } from '@/features/public/site-stats';
 import { ApiError, api } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { localizedResolver } from '@/lib/form-errors';
+import { currentLanguage } from '@/lib/locale';
 import { usePageMeta } from '@/lib/seo';
 
 /**
@@ -65,7 +66,10 @@ export function RegisterPage(): React.JSX.Element {
 
   const onSubmit = form.handleSubmit(async (values) => {
     try {
-      const result = await api.post<AuthResult>('/auth/register', values);
+      const result = await api.post<AuthResult>('/auth/register', {
+        ...values,
+        language: currentLanguage(),
+      });
       setSession(result.accessToken, result.user);
       trackSiteEvent('signup');
       void navigate('/widgets');

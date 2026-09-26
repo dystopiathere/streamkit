@@ -91,7 +91,7 @@ export function landingSnapshot(t: TFunction): string {
     `<section id="pricing" class="space-y-6"><h2 class="text-2xl font-semibold uppercase">${text(t('public.pricing.title'))}</h2>` +
     `<div class="grid gap-4 md:grid-cols-3">${plans}</div>` +
     `<p class="text-xs text-muted">${text(t('public.pricing.note'))} <a class="underline" href="/legal/subscription">${text(t('public.pricing.offer'))}</a></p></section>` +
-    list('delivery', ['digital', 'instant', 'term', 'requirements']) +
+    list('delivery', ['digital', 'account', 'instant', 'term', 'requirements']) +
     list('payment', ['methods', 'card', 'renewal', 'refund']) +
     `</main><footer class="border-t border-border px-4 py-6 text-sm"><nav aria-label="${text(t('public.footer.documents'))}">` +
     `<ul class="mx-auto flex max-w-6xl flex-wrap gap-4">${documents}</ul></nav></footer></div>`

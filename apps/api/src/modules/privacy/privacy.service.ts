@@ -193,6 +193,8 @@ export class PrivacyService {
       rooms,
       subscription,
       payments,
+      devices,
+      mails,
     ] = await Promise.all([
       this.prisma.user.findUniqueOrThrow({
         where: { id: userId },
@@ -202,6 +204,8 @@ export class PrivacyService {
           displayName: true,
           status: true,
           isTotpEnabled: true,
+          language: true,
+          emailVerifiedAt: true,
           createdAt: true,
         },
       }),
@@ -273,6 +277,18 @@ export class PrivacyService {
           refundedAt: true,
         },
       }),
+      // Браузеры, из которых входили, — без хэша метки: по нему узнаётся
+      // браузер, это учётные данные, как хэш сессии.
+      this.prisma.knownDevice.findMany({
+        where: { userId },
+        orderBy: { lastSeenAt: 'desc' },
+        select: { userAgent: true, createdAt: true, lastSeenAt: true },
+      }),
+      this.prisma.mailLog.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        select: { kind: true, status: true, createdAt: true },
+      }),
     ]);
 
     await this.audit.record('privacy.data.exported', userId, context);
@@ -289,6 +305,9 @@ export class PrivacyService {
       rooms,
       subscription,
       payments,
+      knownDevices: devices,
+      // Журнал писем: вид и исход, без адреса и текста.
+      mails,
       // BigInt не сериализуется в JSON — приводим к строке, а не к number:
       // просмотры крупного канала в number ещё влезают, но правило «не терять
       // точность молча» дешевле соблюдать везде, чем помнить, где можно.
@@ -350,6 +369,7 @@ export class PrivacyService {
           status: 'ANONYMIZED',
           isTotpEnabled: false,
           totpSecretEncrypted: null,
+          emailVerifiedAt: null,
           anonymizedAt: new Date(),
           // Роль обезличенному не нужна: сотрудник, ушедший так, не должен
           // сохранить вход в админку.
@@ -361,6 +381,13 @@ export class PrivacyService {
         where: { userId, revokedAt: null },
         data: { revokedAt: new Date() },
       });
+
+      // Браузеры, из которых входили, нужны только для писем о входе с нового
+      // устройства — а писать больше некому.
+      await tx.knownDevice.deleteMany({ where: { userId } });
+      // Журнал писем и ссылки подтверждения — о почте, которой больше нет.
+      await tx.mailLog.deleteMany({ where: { userId } });
+      await tx.emailVerificationToken.deleteMany({ where: { userId } });
 
       // Виджеты удаляются вместе со ссылками OBS и состоянием: оверлеи должны
       // перестать работать немедленно, а в настройках лежит не только

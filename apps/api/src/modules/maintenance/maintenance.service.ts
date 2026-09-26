@@ -70,6 +70,63 @@ export class MaintenanceService {
     return result.count;
   }
 
+  /** Ссылки подтверждения почты: истёкшие и использованные. */
+  async purgeExpiredEmailVerifications(): Promise<number> {
+    // Использованную держим сутки: повторное открытие той же ссылки отвечает
+    // «почта подтверждена», а не «ссылка недействительна».
+    const usedBefore = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const result = await this.prisma.emailVerificationToken.deleteMany({
+      where: { OR: [{ expiresAt: { lte: new Date() } }, { usedAt: { lt: usedBefore } }] },
+    });
+    if (result.count > 0) {
+      this.logger.log({ count: result.count }, 'Удалены отработавшие ссылки подтверждения почты');
+    }
+    return result.count;
+  }
+
+  /** Журнал писем старше срока — как аудит, срок в политике конфиденциальности. */
+  async purgeOldMailLogs(retentionDays: number): Promise<number> {
+    const threshold = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+    const result = await this.prisma.mailLog.deleteMany({
+      where: { createdAt: { lt: threshold } },
+    });
+    if (result.count > 0) {
+      this.logger.log({ count: result.count }, 'Удалены старые записи журнала писем');
+    }
+    return result.count;
+  }
+
+  /**
+   * Браузеры, из которых не входили дольше срока. Столько же живёт cookie
+   * `sk_device`: браузер, чья метка истекла, уже не узнать, и запись о нём
+   * бесполезна — вход из него всё равно придёт письмом «новое устройство».
+   */
+  async purgeStaleDevices(retentionDays: number): Promise<number> {
+    const threshold = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+    const result = await this.prisma.knownDevice.deleteMany({
+      where: { lastSeenAt: { lt: threshold } },
+    });
+    if (result.count > 0) {
+      this.logger.log({ count: result.count }, 'Удалены давно не входившие браузеры');
+    }
+    return result.count;
+  }
+
+  /**
+   * Отметки о письмах про новые редакции — доказательство уведомления, как
+   * журнал согласий, и хранятся столько же.
+   */
+  async purgeOldLegalNotices(retentionDays: number): Promise<number> {
+    const threshold = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+    const result = await this.prisma.legalUpdateNotice.deleteMany({
+      where: { sentAt: { lt: threshold } },
+    });
+    if (result.count > 0) {
+      this.logger.log({ count: result.count }, 'Удалены старые отметки о письмах про редакции');
+    }
+    return result.count;
+  }
+
   /**
    * Аудит-лог старше срока хранения.
    *

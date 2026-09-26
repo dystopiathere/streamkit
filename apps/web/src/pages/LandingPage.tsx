@@ -215,7 +215,7 @@ export function LandingPage(): React.JSX.Element {
             {t('public.delivery.title')}
           </h2>
           <ul className="max-w-3xl list-disc space-y-2 pl-5 text-sm">
-            {(['digital', 'instant', 'term', 'requirements'] as const).map((item) => (
+            {(['digital', 'account', 'instant', 'term', 'requirements'] as const).map((item) => (
               <li key={item}>{t(`public.delivery.${item}`)}</li>
             ))}
           </ul>

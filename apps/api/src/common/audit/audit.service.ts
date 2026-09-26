@@ -17,6 +17,7 @@ export type AuditAction =
   | 'auth.password.changed'
   | 'auth.password.reset_requested'
   | 'auth.password.reset'
+  | 'auth.email.verified'
   | 'auth.totp.enabled'
   | 'auth.totp.disabled'
   | 'auth.totp.disable_failed'

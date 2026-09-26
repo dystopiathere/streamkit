@@ -1,6 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { resetPasswordFormSchema, type ResetPasswordFormValues } from '@streamkit/contracts';
-import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
@@ -20,24 +19,8 @@ import {
 import { PublicFooter } from '@/features/public/PublicFooter';
 import { ApiError, api } from '@/lib/api';
 import { localizedResolver } from '@/lib/form-errors';
+import { useTokenFromFragment } from '@/lib/fragment-token';
 import { usePageMeta } from '@/lib/seo';
-
-/**
- * Токен из фрагмента адреса — и сразу из адреса вон.
- *
- * Фрагмент не уходит на сервер и в Referer, но остаётся в истории браузера и
- * в адресной строке, откуда его унесёт снимок экрана. Читаем один раз при
- * открытии и заменяем адрес на чистый.
- */
-function useTokenFromFragment(): string | null {
-  const [token] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get('token'));
-  useEffect(() => {
-    if (window.location.hash) {
-      window.history.replaceState(null, '', window.location.pathname);
-    }
-  }, []);
-  return token;
-}
 
 /** Новый пароль по ссылке из письма. Сессию не выдаёт: дальше — обычный вход. */
 export function ResetPasswordPage(): React.JSX.Element {

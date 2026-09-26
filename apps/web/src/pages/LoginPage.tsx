@@ -21,6 +21,7 @@ import { PublicFooter } from '@/features/public/PublicFooter';
 import { ApiError, api } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { localizedResolver } from '@/lib/form-errors';
+import { currentLanguage } from '@/lib/locale';
 import { usePageMeta } from '@/lib/seo';
 
 export function LoginPage(): React.JSX.Element {
@@ -43,7 +44,10 @@ export function LoginPage(): React.JSX.Element {
 
   const onSubmit = form.handleSubmit(async (values) => {
     try {
-      const response = await api.post<LoginResponse>('/auth/login', values);
+      const response = await api.post<LoginResponse>('/auth/login', {
+        ...values,
+        language: currentLanguage(),
+      });
 
       if ('totpRequired' in response) {
         setNeedsTotp(true);

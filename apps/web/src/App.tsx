@@ -24,6 +24,7 @@ import { RoomsPage } from './pages/RoomsPage';
 import { SecurityPage } from './pages/SecurityPage';
 import { SourcesPage } from './pages/SourcesPage';
 import { StreamPage, StreamWindowPage } from './pages/StreamPage';
+import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { WidgetEditorPage } from './pages/WidgetEditorPage';
 import { WidgetsPage } from './pages/WidgetsPage';
 
@@ -125,6 +126,8 @@ export function App(): React.JSX.Element {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          {/* Вне RequireAuth: ссылку из письма открывают и там, где не входили. */}
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route
             path="/legal/:slug"
             element={

@@ -1,6 +1,6 @@
 # Paid Plans Offer
 
-Version No. 6 of 24.09.2026
+Version No. 7 of 26.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/subscription?lang=ru); if the
@@ -72,6 +72,10 @@ The service is digital and is provided online through the user's account on
 https://stream-kit.ru. There is no physical delivery. Access to the plan opens
 automatically right after the payment service confirms the payment and lasts for
 the whole paid period.
+
+A plan can be purchased once the account email address is confirmed with the
+link from the email (Terms of Use, clause 3.2.1): the receipt and notices of
+automatic charges are sent to that address.
 
 ## 4. Payment and receipt
 

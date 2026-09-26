@@ -159,6 +159,11 @@ export function UsersPage(): React.JSX.Element {
                 cell: (row) => formatNumber(row.widgetCount),
               },
               {
+                key: 'emailVerified',
+                header: t('users.emailVerified'),
+                cell: (row) => (row.emailVerified ? t('common.yes') : t('common.no')),
+              },
+              {
                 key: 'twoFactor',
                 header: t('users.twoFactor'),
                 cell: (row) => (row.isTotpEnabled ? t('common.yes') : t('common.no')),

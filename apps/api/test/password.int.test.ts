@@ -2,7 +2,13 @@ import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { MAILER, type Mailer, type MailMessage } from '../src/common/mail/mailer';
 import { REFRESH_COOKIE_NAME } from '../src/modules/auth/refresh-cookie';
-import { createHarness, extractCookie, registrationPayload, type TestHarness } from './harness';
+import {
+  createHarness,
+  extractCookie,
+  registrationPayload,
+  takeVerificationLetter,
+  type TestHarness,
+} from './harness';
 
 /** Почта в памяти: что и кому ушло. */
 class FakeMailer implements Mailer {
@@ -60,6 +66,7 @@ describe('Пароль: смена и восстановление (feature)', (
     const payload = registrationPayload();
     const response = await request(server()).post('/api/auth/register').send(payload).expect(201);
     const cookies = response.headers['set-cookie'] as unknown as string[];
+    if (mailer.configured) await takeVerificationLetter(mailer.sent, payload.email);
     return {
       payload,
       accessToken: response.body.accessToken as string,

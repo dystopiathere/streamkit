@@ -331,6 +331,9 @@ failed». Администратор входит на ВМ как `ops`.
      sudo -u deploy docker compose --env-file infra.env --env-file release.env --env-file stats.env \
        --env-file admin.env run --rm --no-deps api node dist/scripts/grant-role.js <почта> admin
      ```
+     Пока домен почты не прошёл проверку в Postbox, письмо подтверждения до вас
+     не дойдёт, а без подтверждения закрыта оплата. Подтвердить свою почту
+     можно той же командой со скриптом `dist/scripts/verify-email.js <почта>`.
   4. Войдите на `admin.stream-kit.ru` почтой, паролем и кодом. Остальным
      сотрудникам роль выдаётся уже в админке, и назначение попадает в журнал.
   5. Вход отказал? Ответ один на все причины — неверный пароль, код или

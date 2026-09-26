@@ -1,9 +1,11 @@
 import type {
+  MailKind as PrismaMailKind,
+  MailStatus as PrismaMailStatus,
   Prisma,
   UserRole as PrismaUserRole,
   UserStatus as PrismaUserStatus,
 } from '@prisma/client';
-import type { StaffRole, UserRole, UserStatus } from '@streamkit/contracts';
+import type { MailKind, MailStatus, StaffRole, UserRole, UserStatus } from '@streamkit/contracts';
 import type { Request } from 'express';
 import type { AuditContext, AuditService } from '../../common/audit/audit.service';
 import type { StaffUser } from '../../common/auth/auth.decorators';
@@ -26,6 +28,15 @@ export function toContractStatus(status: PrismaUserStatus): UserStatus {
 
 export function toPrismaStatus(status: UserStatus): PrismaUserStatus {
   return status === 'suspended' ? 'SUSPENDED' : status === 'anonymized' ? 'ANONYMIZED' : 'ACTIVE';
+}
+
+/** `PASSWORD_RESET` → `password_reset`: названия видов совпадают, меняется регистр. */
+export function toContractMailKind(kind: PrismaMailKind): MailKind {
+  return kind.toLowerCase() as MailKind;
+}
+
+export function toContractMailStatus(status: PrismaMailStatus): MailStatus {
+  return status.toLowerCase() as MailStatus;
 }
 
 /** Контекст аудита для действия сотрудника: автор — он, адрес — его. */

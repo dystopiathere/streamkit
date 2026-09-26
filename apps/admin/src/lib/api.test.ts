@@ -7,6 +7,7 @@ const staff = {
   email: 'admin@example.com',
   displayName: 'Админ',
   isTotpEnabled: true,
+  emailVerified: true,
   createdAt: new Date().toISOString(),
   role: 'admin' as const,
 };

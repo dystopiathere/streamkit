@@ -1,39 +1,9 @@
-import type { SessionInfo } from '@streamkit/contracts';
+import { describeUserAgent, type SessionInfo } from '@streamkit/contracts';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button, Card, StatusPill } from '@streamkit/app-kit';
 import { intlLocale } from '@/lib/locale';
 import { useRevokeSession, useSessions } from './queries';
-
-/**
- * Браузер и система по строке User-Agent — коротко, для узнавания.
- *
- * Точный разбор не нужен: человек ищет «это мой ноутбук или нет», и «Chrome,
- * Windows» на это отвечает. Строка целиком длинная и ничего не говорит.
- */
-function describeAgent(agent: string | null): string | null {
-  if (!agent) return null;
-  const browser =
-    [
-      ['Edg/', 'Edge'],
-      ['OPR/', 'Opera'],
-      ['YaBrowser/', 'Yandex Browser'],
-      ['Firefox/', 'Firefox'],
-      ['Chrome/', 'Chrome'],
-      ['Safari/', 'Safari'],
-    ].find(([marker]) => agent.includes(marker!))?.[1] ?? null;
-  const system =
-    [
-      ['Windows', 'Windows'],
-      ['Android', 'Android'],
-      ['iPhone', 'iOS'],
-      ['iPad', 'iPadOS'],
-      ['Mac OS X', 'macOS'],
-      ['Linux', 'Linux'],
-    ].find(([marker]) => agent.includes(marker!))?.[1] ?? null;
-  const parts = [browser, system].filter(Boolean);
-  return parts.length > 0 ? parts.join(', ') : null;
-}
 
 const formatDate = (iso: string): string =>
   new Date(iso).toLocaleString(intlLocale(), {
@@ -70,7 +40,8 @@ export function SessionsCard(): React.JSX.Element {
 
         <ul className="divide-y divide-border">
           {sessions.data?.map((session: SessionInfo) => {
-            const name = describeAgent(session.userAgent) ?? t('security.sessions.unknownDevice');
+            const name =
+              describeUserAgent(session.userAgent) ?? t('security.sessions.unknownDevice');
             return (
               <li key={session.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
                 <div className="min-w-0 flex-1">

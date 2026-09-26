@@ -3,6 +3,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { REFRESH_COOKIE_NAME } from '../src/modules/auth/refresh-cookie';
 import { createHarness, extractCookie, registrationPayload, type TestHarness } from './harness';
 
+/** Строка Set-Cookie с refresh-токеном: рядом приходит и метка браузера `sk_device`. */
+function refreshCookieOf(response: { headers: Record<string, unknown> }): string {
+  const cookies = response.headers['set-cookie'] as string[];
+  return cookies.find((cookie) => cookie.startsWith(`${REFRESH_COOKIE_NAME}=`))!;
+}
+
 describe('Аутентификация (feature)', () => {
   let harness: TestHarness;
 
@@ -128,7 +134,7 @@ describe('Аутентификация (feature)', () => {
       .send(registrationPayload())
       .expect(201);
 
-    const cookie = (registration.headers['set-cookie'] as unknown as string[])[0] as string;
+    const cookie = refreshCookieOf(registration);
 
     const refreshed = await request(server())
       .post('/api/auth/refresh')
@@ -150,14 +156,14 @@ describe('Аутентификация (feature)', () => {
       .send(registrationPayload())
       .expect(201);
 
-    const firstCookie = (registration.headers['set-cookie'] as unknown as string[])[0] as string;
+    const firstCookie = refreshCookieOf(registration);
 
     const refreshed = await request(server())
       .post('/api/auth/refresh')
       .set('Cookie', firstCookie)
       .expect(200);
 
-    const secondCookie = (refreshed.headers['set-cookie'] as unknown as string[])[0] as string;
+    const secondCookie = refreshCookieOf(refreshed);
 
     // Украденная копия старого токена
     await request(server()).post('/api/auth/refresh').set('Cookie', firstCookie).expect(401);
@@ -191,7 +197,7 @@ describe('Аутентификация (feature)', () => {
       .send(registrationPayload())
       .expect(201);
 
-    const cookie = (registration.headers['set-cookie'] as unknown as string[])[0] as string;
+    const cookie = refreshCookieOf(registration);
 
     await request(server()).post('/api/auth/logout').set('Cookie', cookie).expect(204);
     await request(server()).post('/api/auth/refresh').set('Cookie', cookie).expect(401);

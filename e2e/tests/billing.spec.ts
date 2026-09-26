@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { confirmEmail } from './email';
 import { mainNav, openProfileSection } from './navigation';
 
 /**
@@ -19,7 +20,8 @@ test('стример оформляет тариф «Про», получает 
   );
   await page.goto('/register');
   await page.getByLabel('Отображаемое имя').fill('E2E Тариф');
-  await page.getByLabel('Электронная почта').fill(`e2e-billing-${Date.now()}@example.com`);
+  const email = `e2e-billing-${Date.now()}@example.com`;
+  await page.getByLabel('Электронная почта').fill(email);
   await page.getByLabel('Пароль').fill('очень-надёжный-пароль-1');
   for (const checkbox of await page.locator('input[type="checkbox"]').all()) {
     await checkbox.check();
@@ -51,9 +53,23 @@ test('стример оформляет тариф «Про», получает 
   // нажимается.
   await page.getByRole('link', { name: 'Выбрать тариф' }).click();
   await expect(page).toHaveURL(/\/account\/billing$/);
+  // Пока почта не подтверждена, оплатить нельзя — и причина написана на месте.
+  await expect(page.getByText(`Оплата откроется после подтверждения почты ${email}`)).toBeVisible();
+  await page.getByLabel(/Я принимаю/).check();
+  await expect(page.getByRole('button', { name: /^Оплатить/ })).toBeDisabled();
+
+  // Подтверждение пришло с другого устройства: плашка уходит при возврате на
+  // вкладку, без перезагрузки.
+  confirmEmail(email);
+  await page.evaluate('window.dispatchEvent(new Event("visibilitychange"))');
+  await expect(page.getByText('Оплата откроется после подтверждения почты')).toHaveCount(0, {
+    timeout: 10_000,
+  });
+
   await page.getByRole('radio', { name: /^Про/ }).check();
   await page.getByRole('radio', { name: /Месяц/ }).check();
   const pay = page.getByRole('button', { name: /^Оплатить/ });
+  await page.getByLabel(/Я принимаю/).uncheck();
   await expect(pay).toBeDisabled();
   await page.getByLabel(/Я принимаю/).check();
   await pay.click();

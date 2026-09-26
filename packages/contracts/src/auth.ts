@@ -13,6 +13,19 @@ export const passwordSchema = z
 
 export const emailSchema = z.string().trim().toLowerCase().email().max(254);
 
+/**
+ * Язык писем.
+ *
+ * Письмо восстановления пароля уходит на языке страницы, с которой его
+ * запросили: её читает тот же человек, который сейчас будет читать письмо.
+ * Остальные письма уходят без запроса — по расписанию или по событию, — и их
+ * язык берётся из аккаунта: это язык страницы, с которой в него последний раз
+ * вошли или зарегистрировались.
+ */
+export const MAIL_LANGUAGES = ['ru', 'en'] as const;
+export const mailLanguageSchema = z.enum(MAIL_LANGUAGES);
+export type MailLanguage = z.infer<typeof mailLanguageSchema>;
+
 export const registerSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
@@ -32,6 +45,8 @@ export const registerSchema = z.object({
    * запроса они не приходят и приходить не должны.
    */
   acceptDocuments: z.literal(true),
+  /** Язык страницы регистрации — язык будущих писем. */
+  language: mailLanguageSchema.optional(),
 });
 export type RegisterInput = z.infer<typeof registerSchema>;
 
@@ -42,6 +57,8 @@ export const loginSchema = z.object({
     .string()
     .regex(/^\d{6}$/, 'Код из 6 цифр')
     .optional(),
+  /** Язык страницы входа — с ним аккаунт получает следующие письма. */
+  language: mailLanguageSchema.optional(),
 });
 export type LoginInput = z.infer<typeof loginSchema>;
 
@@ -50,6 +67,11 @@ export const publicUserSchema = z.object({
   email: z.string().email(),
   displayName: z.string(),
   isTotpEnabled: z.boolean(),
+  /**
+   * Подтверждена ли почта. Без подтверждения сервис не пишет ничего, кроме
+   * письма подтверждения и восстановления пароля, и не принимает оплату тарифа.
+   */
+  emailVerified: z.boolean(),
   createdAt: isoDateSchema,
 });
 export type PublicUser = z.infer<typeof publicUserSchema>;
@@ -104,19 +126,9 @@ export const sessionSchema = z.object({
 });
 export type SessionInfo = z.infer<typeof sessionSchema>;
 
-/**
- * Язык письма о восстановлении пароля.
- *
- * Язык аккаунта нигде не хранится: интерфейс выбирает его по браузеру. Письмо
- * уходит на языке той страницы, с которой его запросили, — её читает тот же
- * человек, который сейчас будет читать письмо.
- */
-export const MAIL_LANGUAGES = ['ru', 'en'] as const;
-export type MailLanguage = (typeof MAIL_LANGUAGES)[number];
-
 export const forgotPasswordSchema = z.object({
   email: emailSchema,
-  language: z.enum(MAIL_LANGUAGES).default('ru'),
+  language: mailLanguageSchema.default('ru'),
 });
 export type ForgotPasswordInput = z.input<typeof forgotPasswordSchema>;
 
@@ -141,6 +153,20 @@ export const resetPasswordSchema = z.object({
 });
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 
+/**
+ * Сколько живёт ссылка подтверждения почты.
+ *
+ * Сутки, а не час, как у восстановления пароля: подтверждение ничего не
+ * открывает постороннему, а письмо после регистрации нередко открывают вечером.
+ */
+export const EMAIL_VERIFICATION_TTL_HOURS = 24;
+
+/** Подтверждение почты по ссылке: токен того же формата, что у восстановления пароля. */
+export const verifyEmailSchema = z.object({
+  token: z.string().regex(/^[A-Za-z0-9_-]{43}$/, 'Ссылка недействительна или устарела'),
+});
+export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
+
 const PASSWORDS_DIFFER = 'Пароли не совпадают';
 
 /**
@@ -163,3 +189,39 @@ export const resetPasswordFormSchema = z
     message: PASSWORDS_DIFFER,
   });
 export type ResetPasswordFormValues = z.infer<typeof resetPasswordFormSchema>;
+
+const BROWSER_MARKERS: ReadonlyArray<readonly [marker: string, name: string]> = [
+  ['Edg/', 'Edge'],
+  ['OPR/', 'Opera'],
+  ['YaBrowser/', 'Yandex Browser'],
+  ['Firefox/', 'Firefox'],
+  ['Chrome/', 'Chrome'],
+  ['Safari/', 'Safari'],
+];
+
+const SYSTEM_MARKERS: ReadonlyArray<readonly [marker: string, name: string]> = [
+  ['Windows', 'Windows'],
+  ['Android', 'Android'],
+  ['iPhone', 'iOS'],
+  ['iPad', 'iPadOS'],
+  ['Mac OS X', 'macOS'],
+  ['Linux', 'Linux'],
+];
+
+/**
+ * Браузер и система по строке User-Agent — коротко, для узнавания.
+ *
+ * Точный разбор не нужен: человек ищет «это мой ноутбук или нет», и «Chrome,
+ * Windows» на это отвечает. Строка целиком длинная и ничего не говорит. Общая
+ * для списка устройств в дашборде и письма о входе с нового устройства: одно и
+ * то же устройство в них должно называться одинаково.
+ *
+ * @returns «Chrome, Windows» или null, если ничего не узнано.
+ */
+export function describeUserAgent(agent: string | null | undefined): string | null {
+  if (!agent) return null;
+  const browser = BROWSER_MARKERS.find(([marker]) => agent.includes(marker))?.[1] ?? null;
+  const system = SYSTEM_MARKERS.find(([marker]) => agent.includes(marker))?.[1] ?? null;
+  const parts = [browser, system].filter((part): part is string => part !== null);
+  return parts.length > 0 ? parts.join(', ') : null;
+}

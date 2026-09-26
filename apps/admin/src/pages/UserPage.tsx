@@ -191,6 +191,12 @@ function UserCard({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
                 value: user.lastSeenAt ? formatDateTime(user.lastSeenAt) : t('common.never'),
               },
               {
+                label: t('user.emailVerified'),
+                value: user.emailVerifiedAt
+                  ? t('user.emailVerifiedAt', { date: formatDateTime(user.emailVerifiedAt) })
+                  : t('user.emailNotVerified'),
+              },
+              {
                 label: t('user.twoFactor'),
                 value: user.isTotpEnabled ? t('user.twoFactorOn') : t('user.twoFactorOff'),
               },
@@ -499,6 +505,35 @@ function UserCard({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
               key: 'revoked',
               header: t('user.revoked'),
               cell: (row) => formatDateTime(row.revokedAt),
+            },
+          ]}
+        />
+      </Section>
+
+      {/* «Письмо не пришло» — частое обращение: здесь видно, ушло ли оно, и
+          если нет — почему. Адреса и текста нет: в письмах ссылки-доступы. */}
+      <Section title={t('user.mails')}>
+        <DataTable
+          caption={t('user.mailsCaption')}
+          rows={detail.mails}
+          rowKey={(row) => row.id}
+          empty={<p className="text-sm text-muted">—</p>}
+          columns={[
+            { key: 'kind', header: t('user.mailKind'), cell: (row) => t(`mailKind.${row.kind}`) },
+            {
+              key: 'at',
+              header: t('user.mailAt'),
+              cell: (row) => formatDateTime(row.createdAt),
+              className: 'whitespace-nowrap',
+            },
+            {
+              key: 'status',
+              header: t('user.mailStatus'),
+              cell: (row) => (
+                <span className={row.status === 'sent' ? undefined : 'text-danger'}>
+                  {t(`mailStatus.${row.status}`)}
+                </span>
+              ),
             },
           ]}
         />

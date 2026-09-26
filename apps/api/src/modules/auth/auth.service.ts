@@ -11,6 +11,9 @@ import { CryptoService } from '../../common/crypto/crypto.service';
 import { PasswordService } from '../../common/crypto/password.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { LEGAL_DOCUMENTS, REQUIRED_ON_REGISTER } from '../privacy/legal-documents';
+import { EmailVerificationService } from './email-verification.service';
+import { KnownDeviceService } from './known-device.service';
+import { SecurityMailService } from './security-mail.service';
 import { TokenService } from './token.service';
 import { TotpService } from './totp.service';
 
@@ -28,11 +31,20 @@ export class AuthService {
     private readonly totp: TotpService,
     private readonly crypto: CryptoService,
     private readonly audit: AuditService,
+    private readonly devices: KnownDeviceService,
+    private readonly securityMail: SecurityMailService,
+    private readonly emailVerification: EmailVerificationService,
   ) {}
 
+  /**
+   * @param deviceId — метка браузера из cookie `sk_device` (см. `KnownDeviceService`).
+   *   Браузер, в котором зарегистрировались, — первый известный: письма о
+   *   «новом устройстве» при первом же входе быть не должно.
+   */
   async register(
     input: RegisterInput,
     context: AuditContext = {},
+    deviceId?: string,
   ): Promise<AuthResult & { refreshToken: string }> {
     const existing = await this.prisma.user.findUnique({ where: { email: input.email } });
     if (existing) {
@@ -49,6 +61,7 @@ export class AuthService {
           email: input.email,
           passwordHash,
           displayName: input.displayName,
+          language: input.language ?? 'ru',
         },
       });
 
@@ -67,6 +80,8 @@ export class AuthService {
     });
 
     await this.audit.record('auth.register', user.id, context);
+    this.emailVerification.sendAfterRegistration(user.id);
+    if (deviceId) await this.devices.remember(user.id, deviceId, context.userAgent);
 
     const issued = await this.tokens.startSession(user, context);
     return {
@@ -83,8 +98,17 @@ export class AuthService {
    * Ответ «неверный email или пароль» одинаков для несуществующего пользователя
    * и неверного пароля, а время ответа выровнено фиктивной проверкой хэша —
    * иначе логин превращается в оракул для перебора адресов.
+   *
+   * Вход из браузера, которого у аккаунта не было, — письмо владельцу. Только
+   * после второго фактора: без кода вход не состоялся.
+   *
+   * @param deviceId — метка браузера из cookie `sk_device`; её нет — браузер новый.
    */
-  async login(input: LoginInput, context: AuditContext = {}): Promise<LoginOutcome> {
+  async login(
+    input: LoginInput,
+    context: AuditContext = {},
+    deviceId?: string,
+  ): Promise<LoginOutcome> {
     const user = await this.prisma.user.findUnique({ where: { email: input.email } });
 
     const passwordValid = user
@@ -118,6 +142,16 @@ export class AuthService {
 
     await this.audit.record('auth.login.success', user.id, context);
 
+    if (input.language && input.language !== user.language) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { language: input.language },
+      });
+    }
+    if (deviceId && (await this.devices.remember(user.id, deviceId, context.userAgent))) {
+      this.securityMail.newDevice(user.id, context);
+    }
+
     const issued = await this.tokens.startSession(user, context);
     return {
       status: 'authenticated',
@@ -130,11 +164,18 @@ export class AuthService {
     };
   }
 
+  /**
+   * Обновление сессии запоминает браузер молча: сессия в нём уже открыта, и
+   * он не новый. Так браузеры, где вошли до появления писем о новом
+   * устройстве, становятся известными без письма при первом обновлении.
+   */
   async refresh(
     rawToken: string,
     context: AuditContext = {},
+    deviceId?: string,
   ): Promise<AuthResult & { refreshToken: string }> {
     const rotated = await this.tokens.rotate(rawToken, context);
+    if (deviceId) await this.devices.remember(rotated.user.id, deviceId, context.userAgent);
     return {
       accessToken: rotated.accessToken,
       expiresIn: rotated.expiresIn,
@@ -188,6 +229,7 @@ export class AuthService {
     });
     await this.tokens.revokeAllForUser(userId);
     await this.audit.record('auth.password.changed', userId, context);
+    this.securityMail.passwordChanged(userId, 'settings', context);
 
     const issued = await this.tokens.startSession(user, context);
     return {
@@ -261,6 +303,7 @@ export class AuthService {
     // него жить не должна. Выданный админский access-токен закрывает AdminGuard.
     await this.tokens.revokeAllForUser(userId, 'ADMIN');
     await this.audit.record('auth.totp.disabled', userId, context);
+    this.securityMail.totpDisabled(userId, context);
   }
 
   private verifyTotpFor(user: User, code: string): boolean {
@@ -279,6 +322,7 @@ export function toPublicUser(user: User): PublicUser {
     email: user.email,
     displayName: user.displayName,
     isTotpEnabled: user.isTotpEnabled,
+    emailVerified: user.emailVerifiedAt !== null,
     createdAt: user.createdAt.toISOString(),
   };
 }
