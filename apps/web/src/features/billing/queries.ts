@@ -88,6 +88,18 @@ export function useRemovePaymentMethod() {
   });
 }
 
+/**
+ * Пробный период «Про». Открывает функции сразу, поэтому ответ — новая
+ * подписка, а согласий он не трогает: денег и карты здесь нет.
+ */
+export function useStartTrial() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<SubscriptionView>('/billing/trial'),
+    onSuccess: (subscription) => client.setQueryData(billingKeys.subscription, subscription),
+  });
+}
+
 export function useUpdateSubscription() {
   const client = useQueryClient();
   return useMutation({

@@ -36,7 +36,8 @@
     "security": "Security",
     "profile": "Profile menu",
     "profileOf": "Profile:",
-    "profileSections": "Profile sections"
+    "profileSections": "Profile sections",
+    "referrals": "Referrals"
   },
   "auth": {
     "loginTitle": "Sign in",
@@ -72,7 +73,9 @@
       "done": "Password changed, sign in with the new one",
       "noToken": "The link did not open in full. Copy the whole link from the email or request a new one.",
       "requestAgain": "Request a new link"
-    }
+    },
+    "referralCode": "Referrer's promo code",
+    "referralCodeHint": "Optional. If another streamer invited you, enter their promo code."
   },
   "widgets": {
     "title": "Widgets",
@@ -530,6 +533,7 @@
       "hintAfter": ".",
       "replace": "Save the new key"
     },
+    "account": "Account",
     "connect": "Connect {{service}}",
     "reconnect": "Reconnect",
     "disconnect": "Disconnect",
@@ -921,7 +925,9 @@
     "rejoin": "Join again",
     "inRoom": "You are in the room “{{room}}”",
     "ownerUnavailable": "The streamer's room is unavailable right now. Contact the streamer.",
-    "preview": "Your camera image"
+    "preview": "Your camera image",
+    "promo": "This room runs on StreamKit.",
+    "promoLink": "Create your own for free"
   },
   "billing": {
     "title": "Plan",
@@ -955,7 +961,9 @@
       "platforms_other": "{{count}} platforms",
       "platformsUnlimited": "All platforms at once: multistream",
       "rooms": "Private rooms with guests",
-      "styling": "Advanced widget styling"
+      "styling": "Advanced widget styling",
+      "branding": "A stream-kit.ru label in the widget corner",
+      "noBranding": "Widgets without the StreamKit label"
     },
     "choosePlan": "Choose a plan",
     "freeIncludes": "Alerts, chat, analytics and widgets work without paying — a plan lifts the limits.",
@@ -1024,6 +1032,15 @@
     "replaceCard": {
       "title": "Pay with another card",
       "hint": "Pay for the next period with another card — it replaces the saved one, and renewals will use it. The new period starts when you pay."
+    },
+    "referralPro": "While free Pro is active (until {{date}}), your paid plan is paused and will be extended by the same number of days.",
+    "referralProLink": "Referrals",
+    "referralProFree": "Free Pro is active until {{date}}. If you pay for a plan now, the paid period starts after that date.",
+    "trial": {
+      "title": "Try Pro free for {{days}} days",
+      "text": "Rooms with guests, advanced styling and all platforms at once. No card and no charges. If you pay for a plan during the trial, the paid period starts after the trial ends.",
+      "start": "Start the {{days}}-day trial",
+      "active": "Your Pro trial is running."
     }
   },
   "public": {
@@ -1293,6 +1310,41 @@
       "noToken": "The link did not open in full. Copy the whole link from the email.",
       "toDashboard": "Go to the dashboard",
       "toLogin": "Sign in"
+    }
+  },
+  "referrals": {
+    "title": "Referrals",
+    "description": "Share your promo code with other streamers. When someone you invited pays for a plan for the first time, you get Pro days: {{multistream}} for Multistream and {{pro}} for Pro. Days add up, and you turn them on when you need them.",
+    "code": {
+      "title": "Your promo code",
+      "copyCode": "Copy promo code",
+      "link": "Sign-up link",
+      "copyLink": "Copy link",
+      "linkHint": "This link fills in your promo code on the sign-up form."
+    },
+    "days": {
+      "title": "Pro days",
+      "invited": "Signed up",
+      "paid": "Paid for a plan",
+      "balance": "Days earned",
+      "activeUntil": "Pro from referrals is active until {{date}}.",
+      "amount": "Days to turn on",
+      "submit_one": "Turn on {{count}} day",
+      "submit_other": "Turn on {{count}} days",
+      "submitIdle": "Turn on days",
+      "range": "Enter a whole number from 1 to {{max}}.",
+      "pauseHint": "Pro starts now or after the days already turned on. Your paid plan is paused for that time and extended by the same number of days.",
+      "empty": "Days appear once someone you invited pays for a plan for the first time.",
+      "activated": "Pro is on until {{date}}"
+    },
+    "history": {
+      "title": "History",
+      "reward_one": "+{{count}} day for a {{plan}} payment",
+      "reward_other": "+{{count}} days for a {{plan}} payment",
+      "revoked_one": "{{count}} day removed: the payment was refunded",
+      "revoked_other": "{{count}} days removed: the payment was refunded",
+      "activation_one": "{{count}} Pro day on: {{from}} – {{to}}",
+      "activation_other": "{{count}} Pro days on: {{from}} – {{to}}"
     }
   }
 }

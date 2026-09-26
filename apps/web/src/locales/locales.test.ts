@@ -76,3 +76,27 @@ describe('словари интерфейса', () => {
     expect(cyrillic).toEqual([]);
   });
 });
+
+/**
+ * Исходники дашборда. Ключ, которого нет в словаре, i18next не роняет: он
+ * показывает сам ключ — так в карточке источника донатов стояло
+ * «sources.account», а в уведомлении комнаты — «billing.paywall.title».
+ */
+const sources = import.meta.glob<string>(['../**/*.{ts,tsx}', '!../**/*.test.{ts,tsx}'], {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+});
+
+describe('ключи в коде', () => {
+  it('каждый ключ, написанный строкой в t(...), есть в словаре', () => {
+    expect(Object.keys(sources).length).toBeGreaterThan(50);
+    const missing = Object.entries(sources).flatMap(([path, text]) =>
+      [...text.matchAll(/\bt\(\s*'([\w.]+)'/g)]
+        .map((match) => match[1] ?? '')
+        .filter((key) => !ruKeys.has(key))
+        .map((key) => `${path}: ${key}`),
+    );
+    expect(missing).toEqual([]);
+  });
+});

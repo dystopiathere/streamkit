@@ -137,6 +137,7 @@ export class OverlayGateway
       // показать собранную сумму сразу, а не через первый донат.
       state: await this.widgetState.computeById(resolved.widgetId),
       chatChannels,
+      branding: resolved.branding,
       ...resolved.widget,
     };
     client.emit(SOCKET_EVENTS.bootstrap, bootstrap);
@@ -199,6 +200,7 @@ export class OverlayGateway
           const payload: ConfigUpdatedMessage = {
             widgetId: message.widgetId,
             isEnabled: message.isEnabled,
+            branding: message.branding,
             type: message.type,
             config: message.config,
           } as ConfigUpdatedMessage;
@@ -211,6 +213,18 @@ export class OverlayGateway
         case 'chat-channel':
           await this.rejoinChatRooms(message.userId, message.channels);
           break;
+
+        case 'plan-changed': {
+          // Смена тарифа редкая, поэтому конфиги считает каждая реплика, а
+          // отправляет только в комнаты, где у неё есть открытые сцены.
+          const configs = await this.widgets.overlayConfigs(message.userId);
+          for (const config of configs) {
+            const room = widgetRoom(config.widgetId);
+            if ((await this.server.local.in(room).fetchSockets()).length === 0) continue;
+            this.server.local.to(room).emit(SOCKET_EVENTS.configUpdated, config);
+          }
+          break;
+        }
 
         case 'chat': {
           this.server.local

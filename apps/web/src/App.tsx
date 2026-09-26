@@ -18,6 +18,7 @@ import { LoginPage } from './pages/LoginPage';
 import { BillingPage } from './pages/BillingPage';
 import { PlatformsPage } from './pages/PlatformsPage';
 import { PrivacyPage } from './pages/PrivacyPage';
+import { ReferralsPage } from './pages/ReferralsPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { RoomsPage } from './pages/RoomsPage';
@@ -185,6 +186,7 @@ export function App(): React.JSX.Element {
                 <Route path="sources" element={<SourcesPage />} />
                 <Route path="security" element={<SecurityPage />} />
                 <Route path="billing" element={<BillingPage />} />
+                <Route path="referrals" element={<ReferralsPage />} />
                 <Route path="privacy" element={<PrivacyPage />} />
               </Route>
               <Route path="/sources" element={<MovedTo to="/account/sources" />} />

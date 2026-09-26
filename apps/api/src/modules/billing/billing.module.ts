@@ -9,13 +9,28 @@ import {
 } from './billing.controller';
 import { BillingService } from './billing.service';
 import { PAYMENT_GATEWAY } from './payment-gateway';
+import { ReferralsController } from './referrals.controller';
+import { ReferralsService } from './referrals.service';
 import { YooKassaGateway } from './yookassa.gateway';
 
-/** Подписка на платформу: оформление и уведомления — в API, продление — в воркере. */
+/**
+ * Подписка на платформу: оформление и уведомления — в API, продление — в
+ * воркере. Здесь же приглашения: их дни начисляются оплатой и сдвигают период.
+ */
 @Module({
-  controllers: [BillingController, YooKassaWebhookController, PublicSellerController],
-  providers: [BillingService, HttpClient, { provide: PAYMENT_GATEWAY, useClass: YooKassaGateway }],
-  exports: [BillingService],
+  controllers: [
+    BillingController,
+    YooKassaWebhookController,
+    PublicSellerController,
+    ReferralsController,
+  ],
+  providers: [
+    BillingService,
+    ReferralsService,
+    HttpClient,
+    { provide: PAYMENT_GATEWAY, useClass: YooKassaGateway },
+  ],
+  exports: [BillingService, ReferralsService],
 })
 export class BillingModule {}
 
@@ -48,6 +63,7 @@ export class BillingScheduler {
         // списывается, и порядок экономит лишний такт.
         await this.billing.sendRenewalNotices();
         await this.billing.sendExpiryNotices();
+        await this.billing.sendBonusEndNotices();
         await this.billing.renewDue();
       });
     } catch (error) {

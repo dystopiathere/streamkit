@@ -56,7 +56,7 @@ export function RoomPage(): React.JSX.Element {
         error instanceof ApiError && error.status === 503
           ? t('rooms.notConfigured')
           : error instanceof ApiError && error.status === 402
-            ? t('billing.paywall.title')
+            ? t('billing.paywall.rooms.title')
             : t('common.error'),
       );
     }

@@ -1,6 +1,6 @@
 # StreamKit Terms of Service
 
-Version No. 13 of 26.09.2026
+Version No. 14 of 26.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/terms?lang=ru); if the two
@@ -164,7 +164,7 @@ The Operator sends to the account email address the service emails necessary to
 perform the contract: about a password change, about a sign-in from a browser
 never used with the account before, about two-factor sign-in being turned off,
 about an upcoming automatic charge, about a paid period ending soon without
-renewal, about changes in price and terms and about new versions of documents,
+renewal, about the trial and free Pro days ending soon, about changes in price and terms and about new versions of documents,
 as well as an email with a password recovery link, sent only on a request made
 on the sign-in page. Emails are sent only to a confirmed address (clause 3.2.1).
 Security emails cannot be turned off: without them the user would not learn about

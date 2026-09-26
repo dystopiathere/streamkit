@@ -1,8 +1,15 @@
-import { defaultAlertWidgetConfig } from '@streamkit/contracts';
+import {
+  alertWidgetConfigSchema,
+  defaultAlertWidgetConfig,
+  goalWidgetConfigSchema,
+  latestWidgetConfigSchema,
+  rouletteWidgetConfigSchema,
+  type WidgetConfig,
+} from '@streamkit/contracts';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { AlertCard } from './AlertCard';
-import { canvasScale, WidgetStage } from './stage';
+import { canvasScale, stageHasContent, WidgetStage } from './stage';
 
 describe('окно виджета', () => {
   it('рисует содержимое ровно в пикселях окна', () => {
@@ -65,5 +72,72 @@ describe('ширина картинки оповещения', () => {
     };
     const { container } = render(<AlertCard event={event} config={config} animate={false} />);
     expect(container.querySelector('img')!.style.maxWidth).toBe('320px');
+  });
+});
+
+describe('подпись бесплатного тарифа', () => {
+  it('стоит в окне виджета, когда её просит тариф, и только тогда', () => {
+    const { rerender } = render(
+      <WidgetStage canvas={{ width: 800, height: 600 }} branding>
+        <span>виджет</span>
+      </WidgetStage>,
+    );
+    const badge = screen.getByTestId('widget-branding');
+    expect(badge.textContent).toBe('stream-kit.ru');
+    // Внутри окна, а не поверх всего места: масштабируется вместе с виджетом.
+    expect(screen.getByTestId('widget-canvas').contains(badge)).toBe(true);
+
+    rerender(
+      <WidgetStage canvas={{ width: 800, height: 600 }}>
+        <span>виджет</span>
+      </WidgetStage>,
+    );
+    expect(screen.queryByTestId('widget-branding')).toBeNull();
+  });
+
+  it('есть и у виджета без окна', () => {
+    render(
+      <WidgetStage canvas={null} branding>
+        <span>виджет</span>
+      </WidgetStage>,
+    );
+    expect(screen.getByTestId('widget-branding')).toBeTruthy();
+  });
+});
+
+describe('подпись у виджетов, пустых между событиями', () => {
+  const idle = { alertShown: false, latestEvent: false, spinning: false };
+  const alerts: WidgetConfig = { type: 'alerts', config: alertWidgetConfigSchema.parse({}) };
+  const latest: WidgetConfig = { type: 'latest', config: latestWidgetConfigSchema.parse({}) };
+  const hiddenWheel: WidgetConfig = {
+    type: 'roulette',
+    config: rouletteWidgetConfigSchema.parse({ hideWhenIdle: true }),
+  };
+
+  it('у оповещений — только пока оповещение на экране', () => {
+    expect(stageHasContent(alerts, idle)).toBe(false);
+    expect(stageHasContent(alerts, { ...idle, alertShown: true })).toBe(true);
+  });
+
+  it('у последнего события — с событием или с текстом на пустой случай', () => {
+    expect(stageHasContent(latest, idle)).toBe(false);
+    expect(stageHasContent(latest, { ...idle, latestEvent: true })).toBe(true);
+    const withText: WidgetConfig = {
+      type: 'latest',
+      config: latestWidgetConfigSchema.parse({ emptyText: 'Ждём первого' }),
+    };
+    expect(stageHasContent(withText, idle)).toBe(true);
+  });
+
+  it('у рулетки, скрытой между прокрутами, — только на прокрут', () => {
+    expect(stageHasContent(hiddenWheel, idle)).toBe(false);
+    expect(stageHasContent(hiddenWheel, { ...idle, spinning: true })).toBe(true);
+    const wheel: WidgetConfig = { type: 'roulette', config: rouletteWidgetConfigSchema.parse({}) };
+    expect(stageHasContent(wheel, idle)).toBe(true);
+  });
+
+  it('у остальных — всегда', () => {
+    const goal: WidgetConfig = { type: 'goal', config: goalWidgetConfigSchema.parse({}) };
+    expect(stageHasContent(goal, idle)).toBe(true);
   });
 });

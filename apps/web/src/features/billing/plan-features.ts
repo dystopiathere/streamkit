@@ -23,5 +23,6 @@ export function planFeatureList(plan: Plan, t: TFunction): string[] {
       : t('billing.features.platforms', { count: features.platforms }),
     ...(features.rooms ? [t('billing.features.rooms')] : []),
     ...(features.advancedStyling ? [t('billing.features.styling')] : []),
+    features.branding ? t('billing.features.branding') : t('billing.features.noBranding'),
   ];
 }

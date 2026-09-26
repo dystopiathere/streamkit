@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 920" width="1440" height="920" font-family="Arial, Helvetica, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#3c4043"/>
+    </marker>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1a5fb4"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1440" height="920" fill="#ffffff"/>
+
+  <text x="40" y="52" font-size="28" font-weight="700" fill="#202124">StreamKit: architecture and YouTube API usage</text>
+  <text x="40" y="82" font-size="16" fill="#5f6368">Each streamer connects only their own YouTube channel (OAuth scope youtube.readonly). All calls use that streamer's token.</text>
+
+  <!-- ===================== Clients ===================== -->
+  <rect x="40" y="120" width="300" height="600" rx="14" fill="#f1f3f4" stroke="#9aa0a6"/>
+  <text x="60" y="152" font-size="18" font-weight="700" fill="#202124">Streamer's devices</text>
+
+  <rect x="60" y="175" width="260" height="190" rx="10" fill="#ffffff" stroke="#5f6368"/>
+  <text x="76" y="203" font-size="16" font-weight="700" fill="#202124">Dashboard (web browser)</text>
+  <text x="76" y="229" font-size="14" fill="#3c4043">• Profile › Platforms: connect /</text>
+  <text x="88" y="247" font-size="14" fill="#3c4043">disconnect YouTube</text>
+  <text x="76" y="271" font-size="14" fill="#3c4043">• Analytics of own channel</text>
+  <text x="76" y="295" font-size="14" fill="#3c4043">• Stream window: live chat,</text>
+  <text x="88" y="313" font-size="14" fill="#3c4043">viewers, events</text>
+  <text x="76" y="341" font-size="13" fill="#5f6368">HTTPS + WebSocket</text>
+
+  <rect x="60" y="390" width="260" height="170" rx="10" fill="#ffffff" stroke="#5f6368"/>
+  <text x="76" y="418" font-size="16" font-weight="700" fill="#202124">OBS browser source</text>
+  <text x="76" y="444" font-size="14" fill="#3c4043">• Chat overlay on the</text>
+  <text x="88" y="462" font-size="14" fill="#3c4043">streamer's own stream</text>
+  <text x="76" y="486" font-size="14" fill="#3c4043">• Alert overlay: memberships,</text>
+  <text x="88" y="504" font-size="14" fill="#3c4043">Super Chats (opt-in)</text>
+  <text x="76" y="538" font-size="13" fill="#5f6368">WebSocket, secret link</text>
+
+  <rect x="60" y="585" width="260" height="115" rx="10" fill="#ffffff" stroke="#5f6368" stroke-dasharray="6 4"/>
+  <text x="76" y="613" font-size="16" font-weight="700" fill="#202124">Viewers of the stream</text>
+  <text x="76" y="639" font-size="14" fill="#3c4043">See the overlay only as part</text>
+  <text x="76" y="657" font-size="14" fill="#3c4043">of the streamer's video.</text>
+  <text x="76" y="681" font-size="13" fill="#5f6368">No access to StreamKit</text>
+
+  <!-- ===================== StreamKit ===================== -->
+  <rect x="400" y="120" width="560" height="600" rx="14" fill="#fffbea" stroke="#b08d00"/>
+  <text x="420" y="152" font-size="18" font-weight="700" fill="#202124">StreamKit servers (Yandex Cloud, Russia)</text>
+
+  <rect x="420" y="175" width="250" height="190" rx="10" fill="#ffffff" stroke="#5f6368"/>
+  <text x="436" y="203" font-size="16" font-weight="700" fill="#202124">API server</text>
+  <text x="436" y="229" font-size="14" fill="#3c4043">• OAuth: code → tokens,</text>
+  <text x="448" y="247" font-size="14" fill="#3c4043">state bound to browser</text>
+  <text x="436" y="271" font-size="14" fill="#3c4043">• Serves own analytics only</text>
+  <text x="436" y="295" font-size="14" fill="#3c4043">• WebSocket gateways push</text>
+  <text x="448" y="313" font-size="14" fill="#3c4043">chat to dashboard/overlay</text>
+  <text x="436" y="341" font-size="14" fill="#3c4043">• Disconnect: revoke + delete</text>
+
+  <rect x="690" y="175" width="250" height="190" rx="10" fill="#ffffff" stroke="#5f6368"/>
+  <text x="706" y="203" font-size="16" font-weight="700" fill="#202124">Background worker</text>
+  <text x="706" y="229" font-size="14" fill="#3c4043">• Metrics poller: every 15 min,</text>
+  <text x="718" y="247" font-size="14" fill="#3c4043">every 1 min while live</text>
+  <text x="706" y="271" font-size="14" fill="#3c4043">• Live chat source: finds the</text>
+  <text x="718" y="289" font-size="14" fill="#3c4043">active broadcast, holds one</text>
+  <text x="718" y="307" font-size="14" fill="#3c4043">streamList per broadcast</text>
+  <text x="706" y="331" font-size="14" fill="#3c4043">• Quota guard before every call</text>
+
+  <rect x="420" y="400" width="250" height="160" rx="10" fill="#ffffff" stroke="#5f6368"/>
+  <text x="436" y="428" font-size="16" font-weight="700" fill="#202124">PostgreSQL</text>
+  <text x="436" y="454" font-size="14" fill="#3c4043">• OAuth tokens encrypted</text>
+  <text x="448" y="472" font-size="14" fill="#3c4043">(AES-256-GCM)</text>
+  <text x="436" y="496" font-size="14" fill="#3c4043">• Channel metrics: 90 days</text>
+  <text x="436" y="520" font-size="14" fill="#3c4043">• Membership / Super Chat</text>
+  <text x="448" y="538" font-size="14" fill="#3c4043">events in own history</text>
+
+  <rect x="690" y="400" width="250" height="160" rx="10" fill="#ffffff" stroke="#5f6368"/>
+  <text x="706" y="428" font-size="16" font-weight="700" fill="#202124">Redis (Valkey)</text>
+  <text x="706" y="454" font-size="14" fill="#3c4043">• Daily quota counters,</text>
+  <text x="718" y="472" font-size="14" fill="#3c4043">Pacific-time day</text>
+  <text x="706" y="496" font-size="14" fill="#3c4043">• Real-time bus: chat passes</text>
+  <text x="718" y="514" font-size="14" fill="#3c4043">through, never persisted</text>
+  <text x="706" y="538" font-size="14" fill="#3c4043">• Who is watching (90 s TTL)</text>
+
+  <rect x="420" y="585" width="520" height="115" rx="10" fill="#fff4c2" stroke="#b08d00"/>
+  <text x="436" y="613" font-size="16" font-weight="700" fill="#202124">Not stored anywhere</text>
+  <text x="436" y="639" font-size="14" fill="#3c4043">Live chat messages and authors' names. No search.list, no other channels,</text>
+  <text x="436" y="657" font-size="14" fill="#3c4043">no ads, no resale, no AI training, no sharing with third parties.</text>
+  <text x="436" y="681" font-size="14" fill="#3c4043">Chat is read only while the streamer's overlay or stream window is open.</text>
+
+  <!-- ===================== Google ===================== -->
+  <rect x="1020" y="120" width="380" height="600" rx="14" fill="#e8f0fe" stroke="#1a5fb4"/>
+  <text x="1040" y="152" font-size="18" font-weight="700" fill="#202124">Google</text>
+
+  <rect x="1040" y="175" width="340" height="110" rx="10" fill="#ffffff" stroke="#1a5fb4"/>
+  <text x="1056" y="203" font-size="16" font-weight="700" fill="#202124">OAuth 2.0</text>
+  <text x="1056" y="229" font-size="14" fill="#3c4043">Consent screen, scope youtube.readonly</text>
+  <text x="1056" y="253" font-size="14" fill="#3c4043">Token refresh; revoke on disconnect</text>
+  <text x="1056" y="271" font-size="13" fill="#5f6368">myaccount.google.com/permissions</text>
+
+  <rect x="1040" y="310" width="340" height="200" rx="10" fill="#ffffff" stroke="#1a5fb4"/>
+  <text x="1056" y="338" font-size="16" font-weight="700" fill="#202124">YouTube Data API v3</text>
+  <text x="1056" y="364" font-size="14" fill="#3c4043">channels.list (mine=true) — 1 unit</text>
+  <text x="1056" y="388" font-size="14" fill="#3c4043">liveBroadcasts.list</text>
+  <text x="1068" y="406" font-size="14" fill="#3c4043">(broadcastStatus=active) — 1 unit</text>
+  <text x="1056" y="430" font-size="14" fill="#3c4043">videos.list (liveStreamingDetails)</text>
+  <text x="1068" y="448" font-size="14" fill="#3c4043">— 1 unit, only while live</text>
+  <text x="1056" y="478" font-size="13" fill="#5f6368">One analytics poll = 3 units</text>
+  <text x="1056" y="496" font-size="13" fill="#5f6368">search.list is never called</text>
+
+  <rect x="1040" y="535" width="340" height="165" rx="10" fill="#ffffff" stroke="#1a5fb4"/>
+  <text x="1056" y="563" font-size="16" font-weight="700" fill="#202124">YouTube Live Streaming API</text>
+  <text x="1056" y="589" font-size="14" fill="#3c4043">liveChatMessages.streamList (gRPC)</text>
+  <text x="1056" y="613" font-size="14" fill="#3c4043">One stream per live broadcast of the</text>
+  <text x="1056" y="631" font-size="14" fill="#3c4043">streamer's own channel; resumed with</text>
+  <text x="1056" y="649" font-size="14" fill="#3c4043">pageToken after a disconnect</text>
+  <text x="1056" y="679" font-size="13" fill="#5f6368">Opened only on demand (see ④)</text>
+
+  <!-- ===================== Arrows ===================== -->
+  <!-- ① dashboard -> OAuth consent -->
+  <path d="M320,200 C 352,200 352,100 384,100 L 990,100 C 1012,100 1012,215 1040,215" fill="none" stroke="#1a5fb4" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  <circle cx="680" cy="100" r="13" fill="#1a5fb4"/><text x="680" y="105" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
+
+  <!-- ② API <-> OAuth token exchange -->
+    <path d="M1040,262 L 1000,262 C 984,262 984,112 968,112 L 420,112 C 409,112 409,124 409,136 L 409,196 L 418,196" fill="none" stroke="#1a5fb4" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrowBlue)"/>
+  <circle cx="820" cy="112" r="13" fill="#1a5fb4"/><text x="820" y="117" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
+
+  <!-- ③ worker -> Data API -->
+  <path d="M940,235 L 1040,380" fill="none" stroke="#1a5fb4" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  <circle cx="990" cy="308" r="13" fill="#1a5fb4"/><text x="990" y="313" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">3</text>
+
+  <!-- ④ worker <-> streamList -->
+  <path d="M940,320 C 1000,320 990,600 1040,600" fill="none" stroke="#1a5fb4" stroke-width="2" marker-start="url(#arrowBlue)" marker-end="url(#arrowBlue)"/>
+  <circle cx="992" cy="470" r="13" fill="#1a5fb4"/><text x="992" y="475" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">4</text>
+
+  <!-- ⑤ worker -> redis bus -> API -> clients -->
+  <path d="M815,365 L 815,400" fill="none" stroke="#3c4043" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M720,400 L 720,383 L 630,383 L 630,367" fill="none" stroke="#3c4043" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M420,270 L 320,270" fill="none" stroke="#3c4043" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M420,330 C 370,330 370,470 320,470" fill="none" stroke="#3c4043" stroke-width="2" marker-end="url(#arrow)"/>
+  <circle cx="370" cy="270" r="13" fill="#3c4043"/><text x="370" y="275" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">5</text>
+
+  <!-- storage -->
+  <path d="M545,365 L 545,400" fill="none" stroke="#3c4043" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ===================== Legend ===================== -->
+  <g font-size="14" fill="#3c4043">
+    <text x="40" y="760" font-size="16" font-weight="700" fill="#202124">Flows</text>
+    <circle cx="52" cy="786" r="10" fill="#1a5fb4"/><text x="52" y="791" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
+    <text x="70" y="791">The streamer grants youtube.readonly to their own channel on Google's consent screen.</text>
+    <circle cx="52" cy="812" r="10" fill="#1a5fb4"/><text x="52" y="817" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
+    <text x="70" y="817">The API server exchanges the code for tokens and stores them encrypted; disconnect revokes the token at Google and deletes all channel data.</text>
+    <circle cx="52" cy="838" r="10" fill="#1a5fb4"/><text x="52" y="843" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">3</text>
+    <text x="70" y="843">Analytics poll (3 units): every 15 minutes, every minute while live; finding the broadcast for chat — 1 unit every 2 minutes, only while chat is open.</text>
+    <circle cx="52" cy="864" r="10" fill="#1a5fb4"/><text x="52" y="869" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">4</text>
+    <text x="70" y="869">streamList runs only while the broadcast is live AND the streamer has the chat overlay, the alert overlay with YouTube events, or the stream window open.</text>
+    <circle cx="52" cy="890" r="10" fill="#3c4043"/><text x="52" y="895" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">5</text>
+    <text x="70" y="895">Chat goes worker → Redis bus → API → WebSocket to the streamer's own dashboard and overlay, in real time and without being stored.</text>
+  </g>
+</svg>

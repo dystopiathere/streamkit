@@ -36,6 +36,9 @@ export function JoinPage(): React.JSX.Element {
   const { t } = useTranslation();
   const [token] = useState(() => window.location.hash.replace(/^#/, ''));
   const [session, setSession] = useState<GuestJoinResult | null>(null);
+  // Промокод пригласившего стримера переживает конец созвона: строка «создайте
+  // свою комнату» нужнее всего как раз после него.
+  const [hostCode, setHostCode] = useState<string | null>(null);
   const [ended, setEnded] = useState<Ended | null>(null);
   const [devices, setDevices] = useState<{ video?: string; audio?: string }>({});
   // Имя живёт здесь, а не в форме: форма монтируется заново после выхода из
@@ -101,9 +104,24 @@ export function JoinPage(): React.JSX.Element {
             setDevices(chosen);
             setEnded(null);
             setSession(result);
+            setHostCode(result.hostReferralCode);
           }}
         />
       )}
+
+      {/* Гость видел сервис в деле — ссылка на регистрацию с промокодом того,
+          кто его позвал. В новой вкладке: созвон не должен оборваться. */}
+      <p className="text-center text-sm text-muted">
+        {t('join.promo')}{' '}
+        <Link
+          to={hostCode ? `/register?ref=${encodeURIComponent(hostCode)}` : '/register'}
+          target="_blank"
+          className="underline hover:text-fg"
+        >
+          {t('join.promoLink')}
+          <NewTabHint />
+        </Link>
+      </p>
     </MainContent>
   );
 }

@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { type AuthResult, type RegisterInput, registerSchema } from '@streamkit/contracts';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Button,
@@ -44,6 +44,7 @@ const DOCUMENTS = [
 export function RegisterPage(): React.JSX.Element {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const setSession = useAuthStore((state) => state.setSession);
 
   const form = useForm<RegisterInput>({
@@ -53,6 +54,9 @@ export function RegisterPage(): React.JSX.Element {
       password: '',
       displayName: '',
       acceptDocuments: true,
+      // Ссылка из раздела «Приглашения» приносит промокод в адресе: вписывать
+      // его руками приходится только тем, кому код продиктовали.
+      referralCode: params.get('ref') ?? '',
     },
   });
 
@@ -74,6 +78,11 @@ export function RegisterPage(): React.JSX.Element {
       trackSiteEvent('signup');
       void navigate('/widgets');
     } catch (error) {
+      // Остальное форма проверила сама, и 400 при заполненном промокоде — это он.
+      if (error instanceof ApiError && error.status === 400 && values.referralCode) {
+        form.setError('referralCode', { message: error.message }, { shouldFocus: true });
+        return;
+      }
       toast.error(error instanceof ApiError ? error.message : t('common.error'));
     }
   });
@@ -120,6 +129,23 @@ export function RegisterPage(): React.JSX.Element {
               />
               <FieldHint id="password">{t('auth.passwordHint')}</FieldHint>
               <FieldError id="password" message={errors.password?.message} />
+            </div>
+
+            <div>
+              <Label htmlFor="referralCode">{t('auth.referralCode')}</Label>
+              <Input
+                id="referralCode"
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                {...describeField('referralCode', {
+                  hint: true,
+                  error: errors.referralCode?.message,
+                })}
+                {...form.register('referralCode')}
+              />
+              <FieldHint id="referralCode">{t('auth.referralCodeHint')}</FieldHint>
+              <FieldError id="referralCode" message={errors.referralCode?.message} />
             </div>
 
             {/* Документы — перед кнопкой, а не после: фраза объясняет, что

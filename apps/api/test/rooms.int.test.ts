@@ -209,6 +209,11 @@ describe('Приватные комнаты (feature)', () => {
     const response = await join(invite.raw, { displayName: '  Вася Пупкин  ' }).expect(200);
     expect(response.body.url).toBe('wss://livekit.test');
     expect(response.body.roomName).toBe('Вечерний эфир');
+    // Ссылка «создайте свою комнату» у гостя ведёт на регистрацию с промокодом
+    // стримера — тем же, что он видит у себя в «Приглашениях».
+    const owned = await harness.prisma.user.findUniqueOrThrow({ where: { id: owner.userId } });
+    expect(response.body.hostReferralCode).toBe(owned.referralCode);
+    expect(response.body.hostReferralCode).toMatch(/^[A-Z0-9]{8}$/);
 
     const claims = await verifier().verify(response.body.token as string);
     expect(claims.sub).toMatch(new RegExp(`^guest:${invite.id}:`));

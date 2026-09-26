@@ -10,6 +10,7 @@ import {
 import type { Widget as PrismaWidget } from '@prisma/client';
 import {
   type AlertWidgetConfig,
+  type ConfigUpdatedMessage,
   applyPlanToConfig,
   configSchemaFor,
   type CreatedOverlayToken,
@@ -80,6 +81,8 @@ export interface ResolvedOverlayToken {
   isEnabled: boolean;
   /** Тип и конфиг вместе: оверлей без типа не знает, чем рендерить конфиг. */
   widget: WidgetConfig;
+  /** Подпись «stream-kit.ru» в кадре: бесплатный тариф владельца. */
+  branding: boolean;
 }
 
 @Injectable()
@@ -190,13 +193,15 @@ export class WidgetsService {
     // вернуться), но без «Про» рисуется базовым. Урезание — здесь, на выходе, а
     // не при сохранении: иначе тариф, кончившийся на один день, стирал бы
     // раскладку навсегда.
+    const features = await this.billing.planFeatures(userId);
     await this.bus.publish({
       kind: 'widget-config',
       userId,
       widgetId,
       isEnabled: result.isEnabled,
+      branding: features.branding,
       type: result.type,
-      config: applyPlanToConfig(result.config, await this.billing.planFeatures(userId)),
+      config: applyPlanToConfig(result.config, features),
     } as BusMessage);
 
     // Состояние идёт следом отдельным сообщением, и это обязательно: часть
@@ -352,6 +357,7 @@ export class WidgetsService {
     if (row.widget.user.status !== 'ACTIVE') return null;
 
     const widget = parseWidgetConfig(row.widget.type, row.widget.config);
+    const features = await this.billing.planFeatures(row.widget.userId);
     return {
       tokenId: row.id,
       widgetId: row.widgetId,
@@ -363,12 +369,31 @@ export class WidgetsService {
       // работать сразу.
       widget: {
         ...widget,
-        config: applyPlanToConfig(
-          widget.config,
-          await this.billing.planFeatures(row.widget.userId),
-        ),
+        config: applyPlanToConfig(widget.config, features),
       } as ResolvedOverlayToken['widget'],
+      branding: features.branding,
     };
+  }
+
+  /**
+   * Конфиги всех виджетов владельца в том виде, в каком их видит оверлей:
+   * приведённые к тарифу и с подписью по нему. Для рассылки после смены
+   * тарифа (`plan-changed`).
+   */
+  async overlayConfigs(userId: string): Promise<ConfigUpdatedMessage[]> {
+    const rows = await this.prisma.widget.findMany({ where: { userId } });
+    if (rows.length === 0) return [];
+    const features = await this.billing.planFeatures(userId);
+    return rows.map((row) => {
+      const widget = parseWidgetConfig(row.type, row.config);
+      return {
+        widgetId: row.id,
+        isEnabled: row.isEnabled,
+        branding: features.branding,
+        ...widget,
+        config: applyPlanToConfig(widget.config, features),
+      } as ConfigUpdatedMessage;
+    });
   }
 
   /** Живые ссылки всех виджетов владельца. */

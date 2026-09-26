@@ -38,6 +38,7 @@ import {
   TimerDisplay,
   TopDonorsList,
   WidgetStage,
+  BrandingBadge,
 } from '@streamkit/ui';
 import {
   type CSSProperties,
@@ -71,6 +72,7 @@ export function WidgetPreview({
   alertTrigger = null,
   rouletteSpin = null,
   onRouletteFinished,
+  branding = false,
 }: {
   type: WidgetType;
   config: Record<string, unknown>;
@@ -82,6 +84,8 @@ export function WidgetPreview({
   /** Прокрут рулетки, который проиграть в предпросмотре. */
   rouletteSpin?: RouletteSpin | null;
   onRouletteFinished?: (spinId: string) => void;
+  /** Подпись бесплатного тарифа — там же, где её увидят зрители. */
+  branding?: boolean;
 }): React.JSX.Element {
   const canvas = canvasOf(config);
   const surface = (
@@ -98,10 +102,19 @@ export function WidgetPreview({
   // Окно задано — предпросмотр показывает ровно браузер-сорс этого размера,
   // уменьшенный под колонку: и пропорции, и обрезку того, что вылезло за окно.
   // Не задано (виджеты до появления окна) — прежний кадр с автомасштабом.
-  if (!canvas) return <FitToFrame>{surface}</FitToFrame>;
+  if (!canvas) {
+    return (
+      <div className="relative">
+        <FitToFrame>{surface}</FitToFrame>
+        {branding ? <BrandingBadge /> : null}
+      </div>
+    );
+  }
   return (
     <CanvasFrame canvas={canvas} className="checkerboard rounded-lg">
-      <WidgetStage canvas={canvas}>{surface}</WidgetStage>
+      <WidgetStage canvas={canvas} branding={branding}>
+        {surface}
+      </WidgetStage>
     </CanvasFrame>
   );
 }

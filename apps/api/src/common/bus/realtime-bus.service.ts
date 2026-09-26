@@ -22,6 +22,8 @@ export type BusMessage =
       userId: string;
       widgetId: string;
       isEnabled: boolean;
+      /** Подпись «stream-kit.ru» в кадре — по тарифу владельца. */
+      branding: boolean;
     } & WidgetConfig)
   | { kind: 'widget-state'; widgetId: string; state: WidgetState }
   // Прокрут рулетки — событие, а не состояние: см. `rouletteSpinMessageSchema`.
@@ -44,7 +46,12 @@ export type BusMessage =
   | { kind: 'channel-live'; userId: string; platform: Platform; isLive: boolean }
   // Аккаунт заблокирован: открытые вкладки дашборда отключаются, а не
   // досматривают ленту событий до конца срока токена.
-  | { kind: 'user-suspended'; userId: string };
+  | { kind: 'user-suspended'; userId: string }
+  // Сменился тариф владельца: оплата, пробный период, дни за приглашения,
+  // возврат или конец срока. Открытые сцены получают конфиг, приведённый к
+  // новому тарифу, — и с подписью или без неё. Каждая реплика пересчитывает
+  // конфиги только для своих сокетов.
+  | { kind: 'plan-changed'; userId: string };
 
 /**
  * Шина реального времени поверх Redis pub/sub.

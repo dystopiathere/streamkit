@@ -1,6 +1,12 @@
 import { GRACE_DAYS, PLAN_FEATURES } from '@streamkit/contracts';
 import { describe, expect, it } from 'vitest';
-import { addBillingPeriod, DAY_MS, effectivePlan, subscriptionStatus } from './billing-periods';
+import {
+  addBillingPeriod,
+  DAY_MS,
+  effectivePlan,
+  paidPlan,
+  subscriptionStatus,
+} from './billing-periods';
 
 const utc = (iso: string) => new Date(iso);
 
@@ -61,39 +67,58 @@ describe('действующий тариф', () => {
   const inside = utc('2026-10-01T00:00:00Z');
 
   it('без подписки — бесплатный', () => {
-    expect(effectivePlan(null, inside)).toBe('free');
-    expect(effectivePlan({ plan: 'PRO', currentPeriodEnd: null, autoRenew: false }, inside)).toBe(
-      'free',
-    );
+    expect(effectivePlan(null, inside, null)).toBe('free');
+    expect(
+      effectivePlan({ plan: 'PRO', currentPeriodEnd: null, autoRenew: false }, inside, null),
+    ).toBe('free');
   });
 
   it('внутри оплаченного периода — тариф из подписки', () => {
-    expect(effectivePlan({ plan: 'PRO', currentPeriodEnd: end, autoRenew: true }, inside)).toBe(
-      'pro',
-    );
     expect(
-      effectivePlan({ plan: 'MULTISTREAM', currentPeriodEnd: end, autoRenew: false }, inside),
+      effectivePlan({ plan: 'PRO', currentPeriodEnd: end, autoRenew: true }, inside, null),
+    ).toBe('pro');
+    expect(
+      effectivePlan({ plan: 'MULTISTREAM', currentPeriodEnd: end, autoRenew: false }, inside, null),
     ).toBe('multistream');
   });
 
   it('в льготные дни тариф ещё действует, после них — нет', () => {
     const grace = new Date(end.getTime() + DAY_MS);
     const late = new Date(end.getTime() + GRACE_DAYS * DAY_MS);
-    expect(effectivePlan({ plan: 'PRO', currentPeriodEnd: end, autoRenew: true }, grace)).toBe(
-      'pro',
-    );
-    expect(effectivePlan({ plan: 'PRO', currentPeriodEnd: end, autoRenew: true }, late)).toBe(
+    expect(
+      effectivePlan({ plan: 'PRO', currentPeriodEnd: end, autoRenew: true }, grace, null),
+    ).toBe('pro');
+    expect(effectivePlan({ plan: 'PRO', currentPeriodEnd: end, autoRenew: true }, late, null)).toBe(
       'free',
     );
     // Без автопродления льготных дней нет: тариф кончается вместе с периодом.
-    expect(effectivePlan({ plan: 'PRO', currentPeriodEnd: end, autoRenew: false }, grace)).toBe(
-      'free',
-    );
+    expect(
+      effectivePlan({ plan: 'PRO', currentPeriodEnd: end, autoRenew: false }, grace, null),
+    ).toBe('free');
   });
 
   it('истёкшая подписка не открывает ничего сверх бесплатного', () => {
     const late = new Date(end.getTime() + 365 * DAY_MS);
-    const plan = effectivePlan({ plan: 'PRO', currentPeriodEnd: end, autoRenew: true }, late);
+    const plan = effectivePlan({ plan: 'PRO', currentPeriodEnd: end, autoRenew: true }, late, null);
     expect(PLAN_FEATURES[plan]).toEqual(PLAN_FEATURES.free);
+  });
+});
+
+describe('«Про» за приглашения', () => {
+  const end = utc('2026-10-15T00:00:00Z');
+  const inside = utc('2026-10-01T00:00:00Z');
+  const multistream = { plan: 'MULTISTREAM' as const, currentPeriodEnd: end, autoRenew: true };
+
+  it('пока срок не кончился — «Про» поверх любого тарифа', () => {
+    const until = new Date(inside.getTime() + DAY_MS);
+    expect(effectivePlan(null, inside, until)).toBe('pro');
+    expect(effectivePlan(multistream, inside, until)).toBe('pro');
+  });
+
+  it('после срока — снова оплаченный тариф, а оплаченным тариф не становится вовсе', () => {
+    expect(effectivePlan(multistream, inside, inside)).toBe('multistream');
+    expect(effectivePlan(null, inside, new Date(inside.getTime() - DAY_MS))).toBe('free');
+    expect(paidPlan(null, inside)).toBe('free');
+    expect(paidPlan(multistream, inside)).toBe('multistream');
   });
 });

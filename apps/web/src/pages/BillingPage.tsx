@@ -6,6 +6,7 @@ import {
   type PaidPlan,
   PLAN_PRICES,
   type SubscriptionView,
+  TRIAL_DAYS,
 } from '@streamkit/contracts';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +19,7 @@ import {
   useReturnedPayment,
   useSubscription,
   useRemovePaymentMethod,
+  useStartTrial,
   useUpdateSubscription,
 } from '@/features/billing/queries';
 import { planFeatureList } from '@/features/billing/plan-features';
@@ -68,6 +70,28 @@ export function BillingPage(): React.JSX.Element {
           {t(`billing.returned.${returned.data.status}`)}
         </p>
       ) : null}
+
+      {subscription.data?.bonusProUntil ? (
+        <p
+          data-testid="bonus-pro"
+          className="rounded-lg border border-border bg-surface-hover p-3 text-sm"
+        >
+          {subscription.data.trialEndsAt
+            ? t('billing.trial.active', { date: formatDate(subscription.data.trialEndsAt) }) + ' '
+            : null}
+          {t(
+            subscription.data.plan === 'free' ? 'billing.referralProFree' : 'billing.referralPro',
+            {
+              date: formatDate(subscription.data.bonusProUntil),
+            },
+          )}{' '}
+          <Link to="/account/referrals" className="underline hover:text-fg">
+            {t('billing.referralProLink')}
+          </Link>
+        </p>
+      ) : null}
+
+      {subscription.data?.trialAvailable ? <TrialOffer /> : null}
 
       {subscription.isLoading ? (
         <p role="status" className="text-muted">
@@ -243,6 +267,33 @@ function CurrentPlan({ subscription }: { subscription: SubscriptionView }): Reac
           </Button>
         </div>
       ) : null}
+    </Card>
+  );
+}
+
+/**
+ * Пробный период «Про»: один раз, без карты. Стоит над оформлением, потому
+ * что для того, кто ещё не платил, это самый короткий путь увидеть «Про» в
+ * деле — а оплатить можно и потом, не потеряв пробных дней.
+ */
+function TrialOffer(): React.JSX.Element {
+  const { t } = useTranslation();
+  const startTrial = useStartTrial();
+  return (
+    <Card className="space-y-3">
+      <h2 className="font-medium">{t('billing.trial.title', { days: TRIAL_DAYS })}</h2>
+      <p className="text-sm text-muted">{t('billing.trial.text')}</p>
+      <Button
+        isLoading={startTrial.isPending}
+        onClick={() =>
+          startTrial.mutate(undefined, {
+            onError: (error) =>
+              toast.error(error instanceof ApiError ? error.message : t('common.error')),
+          })
+        }
+      >
+        {t('billing.trial.start', { days: TRIAL_DAYS })}
+      </Button>
     </Card>
   );
 }

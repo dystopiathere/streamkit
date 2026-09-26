@@ -103,6 +103,12 @@ export const configUpdatedMessageSchema = z
   .object({
     widgetId: z.string().uuid(),
     isEnabled: z.boolean(),
+    /**
+     * Подпись «stream-kit.ru» в углу — по тарифу владельца. Едет с настройками:
+     * тариф кончается посреди эфира, и открытая сцена узнаёт об этом рассылкой
+     * конфига, а не переподключением.
+     */
+    branding: z.boolean().default(false),
   })
   .and(widgetConfigSchema);
 export type ConfigUpdatedMessage = z.infer<typeof configUpdatedMessageSchema>;
@@ -176,6 +182,8 @@ export const overlayBootstrapSchema = z
      * ни одной не подключено, и показывать нечего.
      */
     chatChannels: z.array(chatChannelRefSchema).default([]),
+    /** Подпись «stream-kit.ru» в углу: бесплатный тариф владельца. */
+    branding: z.boolean().default(false),
   })
   .and(widgetConfigSchema);
 export type OverlayBootstrap = z.infer<typeof overlayBootstrapSchema>;
