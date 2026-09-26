@@ -1,6 +1,7 @@
 import { Button, DataTable, EmptyState, Input, Label, StatusPill } from '@streamkit/app-kit';
 import {
   ADMIN_SUBSCRIPTION_FILTERS,
+  ADMIN_TRIAL_FILTERS,
   type AdminUserRow,
   USER_ROLES,
   USER_STATUSES,
@@ -34,6 +35,7 @@ export function UsersPage(): React.JSX.Element {
     status: params.get('status') ?? undefined,
     role: params.get('role') ?? undefined,
     subscription: params.get('subscription') ?? undefined,
+    trial: params.get('trial') ?? undefined,
   };
   const [draft, setDraft] = useState(filters.q ?? '');
   const users = useUsers(filters);
@@ -99,6 +101,15 @@ export function UsersPage(): React.JSX.Element {
             label: t(`subscription.${value}`),
           }))}
         />
+        <SelectFilter
+          label={t('users.trial')}
+          value={filters.trial ?? ''}
+          onChange={(value) => setFilter('trial', value)}
+          options={ADMIN_TRIAL_FILTERS.map((value) => ({
+            value: value === 'any' ? '' : value,
+            label: t(`trialFilter.${value}`),
+          }))}
+        />
         {params.size > 0 ? (
           <Button
             variant="ghost"
@@ -150,7 +161,16 @@ export function UsersPage(): React.JSX.Element {
               {
                 key: 'subscription',
                 header: t('users.subscription'),
-                cell: (row) => <Status namespace="subscription" value={row.subscriptionStatus} />,
+                // У того, кто на пробном, подписки нет: без отметки он выглядел бы
+                // бесплатным, и «почему у меня открыты комнаты» было бы не понять.
+                cell: (row) => (
+                  <span className="flex flex-wrap gap-1">
+                    <Status namespace="subscription" value={row.subscriptionStatus} />
+                    {row.trial === 'active' ? (
+                      <StatusPill tone="accent">{t('users.onTrial')}</StatusPill>
+                    ) : null}
+                  </span>
+                ),
               },
               {
                 key: 'widgets',

@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
+  type AdminTrialState,
   type AdminUserDetail,
   type AdminUserListQuery,
   type AdminUserRow,
@@ -12,7 +13,7 @@ import {
 import { AuditService, type AuditContext } from '../../common/audit/audit.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { TokenService } from '../auth/token.service';
-import { DAY_MS, subscriptionStatus } from '../billing/billing-periods';
+import { DAY_MS, subscriptionStatus, toContractPlan } from '../billing/billing-periods';
 import { BillingService, toPaymentView } from '../billing/billing.service';
 import { toContractProvider } from '../events/event.mappers';
 import { EventsService } from '../events/events.service';
@@ -37,6 +38,18 @@ import {
 
 /** Писем в карточке: поддержке нужны последние, а журнал живёт полгода. */
 const MAIL_LOG_LIMIT = 50;
+
+/** Приглашённых, начислений и включений дней в карточке — последние. */
+const REFERRAL_LIMIT = 50;
+
+/** Пробный период по отметкам пользователя; фильтр списка держит те же границы. */
+export function trialState(
+  user: { trialStartedAt: Date | null; trialEndsAt: Date | null },
+  now: Date,
+): AdminTrialState {
+  if (!user.trialStartedAt) return 'never';
+  return user.trialEndsAt && user.trialEndsAt > now ? 'active' : 'ended';
+}
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -84,6 +97,7 @@ export class AdminUsersService {
         emailVerified: row.emailVerifiedAt !== null,
         createdAt: row.createdAt.toISOString(),
         lastSeenAt: iso(row.refreshTokens[0]?.lastUsedAt),
+        trial: trialState(row, now),
         subscriptionStatus: subscriptionStatus(row.subscription, now),
         widgetCount: row._count.widgets,
       })),
@@ -112,7 +126,24 @@ export class AdminUsersService {
         donationSources: { orderBy: { createdAt: 'asc' } },
         payments: { orderBy: { createdAt: 'desc' }, take: 50 },
         mailLogs: { orderBy: { createdAt: 'desc' }, take: MAIL_LOG_LIMIT },
-        _count: { select: { alertEvents: true } },
+        referredBy: { select: { id: true, email: true } },
+        referrals: {
+          orderBy: { createdAt: 'desc' },
+          take: REFERRAL_LIMIT,
+          select: {
+            id: true,
+            email: true,
+            createdAt: true,
+            referralReward: { select: { revokedAt: true } },
+          },
+        },
+        referralRewards: {
+          orderBy: { createdAt: 'desc' },
+          take: REFERRAL_LIMIT,
+          include: { referred: { select: { id: true, email: true } } },
+        },
+        referralActivations: { orderBy: { createdAt: 'desc' }, take: REFERRAL_LIMIT },
+        _count: { select: { alertEvents: true, referrals: true } },
       },
     });
     if (!user) throw new NotFoundException('Пользователь не найден');
@@ -142,6 +173,7 @@ export class AdminUsersService {
             .sort()
             .at(-1) ?? null,
         anonymizedAt: iso(user.anonymizedAt),
+        trial: trialState(user, new Date()),
       },
       sessions,
       consents: user.consents.map((consent) => ({
@@ -202,6 +234,35 @@ export class AdminUsersService {
         createdAt: mail.createdAt.toISOString(),
       })),
       eventCount: user._count.alertEvents,
+      referrals: {
+        code: user.referralCode,
+        referredBy: user.referredBy,
+        invitedCount: user._count.referrals,
+        invited: user.referrals.map((invited) => ({
+          id: invited.id,
+          email: invited.email,
+          createdAt: invited.createdAt.toISOString(),
+          rewarded: invited.referralReward !== null && invited.referralReward.revokedAt === null,
+        })),
+        balanceDays: user.referralDaysBalance,
+        rewards: user.referralRewards.map((reward) => ({
+          id: reward.id,
+          referred: reward.referred,
+          plan: toContractPlan(reward.plan),
+          days: reward.days,
+          createdAt: reward.createdAt.toISOString(),
+          revokedAt: iso(reward.revokedAt),
+        })),
+        activations: user.referralActivations.map((activation) => ({
+          id: activation.id,
+          days: activation.days,
+          startsAt: activation.startsAt.toISOString(),
+          endsAt: activation.endsAt.toISOString(),
+        })),
+        trialStartedAt: iso(user.trialStartedAt),
+        trialEndsAt: iso(user.trialEndsAt),
+        bonusProUntil: iso(user.bonusProUntil),
+      },
     };
   }
 
@@ -291,6 +352,21 @@ export class AdminUsersService {
         and.push({
           OR: [{ subscription: { is: null } }, { subscription: { currentPeriodEnd: null } }],
         });
+        break;
+      default:
+        break;
+    }
+
+    // Те же границы, что у `trialState`.
+    switch (query.trial) {
+      case 'active':
+        and.push({ trialEndsAt: { gt: now } });
+        break;
+      case 'used':
+        and.push({ trialStartedAt: { not: null } });
+        break;
+      case 'never':
+        and.push({ trialStartedAt: null });
         break;
       default:
         break;

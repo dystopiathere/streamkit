@@ -646,6 +646,142 @@ describe('Админка (feature)', () => {
       expect(list.body.items[0].emailVerified).toBe(true);
     });
 
+    it('карточка показывает приглашения: промокод, кто пригласил, начисления, включения и пробный период', async () => {
+      const admin = await staff();
+      const referrer = await streamer();
+      const invited = await streamer();
+      const quiet = await streamer();
+      const now = Date.now();
+      await harness.prisma.user.update({
+        where: { id: referrer.userId },
+        data: {
+          referralCode: 'ABCD2345',
+          referralDaysBalance: 11,
+          trialStartedAt: new Date(now - 20 * 86_400_000),
+          trialEndsAt: new Date(now - 6 * 86_400_000),
+          bonusProUntil: new Date(now + 3 * 86_400_000),
+        },
+      });
+      await harness.prisma.user.updateMany({
+        where: { id: { in: [invited.userId, quiet.userId] } },
+        data: { referredById: referrer.userId },
+      });
+      const payment = await harness.prisma.payment.create({
+        data: {
+          userId: invited.userId,
+          kind: 'INITIAL',
+          plan: 'PRO',
+          period: 'MONTH',
+          amountMinor: 49_900,
+          currency: 'RUB',
+          status: 'SUCCEEDED',
+          paidAt: new Date(),
+        },
+      });
+      await harness.prisma.referralReward.create({
+        data: {
+          referrerId: referrer.userId,
+          referredId: invited.userId,
+          paymentId: payment.id,
+          plan: 'PRO',
+          days: 14,
+        },
+      });
+      await harness.prisma.referralActivation.create({
+        data: {
+          userId: referrer.userId,
+          days: 3,
+          startsAt: new Date(now),
+          endsAt: new Date(now + 3 * 86_400_000),
+        },
+      });
+
+      const card = await request(server())
+        .get(`/api/admin/users/${referrer.userId}`)
+        .set(auth(admin.adminToken))
+        .expect(200);
+      expect(card.body.referrals).toMatchObject({
+        code: 'ABCD2345',
+        referredBy: null,
+        invitedCount: 2,
+        balanceDays: 11,
+        rewards: [
+          {
+            referred: { id: invited.userId, email: invited.email },
+            plan: 'pro',
+            days: 14,
+            revokedAt: null,
+          },
+        ],
+        activations: [{ days: 3 }],
+      });
+      expect(card.body.referrals.trialStartedAt).not.toBeNull();
+      expect(card.body.referrals.bonusProUntil).not.toBeNull();
+      const rewarded = Object.fromEntries(
+        (card.body.referrals.invited as { id: string; rewarded: boolean }[]).map((row) => [
+          row.id,
+          row.rewarded,
+        ]),
+      );
+      expect(rewarded).toEqual({ [invited.userId]: true, [quiet.userId]: false });
+
+      // У приглашённого — ссылка на пригласившего.
+      const invitedCard = await request(server())
+        .get(`/api/admin/users/${invited.userId}`)
+        .set(auth(admin.adminToken))
+        .expect(200);
+      expect(invitedCard.body.referrals).toMatchObject({
+        code: null,
+        referredBy: { id: referrer.userId, email: referrer.email },
+        invitedCount: 0,
+        trialStartedAt: null,
+      });
+    });
+
+    it('пробный период: отметка в списке и карточке, фильтр по нему', async () => {
+      const admin = await staff();
+      const onTrial = await streamer();
+      const ended = await streamer();
+      const never = await streamer();
+      const now = Date.now();
+      await harness.prisma.user.update({
+        where: { id: onTrial.userId },
+        data: { trialStartedAt: new Date(now), trialEndsAt: new Date(now + 14 * 86_400_000) },
+      });
+      await harness.prisma.user.update({
+        where: { id: ended.userId },
+        data: {
+          trialStartedAt: new Date(now - 20 * 86_400_000),
+          trialEndsAt: new Date(now - 6 * 86_400_000),
+        },
+      });
+
+      const ids = async (trial: string) => {
+        const list = await request(server())
+          .get('/api/admin/users')
+          .query({ trial, limit: 100 })
+          .set(auth(admin.adminToken))
+          .expect(200);
+        return (list.body.items as { id: string; trial: string }[])
+          .filter((row) => [onTrial.userId, ended.userId, never.userId].includes(row.id))
+          .map((row) => [row.id, row.trial]);
+      };
+      expect(await ids('active')).toEqual([[onTrial.userId, 'active']]);
+      expect(new Map(await ids('used'))).toEqual(
+        new Map([
+          [onTrial.userId, 'active'],
+          [ended.userId, 'ended'],
+        ]),
+      );
+      expect(await ids('never')).toEqual([[never.userId, 'never']]);
+
+      const card = await request(server())
+        .get(`/api/admin/users/${onTrial.userId}`)
+        .set(auth(admin.adminToken))
+        .expect(200);
+      expect(card.body.user.trial).toBe('active');
+    });
+
     it('просмотр карточки пишется в журнал с автором', async () => {
       const support = await staff('SUPPORT');
       const target = await streamer();

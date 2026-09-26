@@ -74,12 +74,25 @@ export type AdminAuthResult = z.infer<typeof adminAuthResultSchema>;
 
 export const ADMIN_SUBSCRIPTION_FILTERS = ['any', 'active', 'grace', 'expired', 'none'] as const;
 
+/**
+ * Пробный период: `active` — идёт сейчас, `used` — когда-либо включался,
+ * `never` — не включался. Отдельно от подписки: у того, кто на пробном, подписки
+ * нет вовсе, и в фильтре подписки он неотличим от бесплатного.
+ */
+export const ADMIN_TRIAL_FILTERS = ['any', 'active', 'used', 'never'] as const;
+
+/** Пробный период пользователя: не включался, идёт или кончился. */
+export const ADMIN_TRIAL_STATES = ['never', 'active', 'ended'] as const;
+export const adminTrialStateSchema = z.enum(ADMIN_TRIAL_STATES);
+export type AdminTrialState = z.infer<typeof adminTrialStateSchema>;
+
 export const adminUserListQuerySchema = cursorPaginationSchema.extend({
   /** Поиск по почте, имени или точному идентификатору. */
   q: z.string().trim().max(254).optional(),
   status: userStatusSchema.optional(),
   role: userRoleSchema.optional(),
   subscription: z.enum(ADMIN_SUBSCRIPTION_FILTERS).default('any'),
+  trial: z.enum(ADMIN_TRIAL_FILTERS).default('any'),
 });
 export type AdminUserListQuery = z.infer<typeof adminUserListQuerySchema>;
 
@@ -95,6 +108,7 @@ export const adminUserRowSchema = z.object({
   /** Последнее обновление сессии дашборда. null — не входил с момента очистки сессий. */
   lastSeenAt: isoDateSchema.nullable(),
   subscriptionStatus: subscriptionViewSchema.shape.status,
+  trial: adminTrialStateSchema,
   widgetCount: z.number().int().min(0),
 });
 export type AdminUserRow = z.infer<typeof adminUserRowSchema>;
@@ -214,6 +228,60 @@ export const adminMailLogSchema = z.object({
 });
 export type AdminMailLog = z.infer<typeof adminMailLogSchema>;
 
+/** Другой стример в сведениях о приглашениях: ссылка на его карточку. */
+export const adminReferralPeerSchema = z.object({
+  id: uuidSchema,
+  email: z.string(),
+});
+
+/**
+ * Приглашения в карточке стримера.
+ *
+ * Отвечает на обращения «дни за друга не пришли» и «где мой пробный период»:
+ * кто пригласил, кого пригласил он сам, за чьи оплаты начислены дни, сколько
+ * их накоплено и когда включены.
+ */
+export const adminReferralsSchema = z.object({
+  /** null — раздел «Приглашения» ещё не открывали, промокод не выдан. */
+  code: z.string().nullable(),
+  referredBy: adminReferralPeerSchema.nullable(),
+  /** Все зарегистрировавшиеся по промокоду. */
+  invitedCount: z.number().int().min(0),
+  /** Последние приглашённые, новые сверху. */
+  invited: z.array(
+    adminReferralPeerSchema.extend({
+      createdAt: isoDateSchema,
+      /** Оплатил и принёс дни (без отозванных возвратом). */
+      rewarded: z.boolean(),
+    }),
+  ),
+  balanceDays: z.number().int().min(0),
+  rewards: z.array(
+    z.object({
+      id: uuidSchema,
+      referred: adminReferralPeerSchema,
+      plan: paidPlanSchema,
+      days: z.number().int().positive(),
+      createdAt: isoDateSchema,
+      revokedAt: isoDateSchema.nullable(),
+    }),
+  ),
+  activations: z.array(
+    z.object({
+      id: uuidSchema,
+      days: z.number().int().positive(),
+      startsAt: isoDateSchema,
+      endsAt: isoDateSchema,
+    }),
+  ),
+  /** Пробный период: когда включён и до какого момента. */
+  trialStartedAt: isoDateSchema.nullable(),
+  trialEndsAt: isoDateSchema.nullable(),
+  /** Конец всей цепочки бесплатного «Про»: пробный период и включённые дни. */
+  bonusProUntil: isoDateSchema.nullable(),
+});
+export type AdminReferrals = z.infer<typeof adminReferralsSchema>;
+
 export const adminUserDetailSchema = z.object({
   user: adminUserRowSchema.omit({ subscriptionStatus: true, widgetCount: true }).extend({
     anonymizedAt: isoDateSchema.nullable(),
@@ -235,6 +303,7 @@ export const adminUserDetailSchema = z.object({
   mails: z.array(adminMailLogSchema),
   /** Сколько событий пришло за всё время — число, без самих событий. */
   eventCount: z.number().int().min(0),
+  referrals: adminReferralsSchema,
 });
 export type AdminUserDetail = z.infer<typeof adminUserDetailSchema>;
 
