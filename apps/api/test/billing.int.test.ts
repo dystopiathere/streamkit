@@ -1215,6 +1215,68 @@ describe('Подписка на платформу (feature)', () => {
     expect(await billing.sendRenewalNotices()).toBe(1);
   });
 
+  /** Оплаченный месяц без автопродления, кончающийся через `days` дней. */
+  async function paidWithoutRenewal(days: number) {
+    const owner = await streamer();
+    const paymentId = await subscribed(owner.token);
+    const end = new Date(Date.now() + days * DAY_MS);
+    await harness.prisma.subscription.update({
+      where: { userId: owner.userId },
+      data: { currentPeriodEnd: end, autoRenew: false },
+    });
+    await harness.prisma.payment.update({ where: { id: paymentId }, data: { periodEnd: end } });
+    return owner;
+  }
+
+  it('без автопродления оплаченный период кончается письмом — одним, на языке аккаунта', async () => {
+    const owner = await paidWithoutRenewal(2);
+    await harness.prisma.user.update({ where: { id: owner.userId }, data: { language: 'en' } });
+
+    expect(await billing.sendExpiryNotices()).toBe(1);
+    expect(await billing.sendExpiryNotices()).toBe(0);
+    expect(await billing.sendRenewalNotices()).toBe(0);
+    expect(mailer.sent).toHaveLength(1);
+    expect(mailer.sent[0]!.to).toBe(owner.email);
+    expect(mailer.sent[0]!.subject).toContain('“Pro” plan is paid until');
+    expect(mailer.sent[0]!.html).toContain('/account/billing?lang=en');
+  });
+
+  it('о конце оплаченного периода не пишут раньше срока', async () => {
+    await paidWithoutRenewal(10);
+    expect(await billing.sendExpiryNotices()).toBe(0);
+  });
+
+  it('подаренные дни кончаются без письма', async () => {
+    const owner = await paidWithoutRenewal(2);
+    // Подарок сдвигает конец за пределы оплаченного: кончается уже подарок.
+    await billing.extend(owner.userId, 1, 'pro');
+    expect(await billing.sendExpiryNotices()).toBe(0);
+    expect(mailer.sent).toHaveLength(0);
+  });
+
+  it('возвращённый платёж — не оплаченный период', async () => {
+    const owner = await paidWithoutRenewal(2);
+    await harness.prisma.payment.updateMany({
+      where: { userId: owner.userId },
+      data: { refundedAt: new Date() },
+    });
+    expect(await billing.sendExpiryNotices()).toBe(0);
+  });
+
+  it('при включённом автопродлении письмо о конце периода не уходит — уходит о списании', async () => {
+    const owner = await streamer();
+    await subscribed(owner.token);
+    expect(await billing.sendExpiryNotices()).toBe(0);
+  });
+
+  it('упавшая отправка письма о конце периода повторяется следующим тактом', async () => {
+    await paidWithoutRenewal(2);
+    mailer.fail = true;
+    expect(await billing.sendExpiryNotices()).toBe(0);
+    mailer.fail = false;
+    expect(await billing.sendExpiryNotices()).toBe(1);
+  });
+
   it('смена периода меняет сумму продления и требует нового письма', async () => {
     const { userId } = await dueSoon();
     const owner = await harness.prisma.user.findUniqueOrThrow({ where: { id: userId } });

@@ -5,11 +5,14 @@ import { AppConfig } from '../../config/app-config.service';
 export interface MailMessage {
   to: string;
   subject: string;
-  /**
-   * Только текст. HTML-писем нет намеренно: в письмо попадают имя стримера и
-   * название способа оплаты, и текст не даёт им стать разметкой.
-   */
+  /** Текстовая версия — есть у каждого письма, см. `renderMail`. */
   text: string;
+  /**
+   * Свёрстанная версия из `renderMail`. В неё попадают имя стримера и название
+   * способа оплаты — вёрстка экранирует их сама, собирать HTML в обход неё
+   * нельзя.
+   */
+  html: string;
 }
 
 /**
@@ -60,6 +63,7 @@ export class SmtpMailer implements Mailer {
       to: message.to,
       subject: message.subject,
       text: message.text,
+      html: message.html,
     });
   }
 }

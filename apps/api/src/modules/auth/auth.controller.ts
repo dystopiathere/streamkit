@@ -39,6 +39,8 @@ import { type AuthenticatedUser, CurrentUser, Public } from '../../common/auth/a
 import { zodBody } from '../../common/pipes/zod-validation.pipe';
 import { AppConfig } from '../../config/app-config.service';
 import { AuthService } from './auth.service';
+import { readDeviceCookie, setDeviceCookie } from './device-cookie';
+import { KnownDeviceService } from './known-device.service';
 import { PasswordResetService } from './password-reset.service';
 import { clearRefreshCookie, readRefreshCookie, setRefreshCookie } from './refresh-cookie';
 import { TokenService } from './token.service';
@@ -63,6 +65,7 @@ export class AuthController {
     private readonly tokens: TokenService,
     private readonly audit: AuditService,
     private readonly config: AppConfig,
+    private readonly devices: KnownDeviceService,
   ) {}
 
   @Public()
@@ -74,7 +77,8 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ): Promise<AuthResult> {
     const context = this.audit.contextFromRequest(request);
-    const { refreshToken, ...result } = await this.auth.register(body, context);
+    const deviceId = this.deviceIdFor(request, response);
+    const { refreshToken, ...result } = await this.auth.register(body, context, deviceId);
     this.issueRefreshCookie(response, refreshToken);
     return result;
   }
@@ -89,7 +93,8 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ): Promise<LoginResponse> {
     const context = this.audit.contextFromRequest(request);
-    const outcome = await this.auth.login(body, context);
+    const deviceId = this.deviceIdFor(request, response);
+    const outcome = await this.auth.login(body, context, deviceId);
 
     if (outcome.status === 'totp-required' || !outcome.result) {
       return { totpRequired: true };
@@ -118,7 +123,11 @@ export class AuthController {
 
     const context = this.audit.contextFromRequest(request);
     try {
-      const { refreshToken, ...result } = await this.auth.refresh(raw, context);
+      const { refreshToken, ...result } = await this.auth.refresh(
+        raw,
+        context,
+        this.deviceIdFor(request, response),
+      );
       this.issueRefreshCookie(response, refreshToken);
       return result;
     } catch (error) {
@@ -267,6 +276,17 @@ export class AuthController {
       body.code,
       this.audit.contextFromRequest(request),
     );
+  }
+
+  /**
+   * Метка браузера: из cookie или новая. Cookie ставится в любом случае —
+   * так продлевается её срок, и браузер, куда заходят раз в полгода, остаётся
+   * известным.
+   */
+  private deviceIdFor(request: Request, response: Response): string {
+    const deviceId = readDeviceCookie(request) ?? this.devices.issue();
+    setDeviceCookie(response, deviceId, this.config);
+    return deviceId;
   }
 
   private issueRefreshCookie(response: Response, token: string): void {

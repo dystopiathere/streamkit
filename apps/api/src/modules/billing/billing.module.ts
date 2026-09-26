@@ -47,6 +47,7 @@ export class BillingScheduler {
         // Письма раньше списаний: продление без отправленного письма не
         // списывается, и порядок экономит лишний такт.
         await this.billing.sendRenewalNotices();
+        await this.billing.sendExpiryNotices();
         await this.billing.renewDue();
       });
     } catch (error) {

@@ -13,6 +13,7 @@ import { EventsModule } from './modules/events/events.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { DonationConnectorsModule } from './modules/integrations/integrations.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
+import { LegalNoticesModule } from './modules/privacy/legal-notices.module';
 
 /**
  * Фоновый процесс.
@@ -56,6 +57,8 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
     // Продление подписок. Оформление и уведомления живут в API, а списание по
     // сохранённому способу — задача по расписанию, как любая другая.
     BillingSchedulerModule,
+    // Письма о новых редакциях документов.
+    LegalNoticesModule,
   ],
 })
 export class WorkerModule {}

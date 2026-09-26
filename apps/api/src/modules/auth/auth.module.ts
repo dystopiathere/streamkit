@@ -3,7 +3,9 @@ import { JwtModule } from '@nestjs/jwt';
 import { AppConfig } from '../../config/app-config.service';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { KnownDeviceService } from './known-device.service';
 import { PasswordResetService } from './password-reset.service';
+import { SecurityMailService } from './security-mail.service';
 import { TokenService } from './token.service';
 import { TotpService } from './totp.service';
 
@@ -23,7 +25,14 @@ import { TotpService } from './totp.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, PasswordResetService, TokenService, TotpService],
+  providers: [
+    AuthService,
+    KnownDeviceService,
+    PasswordResetService,
+    SecurityMailService,
+    TokenService,
+    TotpService,
+  ],
   exports: [AuthService, TokenService, TotpService],
 })
 export class AuthModule {}

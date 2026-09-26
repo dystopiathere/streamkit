@@ -11,10 +11,12 @@ import { AuditService, type AuditContext } from '../../common/audit/audit.servic
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { PasswordService } from '../../common/crypto/password.service';
 import { MAILER, type Mailer } from '../../common/mail/mailer';
+import { mailUrl } from '../../common/mail/mail-text';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { AppConfig } from '../../config/app-config.service';
 import { passwordResetMessage } from './password-reset-mail';
+import { SecurityMailService } from './security-mail.service';
 import { TokenService } from './token.service';
 
 /**
@@ -48,6 +50,7 @@ export class PasswordResetService {
     private readonly config: AppConfig,
     @Inject(MAILER) private readonly mailer: Mailer,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
+    private readonly securityMail: SecurityMailService,
   ) {}
 
   /**
@@ -88,11 +91,10 @@ export class PasswordResetService {
     ]);
     await this.audit.record('auth.password.reset_requested', user.id, context);
 
-    const base = this.config.webBaseUrl.replace(/\/+$/, '');
     const message = passwordResetMessage({
       email: user.email,
       displayName: user.displayName,
-      link: `${base}/reset-password#token=${token}`,
+      link: mailUrl(this.config.webBaseUrl, `/reset-password#token=${token}`, language),
       language,
     });
     // Без await — см. комментарий к методу. Сбой почты пишется в журнал без
@@ -138,5 +140,6 @@ export class PasswordResetService {
 
     await this.tokens.revokeAllForUser(record.userId);
     await this.audit.record('auth.password.reset', record.userId, context);
+    this.securityMail.passwordChanged(record.userId, 'reset', context);
   }
 }

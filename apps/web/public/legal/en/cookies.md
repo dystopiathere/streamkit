@@ -1,6 +1,6 @@
 # Cookie Policy
 
-Version No. 3 of 23.09.2026
+Version No. 4 of 26.09.2026
 
 This is an English translation provided for convenience. The governing text is
 the [Russian version](https://stream-kit.ru/legal/cookies?lang=ru); if the two
@@ -15,6 +15,7 @@ require consent.
 |---|---|---|
 | `sk_refresh` | Session renewal token. Not accessible to page scripts (httpOnly), sent only to `/api/auth` addresses. | 30 days |
 | `sk_oauth_state` | One-time marker for connecting a platform (Twitch, YouTube): confirms that the same browser that started the connection has returned. Sent only to `/api/integrations` addresses. | 10 minutes, deleted on return |
+| `sk_device` | A random browser tag. It lets us tell you by email about a sign-in to your account from a browser never used with it before. It says nothing about you; the server stores only its hash. Not accessible to page scripts (httpOnly), sent only to `/api/auth` addresses. | 400 days after the last sign-in |
 | `sk_admin_refresh` | The same as `sk_refresh`, but for an employee signing in to the admin panel on a separate address. It is never set for visitors or streamers. | 30 days |
 
 In the browser's local storage (not a cookie; it is not sent to the server by

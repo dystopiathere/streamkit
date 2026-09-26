@@ -60,8 +60,13 @@ model User {
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
   anonymizedAt        DateTime?
+  /// Язык служебных писем: `ru` или `en` — язык страницы, с которой в аккаунт
+  /// последний раз вошли или зарегистрировались. Отдельной настройки нет.
+  language            String     @default("ru") @db.VarChar(2)
 
   refreshTokens   RefreshToken[]
+  knownDevices    KnownDevice[]
+  legalNotices    LegalUpdateNotice[]
   passwordResets  PasswordResetToken[]
   consents        Consent[]
   widgets         Widget[]
@@ -100,6 +105,43 @@ model PasswordResetToken {
   @@index([userId])
   /// Уборка истёкших — по одному сроку.
   @@index([expiresAt])
+}
+
+/// Браузер, из которого уже входили в аккаунт.
+///
+/// Вход из браузера, которого здесь нет, — повод для письма «вход с нового
+/// устройства». Браузер узнаётся по случайной метке в httpOnly-cookie
+/// `sk_device`, а не по User-Agent и IP: их делят тысячи людей, и меняются они
+/// с каждым обновлением браузера и сменой сети. В БД — только HMAC метки
+/// (`TOKEN_HASH_PEPPER`), как у сессий.
+model KnownDevice {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  deviceHash String
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceHash])
+  /// Уборка забытых браузеров — по последнему появлению.
+  @@index([lastSeenAt])
+}
+
+/// Письмо о новой редакции документа: кому, о каком документе и какой
+/// редакции. Уникальность — гарантия одного письма на редакцию, даже если
+/// рассылка прервалась посередине и продолжилась с другой реплики.
+model LegalUpdateNotice {
+  id       String          @id @default(uuid()) @db.Uuid
+  userId   String          @db.Uuid
+  document ConsentDocument
+  version  String
+  sentAt   DateTime        @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, document, version])
 }
 
 /// Где действует сессия. Админская сессия — отдельное семейство со своей
@@ -620,6 +662,10 @@ model Subscription {
   /// Продление без него не списывается — оферта обещает предупредить за три дня.
   renewalNoticeFor       DateTime?
   renewalNoticeSentAt    DateTime?
+  /// Письмо «оплаченный период заканчивается» при выключенном автопродлении:
+  /// за какой конец периода ушло. Отдельно от `renewalNoticeFor`, потому что
+  /// то письмо разрешает списание, а это о списании не предупреждает.
+  expiryNoticeFor        DateTime?
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
 
