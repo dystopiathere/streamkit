@@ -77,11 +77,7 @@ export class SocketAdmission {
       const key = `streamkit:ws-handshake:${ip}`;
       // Одной транзакцией: срок, выставленный отдельной командой, не встал бы
       // при обрыве связи между ними, и ключ остался бы вечным.
-      const result = await this.redis
-        .multi()
-        .incr(key)
-        .expire(key, WINDOW_SECONDS, 'NX')
-        .exec();
+      const result = await this.redis.multi().incr(key).expire(key, WINDOW_SECONDS, 'NX').exec();
       const count = Number(result?.[0]?.[1] ?? 0);
       return count <= this.limits.handshakesPerMinute;
     } catch (error) {
