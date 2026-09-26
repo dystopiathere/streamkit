@@ -738,6 +738,50 @@ describe('Админка (feature)', () => {
       });
     });
 
+    it('пробный период: отметка в списке и карточке, фильтр по нему', async () => {
+      const admin = await staff();
+      const onTrial = await streamer();
+      const ended = await streamer();
+      const never = await streamer();
+      const now = Date.now();
+      await harness.prisma.user.update({
+        where: { id: onTrial.userId },
+        data: { trialStartedAt: new Date(now), trialEndsAt: new Date(now + 14 * 86_400_000) },
+      });
+      await harness.prisma.user.update({
+        where: { id: ended.userId },
+        data: {
+          trialStartedAt: new Date(now - 20 * 86_400_000),
+          trialEndsAt: new Date(now - 6 * 86_400_000),
+        },
+      });
+
+      const ids = async (trial: string) => {
+        const list = await request(server())
+          .get('/api/admin/users')
+          .query({ trial, limit: 100 })
+          .set(auth(admin.adminToken))
+          .expect(200);
+        return (list.body.items as { id: string; trial: string }[])
+          .filter((row) => [onTrial.userId, ended.userId, never.userId].includes(row.id))
+          .map((row) => [row.id, row.trial]);
+      };
+      expect(await ids('active')).toEqual([[onTrial.userId, 'active']]);
+      expect(new Map(await ids('used'))).toEqual(
+        new Map([
+          [onTrial.userId, 'active'],
+          [ended.userId, 'ended'],
+        ]),
+      );
+      expect(await ids('never')).toEqual([[never.userId, 'never']]);
+
+      const card = await request(server())
+        .get(`/api/admin/users/${onTrial.userId}`)
+        .set(auth(admin.adminToken))
+        .expect(200);
+      expect(card.body.user.trial).toBe('active');
+    });
+
     it('просмотр карточки пишется в журнал с автором', async () => {
       const support = await staff('SUPPORT');
       const target = await streamer();

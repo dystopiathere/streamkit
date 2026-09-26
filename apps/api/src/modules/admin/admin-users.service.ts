@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
+  type AdminTrialState,
   type AdminUserDetail,
   type AdminUserListQuery,
   type AdminUserRow,
@@ -40,6 +41,15 @@ const MAIL_LOG_LIMIT = 50;
 
 /** Приглашённых, начислений и включений дней в карточке — последние. */
 const REFERRAL_LIMIT = 50;
+
+/** Пробный период по отметкам пользователя; фильтр списка держит те же границы. */
+export function trialState(
+  user: { trialStartedAt: Date | null; trialEndsAt: Date | null },
+  now: Date,
+): AdminTrialState {
+  if (!user.trialStartedAt) return 'never';
+  return user.trialEndsAt && user.trialEndsAt > now ? 'active' : 'ended';
+}
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -87,6 +97,7 @@ export class AdminUsersService {
         emailVerified: row.emailVerifiedAt !== null,
         createdAt: row.createdAt.toISOString(),
         lastSeenAt: iso(row.refreshTokens[0]?.lastUsedAt),
+        trial: trialState(row, now),
         subscriptionStatus: subscriptionStatus(row.subscription, now),
         widgetCount: row._count.widgets,
       })),
@@ -162,6 +173,7 @@ export class AdminUsersService {
             .sort()
             .at(-1) ?? null,
         anonymizedAt: iso(user.anonymizedAt),
+        trial: trialState(user, new Date()),
       },
       sessions,
       consents: user.consents.map((consent) => ({
@@ -340,6 +352,21 @@ export class AdminUsersService {
         and.push({
           OR: [{ subscription: { is: null } }, { subscription: { currentPeriodEnd: null } }],
         });
+        break;
+      default:
+        break;
+    }
+
+    // Те же границы, что у `trialState`.
+    switch (query.trial) {
+      case 'active':
+        and.push({ trialEndsAt: { gt: now } });
+        break;
+      case 'used':
+        and.push({ trialStartedAt: { not: null } });
+        break;
+      case 'never':
+        and.push({ trialStartedAt: null });
         break;
       default:
         break;

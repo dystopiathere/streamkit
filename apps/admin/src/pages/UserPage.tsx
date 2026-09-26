@@ -198,6 +198,10 @@ function UserCard({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
                   : t('user.emailNotVerified'),
               },
               {
+                label: t('user.trial'),
+                value: t(`trialState.${user.trial}`),
+              },
+              {
                 label: t('user.twoFactor'),
                 value: user.isTotpEnabled ? t('user.twoFactorOn') : t('user.twoFactorOff'),
               },

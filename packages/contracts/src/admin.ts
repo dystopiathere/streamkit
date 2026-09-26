@@ -74,12 +74,25 @@ export type AdminAuthResult = z.infer<typeof adminAuthResultSchema>;
 
 export const ADMIN_SUBSCRIPTION_FILTERS = ['any', 'active', 'grace', 'expired', 'none'] as const;
 
+/**
+ * Пробный период: `active` — идёт сейчас, `used` — когда-либо включался,
+ * `never` — не включался. Отдельно от подписки: у того, кто на пробном, подписки
+ * нет вовсе, и в фильтре подписки он неотличим от бесплатного.
+ */
+export const ADMIN_TRIAL_FILTERS = ['any', 'active', 'used', 'never'] as const;
+
+/** Пробный период пользователя: не включался, идёт или кончился. */
+export const ADMIN_TRIAL_STATES = ['never', 'active', 'ended'] as const;
+export const adminTrialStateSchema = z.enum(ADMIN_TRIAL_STATES);
+export type AdminTrialState = z.infer<typeof adminTrialStateSchema>;
+
 export const adminUserListQuerySchema = cursorPaginationSchema.extend({
   /** Поиск по почте, имени или точному идентификатору. */
   q: z.string().trim().max(254).optional(),
   status: userStatusSchema.optional(),
   role: userRoleSchema.optional(),
   subscription: z.enum(ADMIN_SUBSCRIPTION_FILTERS).default('any'),
+  trial: z.enum(ADMIN_TRIAL_FILTERS).default('any'),
 });
 export type AdminUserListQuery = z.infer<typeof adminUserListQuerySchema>;
 
@@ -95,6 +108,7 @@ export const adminUserRowSchema = z.object({
   /** Последнее обновление сессии дашборда. null — не входил с момента очистки сессий. */
   lastSeenAt: isoDateSchema.nullable(),
   subscriptionStatus: subscriptionViewSchema.shape.status,
+  trial: adminTrialStateSchema,
   widgetCount: z.number().int().min(0),
 });
 export type AdminUserRow = z.infer<typeof adminUserRowSchema>;
