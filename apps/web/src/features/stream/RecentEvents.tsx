@@ -2,6 +2,7 @@ import type { AlertEvent } from '@streamkit/contracts';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { cn } from '@streamkit/app-kit';
+import { EventOrigin } from '@/features/events/EventOrigin';
 import { formatMoney, intlLocale } from '@/lib/locale';
 
 /**
@@ -43,17 +44,17 @@ export function RecentEvents({ events }: { events: AlertEvent[] }): React.JSX.El
         <ul aria-live="polite" aria-relevant="additions" className="divide-y divide-border text-sm">
           {events.map((event) => (
             <li key={event.id} className="flex items-center justify-between gap-3 px-4 py-2">
-              <p className="min-w-0 truncate">
-                <span className="font-medium">{event.username}</span>
-                {event.type !== 'donation' ? (
-                  <span className="ml-2 text-xs text-muted">{t(`events.type.${event.type}`)}</span>
-                ) : null}
-                {event.isTest ? (
-                  <span className="ml-2 rounded bg-surface-hover px-1.5 py-0.5 text-xs text-muted">
-                    {t('events.test')}
-                  </span>
-                ) : null}
-              </p>
+              <div className="min-w-0">
+                <p className="truncate">
+                  <span className="font-medium">{event.username}</span>
+                  {event.isTest ? (
+                    <span className="ml-2 rounded bg-surface-hover px-1.5 py-0.5 text-xs text-muted">
+                      {t('events.test')}
+                    </span>
+                  ) : null}
+                </p>
+                <EventOrigin event={event} className="flex text-xs" />
+              </div>
               <div className="shrink-0 text-right">
                 {event.amount ? (
                   <p

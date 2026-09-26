@@ -65,7 +65,8 @@ test('окно эфира показывает чат канала, виджет
 
   await test.step('окно видит оба канала с состоянием и оверлей в OBS', async () => {
     await mainNav(page).getByRole('link', { name: 'Эфир', exact: true }).click();
-    await expect(page.getByText(`twitch.tv/${channel} — читаем чат`)).toBeVisible();
+    await expect(page.getByText('Читается чат', { exact: true })).toBeVisible();
+    await expect(page.getByTitle(`twitch.tv/${channel}`)).toBeVisible();
     // Чат YouTube есть только у идущего эфира, а воркера в прогоне нет.
     await expect(page.getByText(`${youtube.title} — ждём начала эфира`)).toBeVisible();
 

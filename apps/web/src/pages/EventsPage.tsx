@@ -7,6 +7,7 @@ import {
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, Pagination, selectClasses, usePageTitle } from '@streamkit/app-kit';
+import { EventOrigin } from '@/features/events/EventOrigin';
 import { useEventsPage } from '@/features/widgets/queries';
 import { useDashboardSocket } from '@/lib/useDashboardSocket';
 import { formatMoney, intlLocale } from '@/lib/locale';
@@ -152,6 +153,7 @@ export function EventsPage(): React.JSX.Element {
                     </span>
                   ) : null}
                 </p>
+                <EventOrigin event={event} className="flex text-xs" />
                 {event.message ? (
                   <p className="truncate text-sm text-muted">{event.message}</p>
                 ) : null}

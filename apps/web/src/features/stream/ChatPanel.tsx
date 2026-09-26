@@ -46,6 +46,12 @@ export function ChatPanel({
   // Значок площадки у сообщения — только когда площадок несколько: у чата
   // одного Twitch значок на каждой строке — шум.
   const multiPlatform = new Set(chats.map((chat) => chat.platform)).size > 1;
+  const reading = chats.filter((chat) => chat.state === 'ok');
+  const stalled = chats.filter((chat) => chat.state !== 'ok');
+  const chatName = (chat: StreamChat): string =>
+    chat.platform === 'twitch'
+      ? t('stream.chat.channelTwitch', { channel: chat.channel })
+      : chat.title;
 
   return (
     <section
@@ -60,10 +66,22 @@ export function ChatPanel({
           {t('stream.chat.title')}
         </h2>
         {chats.length > 0 ? (
-          <ul className="flex flex-col gap-0.5 text-xs text-muted">
-            {chats.map((chat) => (
-              <li
-                key={`${chat.platform}:${chat.channel}`}
+          <div className="flex flex-col items-end gap-0.5 text-xs text-muted">
+            {reading.length > 0 ? (
+              <p className="flex items-center gap-1.5">
+                <span>{t('stream.chat.reading', { count: reading.length })}</span>
+                {reading.map((chat) => (
+                  <span key={chatKey(chat)} title={chatName(chat)} className="inline-flex">
+                    <PlatformIcon platform={chat.platform} size={14} />
+                  </span>
+                ))}
+              </p>
+            ) : null}
+            {/* Чат, который не читается, — строкой с причиной: иконка без текста
+                не скажет, что ждём эфира или что канал надо переподключить. */}
+            {stalled.map((chat) => (
+              <p
+                key={chatKey(chat)}
                 className={cn(
                   'flex items-center gap-1.5',
                   (chat.state === 'auth' || chat.state === 'quota') && 'text-danger',
@@ -71,14 +89,11 @@ export function ChatPanel({
               >
                 <PlatformIcon platform={chat.platform} size={14} />
                 <span>
-                  {chat.platform === 'twitch'
-                    ? t('stream.chat.channelTwitch', { channel: chat.channel })
-                    : chat.title}{' '}
-                  — {t(`stream.chat.state.${chat.state}`)}
+                  {chatName(chat)} — {t(`stream.chat.state.${chat.state}`)}
                 </span>
-              </li>
+              </p>
             ))}
-          </ul>
+          </div>
         ) : null}
       </header>
 
@@ -161,4 +176,8 @@ export function ChatPanel({
       )}
     </section>
   );
+}
+
+function chatKey(chat: StreamChat): string {
+  return `${chat.platform}:${chat.channel}`;
 }
