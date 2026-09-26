@@ -1213,7 +1213,10 @@
         "quota": "лимит YouTube на сегодня исчерпан — чат вернётся в 10–11 утра по Москве",
         "auth": "переподключите канал в «Площадках»"
       },
-      "channelTwitch": "twitch.tv/{{channel}}"
+      "channelTwitch": "twitch.tv/{{channel}}",
+      "reading_one": "Читается чат",
+      "reading_few": "Читаются чаты:",
+      "reading_many": "Читаются чаты:"
     },
     "events": {
       "title": "Последние события",

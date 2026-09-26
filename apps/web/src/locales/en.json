@@ -1202,7 +1202,9 @@
         "quota": "YouTube’s daily limit is used up — chat returns at midnight Pacific time",
         "auth": "reconnect the channel in Platforms"
       },
-      "channelTwitch": "twitch.tv/{{channel}}"
+      "channelTwitch": "twitch.tv/{{channel}}",
+      "reading_one": "Reading chat",
+      "reading_other": "Reading chats:"
     },
     "events": {
       "title": "Recent events",
