@@ -24,6 +24,7 @@ import {
   GoalBar,
   LatestEventDisplay,
   RouletteDisplay,
+  stageHasContent,
   TimerDisplay,
   TopDonorsList,
   WidgetStage,
@@ -288,7 +289,17 @@ export function OverlayApp(): React.JSX.Element | null {
   // Окно виджета: рисуем ровно в заданных пикселях и масштабируем под сорс, —
   // иначе в сорсе другого размера элементы стояли бы не там, где их поставили.
   return (
-    <WidgetStage canvas={widget.config.canvas} branding={widget.branding}>
+    <WidgetStage
+      canvas={widget.config.canvas}
+      branding={
+        widget.branding &&
+        stageHasContent(widget, {
+          alertShown: current !== null,
+          latestEvent: state?.kind === 'latest' && state.event !== null,
+          spinning: roulette.current !== null,
+        })
+      }
+    >
       {content()}
     </WidgetStage>
   );

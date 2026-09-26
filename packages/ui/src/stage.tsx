@@ -1,4 +1,4 @@
-import type { WidgetCanvas } from '@streamkit/contracts';
+import type { WidgetCanvas, WidgetConfig } from '@streamkit/contracts';
 import { type CSSProperties, type ReactNode, useRef } from 'react';
 import { useBoxSize } from './use-box-size';
 
@@ -108,4 +108,35 @@ export function BrandingBadge(): React.JSX.Element {
       stream-kit.ru
     </div>
   );
+}
+
+/** Что сейчас в кадре у виджетов, которые пусты между событиями. */
+export interface StageOccupancy {
+  /** Оповещение на экране, включая его уход. */
+  alertShown: boolean;
+  /** У «последнего события» есть событие. */
+  latestEvent: boolean;
+  /** Рулетка крутится или держит итог. */
+  spinning: boolean;
+}
+
+/**
+ * Есть ли в кадре что-то, рядом с чем уместна подпись.
+ *
+ * Оповещения, последнее событие без текста-заглушки и рулетка, скрытая между
+ * прокрутами, большую часть эфира пусты. Подпись в пустом углу сцены висела бы
+ * часами сама по себе и читалась бы как реклама поверх чужого эфира, поэтому
+ * у них она появляется и уходит вместе с содержимым.
+ */
+export function stageHasContent(widget: WidgetConfig, occupancy: StageOccupancy): boolean {
+  switch (widget.type) {
+    case 'alerts':
+      return occupancy.alertShown;
+    case 'latest':
+      return occupancy.latestEvent || widget.config.emptyText !== '';
+    case 'roulette':
+      return !widget.config.hideWhenIdle || occupancy.spinning;
+    default:
+      return true;
+  }
 }

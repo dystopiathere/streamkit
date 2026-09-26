@@ -1,8 +1,15 @@
-import { defaultAlertWidgetConfig } from '@streamkit/contracts';
+import {
+  alertWidgetConfigSchema,
+  defaultAlertWidgetConfig,
+  goalWidgetConfigSchema,
+  latestWidgetConfigSchema,
+  rouletteWidgetConfigSchema,
+  type WidgetConfig,
+} from '@streamkit/contracts';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { AlertCard } from './AlertCard';
-import { canvasScale, WidgetStage } from './stage';
+import { canvasScale, stageHasContent, WidgetStage } from './stage';
 
 describe('окно виджета', () => {
   it('рисует содержимое ровно в пикселях окна', () => {
@@ -95,5 +102,42 @@ describe('подпись бесплатного тарифа', () => {
       </WidgetStage>,
     );
     expect(screen.getByTestId('widget-branding')).toBeTruthy();
+  });
+});
+
+describe('подпись у виджетов, пустых между событиями', () => {
+  const idle = { alertShown: false, latestEvent: false, spinning: false };
+  const alerts: WidgetConfig = { type: 'alerts', config: alertWidgetConfigSchema.parse({}) };
+  const latest: WidgetConfig = { type: 'latest', config: latestWidgetConfigSchema.parse({}) };
+  const hiddenWheel: WidgetConfig = {
+    type: 'roulette',
+    config: rouletteWidgetConfigSchema.parse({ hideWhenIdle: true }),
+  };
+
+  it('у оповещений — только пока оповещение на экране', () => {
+    expect(stageHasContent(alerts, idle)).toBe(false);
+    expect(stageHasContent(alerts, { ...idle, alertShown: true })).toBe(true);
+  });
+
+  it('у последнего события — с событием или с текстом на пустой случай', () => {
+    expect(stageHasContent(latest, idle)).toBe(false);
+    expect(stageHasContent(latest, { ...idle, latestEvent: true })).toBe(true);
+    const withText: WidgetConfig = {
+      type: 'latest',
+      config: latestWidgetConfigSchema.parse({ emptyText: 'Ждём первого' }),
+    };
+    expect(stageHasContent(withText, idle)).toBe(true);
+  });
+
+  it('у рулетки, скрытой между прокрутами, — только на прокрут', () => {
+    expect(stageHasContent(hiddenWheel, idle)).toBe(false);
+    expect(stageHasContent(hiddenWheel, { ...idle, spinning: true })).toBe(true);
+    const wheel: WidgetConfig = { type: 'roulette', config: rouletteWidgetConfigSchema.parse({}) };
+    expect(stageHasContent(wheel, idle)).toBe(true);
+  });
+
+  it('у остальных — всегда', () => {
+    const goal: WidgetConfig = { type: 'goal', config: goalWidgetConfigSchema.parse({}) };
+    expect(stageHasContent(goal, idle)).toBe(true);
   });
 });
