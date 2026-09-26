@@ -75,4 +75,24 @@ describe('словари интерфейса', () => {
       .map(([key]) => key);
     expect(cyrillic).toEqual([]);
   });
+
+  it('каждый ключ, который код передаёт в t() строкой, есть в словаре', () => {
+    // Ключа нет ни в одном словаре — i18next молча показывает сам ключ, и
+    // сравнение словарей между собой этого не видит: у обоих его нет.
+    const sources = import.meta.glob<string>(['../**/*.{ts,tsx}', '!../**/*.test.{ts,tsx}'], {
+      query: '?raw',
+      import: 'default',
+      eager: true,
+    });
+    const missing = Object.entries(sources).flatMap(([file, code]) =>
+      [...code.matchAll(/\bt\(\s*'([\w.]+)'/g)]
+        .map((match) => match[1] ?? '')
+        .filter(
+          (key) =>
+            !ruKeys.has(key) && ![...ruKeys.keys()].some((known) => known.startsWith(`${key}.`)),
+        )
+        .map((key) => `${file}: ${key}`),
+    );
+    expect(missing).toEqual([]);
+  });
 });

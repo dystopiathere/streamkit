@@ -539,6 +539,7 @@
     "disconnected": "Service disconnected",
     "connected": "{{service}} is connected. New donations will show up in alerts.",
     "connectFailed": "Could not connect the service. Please try again.",
+    "account": "Account",
     "lastEvent": "Last donation",
     "lastEventAt": "Last event: {{date}}",
     "noEvents": "No donations yet",
